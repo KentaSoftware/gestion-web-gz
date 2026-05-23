@@ -39,56 +39,30 @@ export default function Home() {
             dispatch(setLoading(false))
             return
           }
-          setValue(r.data)
-          dispatch(setUser(r.data))
-          await router.push('/home')
-          dispatch(setLoading(false))
-<<<<<<< HEAD
-          return
-        }
-        
-        // ⭐ DECODIFICAR TOKEN JWT: El token contiene id, role con permissions completo
-        const token = r.data.token;
-        let decodedToken: any = null;
-        
-        try {
-          decodedToken = jwtDecode(token);
-          console.log('✅ Token decodificado:', decodedToken);
-        } catch (error) {
-          console.error('❌ Error al decodificar token:', error);
-        }
-        
-        // Usar datos del token decodificado (tiene TODOS los datos incluyendo role.permissions)
-        const userData: UserWithToken = {
-          nickname: r.data.nickname || r.data.name || '',
-          token: token,
-          id: decodedToken?.id || r.data.id || '',
-          email: decodedToken?.email || r.data.email || '',
-          role: decodedToken?.role || undefined  // Ya viene completo con permissions array
-        };
-        
-        // Log para verificar permisos
-        if (!userData.role) {
-          console.warn('⚠️ Token no contiene información de rol');
-        } else if (!userData.role.permissions || userData.role.permissions.length === 0) {
-          console.warn('⚠️ Rol sin permisos:', userData.role.name);
-        } else {
-          console.log(`✅ Login exitoso | Usuario: ${userData.nickname} | Rol: ${userData.role.name} | Permisos: ${userData.role.permissions.length}`);
-        }
-        
-        // 🔧 IMPORTANTE: Guardar en localStorage el userData completo con role decodificado
-        setValue(userData);
-        
-        dispatch(setUser(userData))
-        
-        router.push('/home')
-        dispatch(setLoading(false))
-      })
-      .catch(e=>{console.log(e);dispatch(setLoading(false))})
-=======
+          // Decode JWT to extract role.permissions required by usePermission
+          const token = r.data.token;
+          let decodedToken: any = null;
+          try {
+            decodedToken = jwtDecode(token);
+          } catch (decodeError) {
+            console.error('Error decoding token:', decodeError);
+          }
+
+          const userData: UserWithToken = {
+            nickname: r.data.nickname || r.data.name || '',
+            token: token,
+            id: decodedToken?.id || r.data.id || '',
+            email: decodedToken?.email || r.data.email || '',
+            role: decodedToken?.role || r.data.role || undefined,
+          };
+
+          setValue(userData);
+          dispatch(setUser(userData));
+          await router.push('/home');
+          dispatch(setLoading(false));
+          return;
         })
-        .catch(e => { console.log(e); dispatch(setLoading(false)) })
->>>>>>> dfb96e2 (WIP: cambios locales)
+        .catch(e => { console.log(e); dispatch(setLoading(false)); })
     }
   })
 

@@ -45,21 +45,14 @@ export default function ExpenseDetailScreen() {
   const fetchExpense = async (id: string) => {
     try {
       dispatch(setLoading(true))
-      const response = await expenseService.getById(id)
+      const expenseData = await expenseService.getById(id)
       
-      console.log('Response from backend:', response)
-      
-      // El backend puede retornar { expense: {...} } o directamente {...}
-      const expenseData = (response as any).expense || response
-      
-      // Transformar amountCents a amount (pesos)
+      // Normalize amount: use amount if present, else derive from amountCents
       const expenseWithAmount = {
         ...expenseData,
-        // Si ya viene 'amount' del backend, usarlo; sino calcular desde amountCents
-        amount: expenseData.amount || (expenseData.amountCents / 100)
+        amount: expenseData.amount || (expenseData.amountCents / 100),
       }
       
-      console.log('Processed expense:', expenseWithAmount)
       setExpense(expenseWithAmount)
       
       // Analytics EG08: Registrar visualización de detalle
@@ -74,7 +67,10 @@ export default function ExpenseDetailScreen() {
     } catch (error: any) {
       console.error('Error al cargar egreso:', error)
       
-      if (error.response?.status === 404) {
+      if (error.response?.status === 410) {
+        dispatch(setAlert({ message: 'Este egreso fue eliminado', type: 'error' }))
+        router.push('/expense')
+      } else if (error.response?.status === 404) {
         dispatch(setAlert({ message: 'El egreso no existe', type: 'error' }))
         router.push('/expense')
       } else if (error.response?.status === 403) {
@@ -161,8 +157,8 @@ export default function ExpenseDetailScreen() {
       
       if (error.response?.status === 403) {
         dispatch(setAlert({ message: 'No tiene permisos para eliminar egresos', type: 'error' }))
-      } else if (error.response?.status === 404) {
-        dispatch(setAlert({ message: 'El egreso no existe o ya fue eliminado', type: 'error' }))
+      } else if (error.response?.status === 410 || error.response?.status === 404) {
+        dispatch(setAlert({ message: 'El egreso ya fue eliminado', type: 'error' }))
         router.push('/expense')
       } else {
         dispatch(setAlert({ message: 'Error al eliminar el egreso', type: 'error' }))

@@ -18,6 +18,8 @@ import { MdEdit, MdDelete, MdVisibility, MdSearch, MdFilterList, MdClose } from 
 import Confirm from '@/components/Confirm'
 import { trackExpenseDeleted, trackExpenseListViewed, trackFilterChange, trackExpenseSearch } from '@/utils/analytics'
 import { usePermission } from '@/hooks/usePermission'
+import ProtectedRoute from '@/components/ProtectedRoute'
+import { Permission } from '@/interfaces/auth.interface'
 
 interface ExpenseFilters {
   page: number;
@@ -728,13 +730,18 @@ function ExpenseScreenContent() {
 
 export default function ExpenseScreen() {
   return (
-    <Suspense fallback={
-      <LoadingContainer>
-        <LoadingText>Cargando egresos...</LoadingText>
-      </LoadingContainer>
-    }>
-      <ExpenseScreenContent />
-    </Suspense>
+    <ProtectedRoute
+      requiredPermission={Permission.READ_EXPENSE}
+      deniedMessage="No tienes permisos para ver egresos. Contacta a tu administrador si necesitas acceso."
+    >
+      <Suspense fallback={
+        <LoadingContainer>
+          <LoadingText>Cargando egresos...</LoadingText>
+        </LoadingContainer>
+      }>
+        <ExpenseScreenContent />
+      </Suspense>
+    </ProtectedRoute>
   )
 }
 

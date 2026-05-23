@@ -46,21 +46,16 @@ export default function EditExpense({ params }: { params: { id: string } }) {
       setLoadingExpense(true)
       setError(null)
 
-      console.log('Cargando expense con ID:', params.id)
-      const response = await expenseService.getById(params.id)
-      console.log('Expense cargada:', response)
-      
-      // Extraer el expense del wrapper si existe
-      const expenseData = (response as any).expense || response
-      console.log('Expense data extraída:', expenseData)
-      
+      const expenseData = await expenseService.getById(params.id)
       setExpense(expenseData)
       setLoadingExpense(false)
       dispatch(setLoading(false))
     } catch (error: any) {
       console.error('Error al cargar egreso:', error)
       
-      if (error.response?.status === 404) {
+      if (error.response?.status === 410) {
+        setError('Este egreso fue eliminado y ya no puede ser editado')
+      } else if (error.response?.status === 404) {
         setError('El egreso no existe o fue eliminado')
       } else if (error.response?.status === 403) {
         setError('No tienes permisos para ver este egreso')
