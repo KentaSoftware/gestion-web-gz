@@ -1,5 +1,5 @@
 'use client'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 /* import { BarChart } from '@mui/x-charts/BarChart'; */
 import { PieChart } from '@mui/x-charts';
 import styled from 'styled-components';
@@ -21,6 +21,8 @@ import { addHours, endOfDay, startOfDay } from 'date-fns';
 import ExpenseKPICard from '@/components/dashboard/ExpenseKPICard';
 import ResultKPICard from '@/components/dashboard/ResultKPICard';
 import { getDateRangeFromInterval } from '@/utils/dashboardHelpers';
+import { cashflowService } from '@/services/cashflow.service';
+import type { CashflowMovement } from '@/interfaces/cashflow.interface';
 
 const containerVariants: Variants = {
   sales: { backgroundColor: "#99BC85", transition: { duration: 0.5 } },
@@ -86,6 +88,24 @@ export default function Home() {
   const [expensePeriod, setExpensePeriod] = useState(() => getDateRangeFromInterval('MENSUAL'))
   const [customDateRange, setCustomDateRange] = useState<{from: string; to: string} | null>(null)
 
+  // Cashflow real movements for home dashboard
+  const [recentMovements, setRecentMovements] = useState<CashflowMovement[]>([])
+
+  const fetchRecentMovements = useCallback(async () => {
+    try {
+      const now = new Date()
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const data = await cashflowService.getMovements({
+        startDate: firstDayOfMonth.toISOString().split('T')[0],
+        endDate: now.toISOString().split('T')[0],
+      })
+      // Show the last 9 most recent
+      setRecentMovements(data.slice(-9).reverse())
+    } catch {
+      setRecentMovements([])
+    }
+  }, [])
+
   const handleSubmit = (startDate: Date, endDate: Date ) => {
     startDate = addHours(startOfDay(startDate), 3)
     endDate = addHours(endOfDay(endDate), 3)
@@ -138,6 +158,11 @@ export default function Home() {
       setCustomDateRange(null) // Limpiar custom range
     }
   }, [interval, dispatch])
+
+  // Fetch recent movements on mount (best-effort; no permission redirect on error)
+  useEffect(() => {
+    fetchRecentMovements()
+  }, [fetchRecentMovements])
 
 
 
@@ -261,15 +286,27 @@ export default function Home() {
           </ChartsContainer>
         </KPIAndChartContainer>
         <MovementsContainer>
-          <MovementsTitle>Ultimos movimientos :</MovementsTitle>
+          <MovementsTitle>Últimos movimientos:</MovementsTitle>
           <MovementsList>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((item, index) => (
-              <MovementItem key={index}>
-                <MovementText>Venta</MovementText>
-                <MovementText color="#b33b3b">CREATE</MovementText>
-                <MovementText>25/5/2025 - 13:13</MovementText>
+            {recentMovements.length === 0 ? (
+              <MovementItem>
+                <MovementText style={{ color: '#999', fontSize: 14 }}>Sin movimientos en el período actual</MovementText>
               </MovementItem>
-            ))}
+            ) : (
+              recentMovements.map((mov, index) => (
+                <MovementItem key={`${mov.sourceId}-${index}`}>
+                  <MovementText>
+                    {mov.source === 'sale' ? 'Venta' : mov.source === 'buy' ? 'Compra' : 'Egreso'}
+                  </MovementText>
+                  <MovementText color={mov.type === 'inflow' ? '#2E7D32' : '#b33b3b'}>
+                    {mov.type === 'inflow' ? '+' : '-'}${mov.amount.toLocaleString('es-AR')}
+                  </MovementText>
+                  <MovementText>
+                    {new Date(mov.date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  </MovementText>
+                </MovementItem>
+              ))
+            )}
           </MovementsList>
         </MovementsContainer>
       </MainContent>

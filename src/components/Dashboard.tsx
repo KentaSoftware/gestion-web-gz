@@ -19,6 +19,7 @@ import { GoHome, GoPackage } from "react-icons/go";
 import { AiOutlineDollar } from 'react-icons/ai';
 import { LiaClipboardListSolid } from "react-icons/lia";
 import { MdOutlineMoneyOff, MdUploadFile } from "react-icons/md";
+import { RiLineChartLine } from 'react-icons/ri'
 import Burger from './Burger';
 
 export default function Dashboard({children}: {children: ReactNode} ) {
@@ -29,7 +30,8 @@ export default function Dashboard({children}: {children: ReactNode} ) {
         {path: 'SALE', name: 'VENTAS', icon: <AiOutlineDollar />},
         {path: 'BUY', name: 'COMPRAS', icon: <LiaClipboardListSolid />},
         {path: 'BUY/SMART-UPLOAD', name: 'CARGA INTELIGENTE', icon: <MdUploadFile />},
-        {path: 'EXPENSE', name: 'EGRESOS', icon: <MdOutlineMoneyOff />}
+        {path: 'EXPENSE', name: 'EGRESOS', icon: <MdOutlineMoneyOff />},
+        {path: 'CASHFLOW', name: 'FLUJO DE CAJA', icon: <RiLineChartLine />}
     ]
     const pathname = usePathname()
     let {ancho, alto} = useResize()

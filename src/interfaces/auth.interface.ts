@@ -30,4 +30,8 @@ export enum Permission {
   READ_USER = 'read_user',
   UPDATE_USER = 'update_user',
   DELETE_USER = 'delete_user',
+
+  // Cash Flow
+  READ_CASHFLOW = 'read_cashflow',
+  CONFIGURE_CASHFLOW = 'configure_cashflow',
 }
