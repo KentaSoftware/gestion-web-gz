@@ -1,120 +1,107 @@
-import React, { ChangeEvent, LabelHTMLAttributes, useEffect, useState } from 'react';
-import styled from 'styled-components';
+import React, { forwardRef, useEffect, useState } from 'react'
+import { Input as InputUi } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 
+type TypeInput = 'text' | 'number' | 'email' | 'date' | 'password'
 
-type TypeInput = 'text' | 'number' | 'email' | 'date' | 'password';
-
-interface LabelProps extends LabelHTMLAttributes<HTMLLabelElement> {
-  active?: boolean;
+/**
+ * Input component — migrated to Tailwind 4 semantic tokens.
+ *
+ * DECISION: `process.env.TEXT_COLOR` replaced by `text-text-primary` token.
+ * Floating label pattern preserved; focus border uses `border-border-interactive`.
+ * TICKET-03: height unified to h-10 (--control-height-md: 40px); disabled state added.
+ */
+interface InputProps {
+  type: TypeInput
+  label: string
+  value?: string | number
+  onChange?: (e: any) => void
+  onBlur?: (e: any) => void
+  name: string
+  required?: boolean
+  readOnly?: boolean
+  disabled?: boolean
+  prefix?: string
+  width?: string
+  placeholder?: string
 }
 
-const InputWrapper = styled.div<{width: string}>`
-  position: relative;
-  margin: 15px 0;
-  /* width: -webkit-fill-available; */
-  width: ${({width})=>width !== '' ? width : '-webkit-fill-available'};
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-`;
-
-const InputLabel = styled.label<{ $active?: boolean }>`
-  position: absolute;
-  top: 10px;
-  left: 15px;
-  font-size: 14px;
-  color: ${props => props.color};
-  transition: transform 0.2s ease-in-out;
-  transform-origin: top left;
-  pointer-events: none;
-  
-  ${({ $active }) =>
-    $active &&
-    `
-    transform: translateY(-25px) scale(0.8);
-  `}
-`;
-
-const Prefix = styled.div`
-  position: absolute;
-  top: 8px;
-  left: 10px;
-  font-size: 16px;
-  color: ${props => props.color};
-  display: flex;
-  align-items: center;
-`;
-
-const InputField = styled.input<{ $focused?: boolean; $hasPrefix?: boolean; }>`
-  height: 35px;
-  padding: 5px 10px;
-  font-size: 16px;
-  color: ${props => props.color};
-  border-radius: 10px;
-  border: ${({ $focused }) => ($focused ? '2px solid #7286D3' : '1px solid #d9d9d9')};
-  transition: border-color 0.2s ease-in-out;
-  padding-left: ${({ $hasPrefix }) => ($hasPrefix ? '30px' : '10px')};
-
-  &:focus {
-    outline: none;
-  }
-`;
-
-const Input = ({ type, label, value, onChange, name, required, readOnly, prefix, width='' }: {
-  type: TypeInput,
-  label: string,
-  value: any,
-  onChange: (e: ChangeEvent<HTMLInputElement>)=>void,
-  name: string,
-  required?: boolean,
-  readOnly?: boolean,
-  prefix?: string,
-  width?: string
-}) => {
-  const [isActive, setIsActive] = useState<boolean>(type === 'date' ? true : false);
-  const [isFocused, setIsFocused] = useState<boolean>(false);
+const Input = forwardRef<HTMLInputElement, InputProps>(({
+  type,
+  label,
+  value,
+  onChange,
+  onBlur,
+  name,
+  required,
+  readOnly,
+  disabled,
+  prefix,
+  width = '',
+  placeholder,
+}, ref) => {
+  const [isActive, setIsActive] = useState<boolean>(type === 'date')
 
   const handleInputFocus = () => {
-    setIsActive(true);
-    setIsFocused(true);
-  };
+    setIsActive(true)
+  }
 
-  const handleInputBlur = () => {
-    setIsActive(value !== '');
-    setIsFocused(false);
-  };
+  const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const hasValue = value !== undefined ? value !== '' : e.target.value !== ''
+    setIsActive(hasValue)
+  }
 
   useEffect(() => {
-    if (value === '') {
-      setIsActive(false);
-      setIsFocused(false);
-    } else {
-      setIsActive(true);
-      setIsFocused(true);
+    if (type === 'date') return
+    if (value !== undefined) {
+      setIsActive(value !== '')
     }
-  }, [value]);
+  }, [value, type])
 
   return (
-    <InputWrapper width={width}>
-      {prefix && <Prefix color={'#716A6A'}>{prefix}</Prefix>}
-      <InputLabel $active={isActive} color={process.env.TEXT_COLOR}>
+    <div
+      className="relative my-4 flex flex-col text-center"
+      style={width ? { width } : { width: '-webkit-fill-available' }}
+    >
+      {prefix && (
+        <div className="absolute top-2 left-2.5 flex items-center text-base text-text-muted">
+          {prefix}
+        </div>
+      )}
+
+      <label
+        htmlFor={name}
+        className={cn(
+          'absolute left-4 top-2.5 pointer-events-none text-label text-text-secondary',
+          'transition-transform duration-[120ms] origin-top-left',
+          isActive && '-translate-y-6 scale-[0.8]'
+        )}
+      >
         {label}
         {required && ' - Campo requerido'}
-      </InputLabel>
-      <InputField
-        color={process.env.TEXT_COLOR}
+      </label>
+
+      <InputUi
+        id={name}
         name={name}
         type={type}
         value={value}
         onChange={onChange}
         onFocus={handleInputFocus}
-        onBlur={handleInputBlur}
-        $focused={isFocused}
+        onBlur={(e) => {
+          handleInputBlur(e)
+          onBlur?.(e)
+        }}
         readOnly={readOnly}
-        $hasPrefix={prefix !== ''}
+        disabled={disabled}
+        placeholder={placeholder}
+        className={cn(prefix && 'pl-8')}
+        ref={ref}
       />
-    </InputWrapper>
-  );
-};
+    </div>
+  )
+})
 
-export default Input;
+Input.displayName = 'Input'
+
+export default Input

@@ -1,50 +1,266 @@
-:root {
-  --max-width: 1100px;
-  --border-radius: 12px;
-  --font-mono: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono',
-    'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro',
-    'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace;
+/* ============================================================
+   Golozur Design System — Theme Tokens
+   MUST come before @import "tailwindcss" so the PostCSS compiler
+   sees the @theme tokens and @source before generating utilities.
+   ============================================================ */
 
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+@source "../**/*.{js,jsx,ts,tsx,mdx}";
 
-  --primary-glow: conic-gradient(
-    from 180deg at 50% 50%,
-    #16abff33 0deg,
-    #0885ff33 55deg,
-    #54d6ff33 120deg,
-    #0071ff33 160deg,
-    transparent 360deg
-  );
-  --secondary-glow: radial-gradient(
-    rgba(255, 255, 255, 1),
-    rgba(255, 255, 255, 0)
-  );
+@theme {
+  /* Colors — Background */
+  --color-background-canvas: #f7f9fc;
+  --color-background-subtle: #eef3fa;
 
-  --tile-start-rgb: 239, 245, 249;
-  --tile-end-rgb: 228, 232, 233;
-  --tile-border: conic-gradient(
-    #00000080,
-    #00000040,
-    #00000030,
-    #00000020,
-    #00000010,
-    #00000010,
-    #00000080
-  );
+  /* Colors — Surface */
+  --color-surface-base: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-inverted: #1f2a3d;
 
-  --callout-rgb: 238, 240, 241;
-  --callout-border-rgb: 172, 175, 176;
-  --card-rgb: 180, 185, 188;
-  --card-border-rgb: 131, 134, 135;
+  /* Colors — Text */
+  --color-text-primary: #1f2a3d;
+  --color-text-secondary: #4f5d75;
+  --color-text-muted: #6e7e99;
+  --color-text-inverse: #eaf0fa;
+
+  /* Colors — Brand */
+  --color-brand-primary: #3e68a4;
+  --color-brand-primary-hover: #315d9d;
+  --color-brand-primary-active: #2a528b;
+  --color-brand-accent: #f49b49;
+  --color-brand-accent-hover: #e5872f;
+  --color-brand-accent-active: #d77821;
+
+  /* Colors — Border */
+  --color-border-subtle: #d9e0ea;
+  --color-border-strong: #bcc8d8;
+  --color-border-interactive: #3e68a4;
+
+  /* Colors — State */
+  --color-state-success: #2e9b6f;
+  --color-state-warning: #f49b49;
+  --color-state-error: #d94b4b;
+  --color-state-info: #315d9d;
+  --color-state-focus: #4f7ab5;
+  --color-overlay-scrim: rgba(15, 23, 36, 0.5);
+  --color-chart-primary: #3e68a4;
+  --color-chart-accent: #f49b49;
+  --color-chart-success: #2e9b6f;
+  --color-chart-warning: #f49b49;
+  --color-chart-error: #d94b4b;
+  --color-chart-grid: #d9e0ea;
+  --color-chart-axis: #6e7e99;
+  --color-chart-tooltip-surface: #ffffff;
+
+  /* Typography — Font Families */
+  --font-heading: 'Libre Baskerville', Georgia, serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Typography — Scale */
+  --text-caption: 12px;
+  --leading-caption: 1.4;
+  --text-label: 14px;
+  --leading-label: 1.4;
+  --text-body: 16px;
+  --leading-body: 1.5;
+  --text-subheading: 20px;
+  --leading-subheading: 1.35;
+  --text-heading-sm: 28px;
+  --leading-heading-sm: 1.2;
+  --tracking-heading-sm: -0.02em;
+  --text-heading: 36px;
+  --leading-heading: 1.15;
+  --tracking-heading: -0.025em;
+  --text-display: 56px;
+  --leading-display: 1.08;
+  --tracking-display: -0.03em;
+  --text-code: 14px;
+  --leading-code: 1.45;
+
+  /* Spacing — Golozur DS tokens.
+     Do not use --spacing-* here: Tailwind v4 uses that namespace
+     to generate utilities such as p-4, px-8, gap-4. */
+  --golozur-spacing-unit: 4px;
+  --golozur-spacing-4: 4px;
+  --golozur-spacing-8: 8px;
+  --golozur-spacing-12: 12px;
+  --golozur-spacing-16: 16px;
+  --golozur-spacing-20: 20px;
+  --golozur-spacing-24: 24px;
+  --golozur-spacing-32: 32px;
+  --golozur-spacing-40: 40px;
+  --golozur-spacing-48: 48px;
+  --golozur-spacing-64: 64px;
+  --golozur-spacing-80: 80px;
+  --golozur-spacing-96: 96px;
+  --golozur-spacing-128: 128px;
+
+  /* Radius */
+  --radius-none: 0px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  /* Border Width */
+  --border-width-none: 0px;
+  --border-width-thin: 1px;
+  --border-width-thick: 2px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(31, 42, 61, 0.08);
+  --shadow-md: 0 8px 24px rgba(31, 42, 61, 0.12);
+  --shadow-lg: 0 16px 40px rgba(31, 42, 61, 0.16);
+  --shadow-focus-ring: 0 0 0 2px rgba(79, 122, 181, 0.32);
+
+  /* Layout */
+  --container-sm: 640px;
+  --container-md: 768px;
+  --container-lg: 1024px;
+  --container-xl: 1280px;
+  --container-2xl: 1440px;
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+  --section-gap: 72px;
+  --element-gap: 8px;
+
+  /* Controls — Sizing and Density */
+  --control-height-sm: 32px;
+  --control-height-md: 40px;
+  --control-height-lg: 48px;
+  --control-padding-x-sm: 12px;
+  --control-padding-x-md: 16px;
+  --control-padding-x-lg: 24px;
+  --control-density-compact: 0.875;
+  --control-density-default: 1;
+  --control-density-comfortable: 1.125;
+
+  /* States */
+  --opacity-disabled: 0.45;
+  --opacity-hover: 0.92;
+  --opacity-pressed: 0.84;
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 240ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1.2);
+  --ease-decelerate: cubic-bezier(0, 0, 0, 1);
+  --ease-accelerate: cubic-bezier(0.3, 0, 1, 1);
+
+  /* Z-Index — Layering Scale */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+
+  /* Shadcn UI — CSS Variable Mapping to Golozur DS tokens */
+  --color-background: #f7f9fc;
+  --color-foreground: #1f2a3d;
+  --color-card: #ffffff;
+  --color-card-foreground: #1f2a3d;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1f2a3d;
+  --color-primary: #3e68a4;
+  --color-primary-foreground: #eaf0fa;
+  --color-secondary: #eef3fa;
+  --color-secondary-foreground: #1f2a3d;
+  --color-muted: #eef3fa;
+  --color-muted-foreground: #6e7e99;
+  --color-accent: #f49b49;
+  --color-accent-foreground: #1f2a3d;
+  --color-destructive: #d94b4b;
+  --color-destructive-foreground: #eaf0fa;
+  --color-border: #d9e0ea;
+  --color-input: #3e68a4;
+  --color-ring: #4f7ab5;
+  --radius: 0.5rem;
 }
 
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Dark theme: override token values when .dark is on <html> */
+.dark {
+  --color-background-canvas: #0f1724;
+  --color-background-subtle: #121c2b;
+  --color-surface-base: #172235;
+  --color-surface-raised: #1e2c44;
+  --color-surface-inverted: #eaf0fa;
+  --color-text-primary: #eaf0fa;
+  --color-text-secondary: #b8c4d9;
+  --color-text-muted: #93a2bc;
+  --color-text-inverse: #0f1724;
+  --color-brand-primary: #6e90c2;
+  --color-brand-primary-hover: #82a1cf;
+  --color-brand-primary-active: #5b7fb4;
+  --color-brand-accent: #f4a65b;
+  --color-brand-accent-hover: #f7b877;
+  --color-brand-accent-active: #e6913f;
+  --color-border-subtle: #2a3a55;
+  --color-border-strong: #3a4d70;
+  --color-border-interactive: #6e90c2;
+  --color-state-success: #4cc38d;
+  --color-state-warning: #f4a65b;
+  --color-state-error: #f07a7a;
+  --color-state-info: #82a1cf;
+  --color-state-focus: #9eb7dc;
+  --color-overlay-scrim: rgba(10, 15, 24, 0.72);
+  --color-chart-primary: #6e90c2;
+  --color-chart-accent: #f4a65b;
+  --color-chart-success: #4cc38d;
+  --color-chart-warning: #f4a65b;
+  --color-chart-error: #f07a7a;
+  --color-chart-grid: #2a3a55;
+  --color-chart-axis: #93a2bc;
+  --color-chart-tooltip-surface: #1e2c44;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 14px 32px rgba(0, 0, 0, 0.4);
+   --shadow-focus-ring: 0 0 0 2px rgba(158, 183, 220, 0.45);
+
+  /* Shadcn UI — Dark mode overrides */
+  --color-background: #0f1724;
+  --color-foreground: #eaf0fa;
+  --color-card: #172235;
+  --color-card-foreground: #eaf0fa;
+  --color-popover: #1e2c44;
+  --color-popover-foreground: #eaf0fa;
+  --color-primary: #6e90c2;
+  --color-primary-foreground: #0f1724;
+  --color-secondary: #121c2b;
+  --color-secondary-foreground: #eaf0fa;
+  --color-muted: #121c2b;
+  --color-muted-foreground: #93a2bc;
+  --color-accent: #f4a65b;
+  --color-accent-foreground: #eaf0fa;
+  --color-destructive: #f07a7a;
+  --color-destructive-foreground: #0f1724;
+  --color-border: #2a3a55;
+  --color-input: #6e90c2;
+  --color-ring: #9eb7dc;
+  /* Golozur Dark — Sidebar tokens mapped from DS dark tokens */
+  --sidebar: hsl(218 39% 15%);                  /* --color-surface-base dark */
+  --sidebar-foreground: hsl(218 62% 95%);       /* --color-text-primary dark */
+  --sidebar-primary: hsl(216 41% 60%);           /* --color-brand-primary dark */
+  --sidebar-primary-foreground: hsl(218 39% 15%); /* --color-surface-base dark */
+  --sidebar-accent: hsl(216 41% 12%);            /* --color-background-subtle dark */
+  --sidebar-accent-foreground: hsl(218 62% 95%); /* --color-text-primary dark */
+  --sidebar-border: hsl(218 34% 25%);            /* --color-border-subtle dark */
+  --sidebar-ring: hsl(216 47% 74%);              /* --color-state-focus dark */
+}
+
+/* ============================================================
+   Base reset — kept minimal. Scrollbar styling preserved.
+   ============================================================ */
 
 * {
   box-sizing: border-box;
-  padding: 0;
-  margin: 0;
 }
 
 html,
@@ -54,22 +270,194 @@ body {
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  ::-webkit-scrollbar {
-      width: 5px;
-      height: 3px;
-  };
-  ::-webkit-scrollbar-track {
-      box-shadow: inset 0 0 6px rgba(0,0,0,0.3); 
-      border-radius: 10px;
-  };
-  ::-webkit-scrollbar-thumb {
-      border-radius: 10px;
-      box-shadow: inset 0 0 6px rgba(0,0,0,0.5); 
+  margin: 0;
+  background-color: var(--color-background-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+}
+
+body ::-webkit-scrollbar {
+  width: 5px;
+  height: 3px;
+}
+
+body ::-webkit-scrollbar-track {
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+}
+
+body ::-webkit-scrollbar-thumb {
+  border-radius: 10px;
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes modal-unfold-in {
+  0% {
+    transform: scaleY(0.005) scaleX(0);
+  }
+  50% {
+    transform: scaleY(0.005) scaleX(1);
+  }
+  100% {
+    transform: scaleY(1) scaleX(1);
+  }
+}
+
+@keyframes modal-unfold-out {
+  0% {
+    transform: scaleY(1) scaleX(1);
+  }
+  50% {
+    transform: scaleY(0.005) scaleX(1);
+  }
+  100% {
+    transform: scaleY(0.005) scaleX(0);
+  }
+}
+
+@keyframes modal-zoom-in {
+  0% {
+    transform: scale(0);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes modal-zoom-out {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(0);
+  }
+}
+
+@keyframes access-denied-shake {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-10deg);
+  }
+  75% {
+    transform: rotate(10deg);
+  }
+}
+
+/* ============================================================
+   Reduced motion — respect user accessibility preferences
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.modal-content-size {
+  width: var(--modal-width);
+  height: var(--modal-height);
+}
+
+.modal-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-track {
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 10px;
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.5);
+}
+
+.modal-title {
+  font-size: var(--text-body);
+}
+
+@media only screen and (max-width: 1440px) {
+  .modal-title {
+    font-size: var(--text-subheading);
+  }
+}
+
+@media only screen and (max-width: 1366px) {
+  .modal-title {
+    font-size: var(--text-body);
+  }
+}
+
+@media only screen and (max-width: 1024px) {
+  .modal-title {
+    font-size: var(--text-body);
+  }
+}
+
+@media only screen and (max-width: 445px) {
+  .modal-title {
+    font-size: var(--text-label);
+  }
+}
+
+@media only screen and (max-width: 1024px) {
+  .modal-content-size {
+    width: 80%;
+  }
+}
+
+@media only screen and (max-width: 768px) {
+  .modal-content-size {
+    height: auto;
+    width: 95%;
+    min-width: 100%;
+    max-height: 90%;
   }
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+:root:not(.dark) {
+  /* Golozur Light — Sidebar tokens mapped from DS tokens */
+  --sidebar: hsl(0 0% 100%);                    /* --color-surface-base */
+  --sidebar-foreground: hsl(218 33% 18%);       /* --color-text-primary */
+  --sidebar-primary: hsl(215 45% 44%);           /* --color-brand-primary */
+  --sidebar-primary-foreground: hsl(218 62% 95%); /* --color-text-inverse */
+  --sidebar-accent: hsl(215 55% 96%);            /* --color-background-subtle */
+  --sidebar-accent-foreground: hsl(218 33% 18%); /* --color-text-primary */
+  --sidebar-border: hsl(215 29% 88%);            /* --color-border-subtle */
+  --sidebar-ring: hsl(215 45% 44%);              /* --color-brand-primary */
+}
+
+@theme inline {
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* Safety net — minimum 44px touch targets on touch devices */
+@media (pointer: coarse) {
+  button:not([data-sidebar="trigger"]):not([data-sidebar="menu-button"]):not([data-sidebar="group-action"]):not([data-sidebar="rail"]),
+  [role="button"]:not([data-sidebar="trigger"]),
+  a,
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }

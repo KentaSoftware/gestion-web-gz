@@ -1,289 +1,129 @@
 'use client';
 
-import React from 'react';
 import { useSelector } from 'react-redux';
-import styled from 'styled-components';
-import { Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { useAppDispatch } from '@/redux/hook';
 import { getPurchaseDocState, setDuplicateModalOpen, setDuplicateDecision } from '@/redux/purchaseDocSlice';
 import { DuplicateDecision } from '@/interfaces/purchaseDoc.interface';
-import { MdWarning, MdClose } from 'react-icons/md';
+import { AlertTriangle, X } from 'lucide-react';
 import { formatDate, formatCurrency } from '@/utils/validators';
+import Modal from '@/components/Modal';
+import { cn } from '@/lib/cn';
+
+// Score → semantic class mapping (no hex in className)
+const scoreBadgeClass = (score: number) => {
+  if (score >= 0.9) return 'bg-state-error text-text-inverse';
+  if (score >= 0.7) return 'bg-state-warning text-text-inverse';
+  return 'bg-chart-warning text-text-inverse';
+};
 
 export default function DuplicateWarningModal() {
   const dispatch = useAppDispatch();
   const { duplicateCheck, duplicateModalOpen } = useSelector(getPurchaseDocState);
-  
+
   if (!duplicateCheck || !duplicateCheck.isDuplicate) return null;
-  
+
   const handleClose = () => {
     dispatch(setDuplicateModalOpen(false));
   };
-  
+
   const handleCancel = () => {
     dispatch(setDuplicateDecision(DuplicateDecision.CANCEL));
     dispatch(setDuplicateModalOpen(false));
   };
-  
+
   const handleProceed = () => {
     dispatch(setDuplicateDecision(DuplicateDecision.PROCEED));
     dispatch(setDuplicateModalOpen(false));
   };
-  
+
   return (
-    <StyledDialog open={duplicateModalOpen} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <TitleBar>
-          <WarningIcon>
-            <MdWarning size={28} color="#ff9800" />
-          </WarningIcon>
-          <Title>Posible Comprobante Duplicado</Title>
-          <CloseButton onClick={handleClose}>
-            <MdClose size={24} />
-          </CloseButton>
-        </TitleBar>
-      </DialogTitle>
-      
-      <DialogContent>
-        <Message>
+    <Modal
+      open={duplicateModalOpen}
+      eClose={handleClose}
+      title="Posible Comprobante Duplicado"
+      width="650px"
+      height="auto"
+    >
+      {/* Warning icon row — rendered inside modal content, below the Modal title */}
+      <div className="flex items-center gap-3 mb-4 pt-2">
+        <AlertTriangle size={28} className="text-state-warning shrink-0" aria-hidden="true" />
+        <p className="text-base text-text-muted m-0">
           Se encontraron comprobantes similares en el sistema. Revisa si el comprobante ya fue registrado:
-        </Message>
-        
-        <CandidatesContainer>
-          {duplicateCheck.candidates.map((candidate, index) => (
-            <CandidateCard key={index}>
-              <CandidateHeader>
-                <CandidateTitle>Compra #{candidate.buyId}</CandidateTitle>
-                <ScoreBadge score={candidate.score}>
-                  {(candidate.score * 100).toFixed(0)}% similitud
-                </ScoreBadge>
-              </CandidateHeader>
-              
-              <CandidateDetails>
-                <Detail>
-                  <Label>Fecha:</Label>
-                  <Value>{formatDate(candidate.date)}</Value>
-                </Detail>
-                
-                <Detail>
-                  <Label>Comprobante:</Label>
-                  <Value>{candidate.documentNumber || 'N/A'}</Value>
-                </Detail>
-                
-                <Detail>
-                  <Label>Total:</Label>
-                  <Value>{formatCurrency(candidate.total)}</Value>
-                </Detail>
-              </CandidateDetails>
-              
-              {candidate.matchReasons && candidate.matchReasons.length > 0 && (
-                <Reasons>
-                  <ReasonsTitle>Coincidencias:</ReasonsTitle>
-                  <ReasonsList>
-                    {candidate.matchReasons.map((reason, idx) => (
-                      <Reason key={idx}>{reason}</Reason>
-                    ))}
-                  </ReasonsList>
-                </Reasons>
-              )}
-            </CandidateCard>
-          ))}
-        </CandidatesContainer>
-        
-        <Question>
-          ¿Estás seguro de que deseas continuar con el registro de este comprobante?
-        </Question>
-      </DialogContent>
-      
-      <DialogActions>
-        <CancelButton onClick={handleCancel}>
-          <MdClose size={20} />
+        </p>
+      </div>
+
+      {/* Candidate list */}
+      <div className="flex flex-col gap-4 mb-6">
+        {duplicateCheck.candidates.map((candidate, index) => (
+          <div
+            key={index}
+            className="border-2 border-state-warning rounded-xl p-4 bg-surface-raised"
+          >
+            {/* Card header */}
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-base font-semibold text-text-primary m-0">
+                Compra #{candidate.buyId}
+              </h3>
+              <span className={cn(
+                'px-3 py-1 rounded-xl text-xs font-semibold',
+                scoreBadgeClass(candidate.score)
+              )}>
+                {(candidate.score * 100).toFixed(0)}% similitud
+              </span>
+            </div>
+
+            {/* Details grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-semibold text-text-muted">Fecha:</span>
+                <span className="text-sm text-text-primary">{formatDate(candidate.date)}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-semibold text-text-muted">Comprobante:</span>
+                <span className="text-sm text-text-primary">{candidate.documentNumber || 'N/A'}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-semibold text-text-muted">Total:</span>
+                <span className="text-sm text-text-primary">{formatCurrency(candidate.total)}</span>
+              </div>
+            </div>
+
+            {/* Match reasons */}
+            {candidate.matchReasons && candidate.matchReasons.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-border-subtle">
+                <div className="text-xs font-semibold text-text-muted mb-2">Coincidencias:</div>
+                <ul className="m-0 pl-5">
+                  {candidate.matchReasons.map((reason, idx) => (
+                    <li key={idx} className="text-xs text-text-muted mb-1">{reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Confirm question */}
+      <p className="text-base font-semibold text-text-primary text-center mb-4">
+        ¿Estás seguro de que deseas continuar con el registro de este comprobante?
+      </p>
+
+      {/* Action buttons */}
+      <div className="flex gap-3 justify-end">
+        <button
+          onClick={handleCancel}
+          className="flex items-center gap-1.5 bg-state-error border-0 text-text-inverse rounded-lg px-6 py-2.5 text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90"
+        >
+          <X size={20} aria-hidden="true" />
           Cancelar Registro
-        </CancelButton>
-        <ProceedButton onClick={handleProceed}>
+        </button>
+        <button
+          onClick={handleProceed}
+          className="bg-state-success border-0 text-text-inverse rounded-lg px-6 py-2.5 text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90"
+        >
           Continuar de Todas Formas
-        </ProceedButton>
-      </DialogActions>
-    </StyledDialog>
+        </button>
+      </div>
+    </Modal>
   );
 }
-
-// Styled Components
-const StyledDialog = styled(Dialog)`
-  .MuiDialog-paper {
-    border-radius: 12px;
-  }
-`;
-
-const TitleBar = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-`;
-
-const WarningIcon = styled.div`
-  display: flex;
-  align-items: center;
-`;
-
-const Title = styled.h2`
-  font-size: 20px;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
-  flex: 1;
-`;
-
-const CloseButton = styled.button`
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #666;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  
-  &:hover {
-    color: #333;
-  }
-`;
-
-const Message = styled.p`
-  font-size: 16px;
-  color: #666;
-  margin: 0 0 24px;
-`;
-
-const CandidatesContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-bottom: 24px;
-`;
-
-const CandidateCard = styled.div`
-  border: 2px solid #ff9800;
-  border-radius: 12px;
-  padding: 16px;
-  background: #fff8e1;
-`;
-
-const CandidateHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-`;
-
-const CandidateTitle = styled.h3`
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
-`;
-
-const ScoreBadge = styled.div<{ score: number }>`
-  background: ${props => {
-    if (props.score >= 0.9) return '#f44336';
-    if (props.score >= 0.7) return '#ff9800';
-    return '#ffa726';
-  }};
-  color: white;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 600;
-`;
-
-const CandidateDetails = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 12px;
-  
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
-const Detail = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`;
-
-const Label = styled.span`
-  font-size: 12px;
-  color: #666;
-  font-weight: 600;
-`;
-
-const Value = styled.span`
-  font-size: 14px;
-  color: #333;
-`;
-
-const Reasons = styled.div`
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #ffe082;
-`;
-
-const ReasonsTitle = styled.div`
-  font-size: 13px;
-  font-weight: 600;
-  color: #666;
-  margin-bottom: 8px;
-`;
-
-const ReasonsList = styled.ul`
-  margin: 0;
-  padding-left: 20px;
-`;
-
-const Reason = styled.li`
-  font-size: 13px;
-  color: #666;
-  margin-bottom: 4px;
-`;
-
-const Question = styled.p`
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
-  text-align: center;
-`;
-
-const CancelButton = styled.button`
-  background: #f44336;
-  border: none;
-  color: white;
-  border-radius: 8px;
-  padding: 10px 24px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  
-  &:hover {
-    background: #da190b;
-  }
-`;
-
-const ProceedButton = styled.button`
-  background: #4CAF50;
-  border: none;
-  color: white;
-  border-radius: 8px;
-  padding: 10px 24px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  
-  &:hover {
-    background: #45a049;
-  }
-`;

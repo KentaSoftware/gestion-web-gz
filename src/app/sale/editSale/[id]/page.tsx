@@ -8,14 +8,12 @@ import { getUser, setUser } from '@/redux/userSlice';
 import { useAppDispatch } from '@/redux/hook';
 import { useSelector } from 'react-redux';
 import useLocalStorage from '@/hooks/useLocalStorage';
-import styled from 'styled-components';
 import ItemsProducts from '@/components/products/ItemsProducts';
 import Input from '@/components/Input';
 import ItemLineaVenta from '@/components/sale/ItemLineaVenta';
 import Button from '@/components/Button';
 import { useRouter } from 'next/navigation';
 import { getLoading, setLoading } from '@/redux/loadingSlice';
-import { setAlert } from '@/redux/alertSlice';
 import FindProductSale from '@/components/sale/FindProductSale';
 import LineaVenta from '@/components/sale/LineaVenta';
 import { useResize } from '@/hooks/useResize';
@@ -23,7 +21,6 @@ import { ExtendItemSale, ItemSale, Sale } from '@/interfaces/sale.interface';
 import { Product } from '@/interfaces/product.interface';
 import { Types } from 'mongoose';
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import Confirm from '@/components/Confirm';
 import { resetSale, setSale } from '@/redux/saleSlice';
 import ContainerSaleWeb from '@/components/sale/ContainerSaleWeb';
 import ContainerSaleMobile from '@/components/sale/ContainerSaleMobile';
@@ -66,21 +63,13 @@ export default function EditSale({ params }: { params: { id: string } }) {
   }, [id, valueStorage])
 
   return (
-    <Container>
+    <div className="flex flex-1 max-[940px]:flex-col">
       {
         ancho > 940 ?
           <ContainerSaleWeb edit={true} />
           :
           <ContainerSaleMobile edit={true} />
       }
-    </Container>
+    </div>
   )
 }
-
-const Container = styled.div`
-  display: flex;
-  flex: 1;
-  @media only screen and (max-width: 940px) {
-    flex-direction: column;
-  }
-`

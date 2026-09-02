@@ -3,7 +3,6 @@ import { useAppDispatch, useAppSelector } from '@/redux/hook'
 import { deleteItemSale, downQTY10Sale, downQTYSale, getItemSale, getSale, onChangePrecioUnitarioSale, upQTY10Sale, upQTYSale } from '@/redux/saleSlice'
 import React from 'react'
 import ItemLineaVenta from './ItemLineaVenta'
-import styled from 'styled-components'
 import { Types } from 'mongoose'
 import useLocalStorage from '@/hooks/useLocalStorage'
 import apiClient from '@/utils/client'
@@ -17,7 +16,7 @@ export default function ListLineaVenta({edit}:{edit?: boolean}) {
     const [valueStorage , setValue] = useLocalStorage("user", "")
 
   return (
-    <ListProduct>
+    <ul className="flex flex-1 w-full flex-col px-4 overflow-y-scroll max-h-[60vh] max-[625px]:px-0 max-[625px]:min-h-[35vh] max-[625px]:max-h-[40vh]">
         { 
             itemSale.length === 0 ? 'No se selecciono productos' :
             itemSale.map((item: ExtendItemSale, index:number)=>{
@@ -51,21 +50,6 @@ export default function ListLineaVenta({edit}:{edit?: boolean}) {
               />
             })
         }
-    </ListProduct> 
+    </ul>
   )
 }
-
-const ListProduct = styled.ul `
-  display: flex;
-  flex: 1;
-  width: 100%;
-  flex-direction: column;
-  padding: 0 15px;
-  overflow-y: scroll;
-  max-height: 60vh;
-  @media only screen and (max-width: 625px) {
-    padding: 0;
-    min-height: 35vh;
-    max-height: 40vh;
-  }
-`

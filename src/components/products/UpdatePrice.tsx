@@ -1,104 +1,106 @@
 import useLocalStorage from '@/hooks/useLocalStorage'
-import { setAlert } from '@/redux/alertSlice'
-import { useAppSelector } from '@/redux/hook'
-import { getUser } from '@/redux/userSlice'
+import { toast } from "sonner";
 import apiClient from '@/utils/client'
-import { useFormik } from 'formik'
-import React from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useDispatch } from 'react-redux'
 import Button from '../Button'
 import Modal from '../Modal'
-import InputSelect from '../InputSelect'
+import { AsyncCombobox } from '@/components/ui/async-combobox'
 import Input from '../Input'
-import { Brand, Categorie, Provider } from '@/interfaces/product.interface'
 import { setLoading } from '@/redux/loadingSlice'
-import ButtonUI from '../ButtonUI'
 
-interface ValueUpdate {
-  categoria: string,
-  proveedor: string,
-  marca: string,
-  porcentaje: number
-}
+const updatePriceSchema = z.object({
+  categoria: z.string(),
+  proveedor: z.string(),
+  marca: z.string(),
+  porcentaje: z.coerce.number().min(0.01, 'Debe ser mayor a 0'),
+  NameCategoria: z.string().optional(),
+  NameProveedor: z.string().optional(),
+  NameMarca: z.string().optional(),
+})
 
-const initialValues:ValueUpdate = {
+type UpdatePriceForm = z.infer<typeof updatePriceSchema>
+
+const initialValues: UpdatePriceForm = {
   categoria: '',
   proveedor: '',
   marca: '',
-  porcentaje: 0
+  porcentaje: 0,
+  NameCategoria: '',
+  NameProveedor: '',
+  NameMarca: '',
 }
 
 export default function UpdatePrice({open, handleClose}:{open: boolean, handleClose: ()=>void}) {
 
-    const user = useAppSelector(getUser)
     const dispatch = useDispatch()
-    const [valueStorage , setValue] = useLocalStorage("user", "")
+    const [valueStorage] = useLocalStorage('user', '')
 
-    const formik = useFormik({
-        initialValues: initialValues,
-        validateOnChange: false,
-        onSubmit: (formValue: ValueUpdate) => {
-          dispatch(setLoading(true));
-            if (formValue.porcentaje <= 0) {
-              dispatch(setAlert({
-                message: 'Porcentaje tiene que ser mayor a 0',
-                type: 'error'
-              }))
-              return 
-            }
-            if (formValue.categoria !== '' || formValue.marca !== '' || formValue.proveedor !== '') {
-              apiClient.patch(`/product`, formValue,
-              {
-                headers: {
-                  Authorization: `Bearer ${valueStorage.token}` // Agregar el token en el encabezado como "Bearer {token}"
-                }
-              })
-              .then(async(response)=>{
-                formik.resetForm()
-                handleClose()
-                dispatch(setLoading(false));
-              })
-              .catch(e=>console.log("error", e))
-            }else{
-              dispatch(setAlert({
-                message: 'Tiene que elegir algun filtro',
-                type: 'error'
-              }))
-              dispatch(setLoading(false));
-              return 
-            }
-        }
+    const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<UpdatePriceForm>({
+        // zodResolver type inference for z.coerce.number() returns unknown;
+        // cast is safe because runtime behavior handles coercion correctly.
+        resolver: zodResolver(updatePriceSchema) as any,
+        defaultValues: initialValues,
     })
+
+    const onSubmit = (formValue: UpdatePriceForm) => {
+        dispatch(setLoading(true));
+        if (formValue.porcentaje <= 0) {
+          toast.error('Porcentaje tiene que ser mayor a 0')
+          return 
+        }
+        if (formValue.categoria !== '' || formValue.marca !== '' || formValue.proveedor !== '') {
+          apiClient.patch(`/product`, formValue,
+          {
+            headers: {
+              Authorization: `Bearer ${valueStorage.token}`
+            }
+          })
+          .then(async(response)=>{
+            reset()
+            handleClose()
+            dispatch(setLoading(false));
+          })
+          .catch(e=>console.log("error", e))
+        }else{
+          toast.error('Tiene que elegir algun filtro')
+          dispatch(setLoading(false));
+          return 
+        }
+    }
 
   return (
     <Modal open={open} eClose={handleClose} title='Actualizar precios' height='auto' >
-        <InputSelect
-            value={formik.values.categoria}
-            onChange={(id:string, item:Categorie)=>{
-              formik.setFieldValue('categoria', id)
-              formik.setFieldValue('NameCategoria', item.descripcion)
+        <AsyncCombobox
+            value={watch('categoria') ?? ''}
+            onChange={(id: string, item: any)=>{
+              setValue('categoria', id)
+              setValue('NameCategoria', item?.descripcion ?? '')
             }}
             name={'Categoria'} path={'categorie'}
         />
-        <InputSelect
-            value={formik.values.proveedor}
-            onChange={(id:string, item:Provider)=>{
-              formik.setFieldValue('proveedor', id)
-              formik.setFieldValue('NameProveedor', item.descripcion)
+        <AsyncCombobox
+            value={watch('proveedor') ?? ''}
+            onChange={(id: string, item: any)=>{
+              setValue('proveedor', id)
+              setValue('NameProveedor', item?.descripcion ?? '')
             }}
             name={'Proveedor'} path={'provider'}
         />
-        <InputSelect
-            value={formik.values.marca}
-            onChange={(id:string, item:Brand)=>{
-              formik.setFieldValue('marca', id)
-              formik.setFieldValue('NameMarca', item.descripcion)
+        <AsyncCombobox
+            value={watch('marca') ?? ''}
+            onChange={(id: string, item: any)=>{
+              setValue('marca', id)
+              setValue('NameMarca', item?.descripcion ?? '')
             }}
             name={'Marca'} path={'brand'}
         />
-        <Input label={'Porcentaje'} name={'porcentaje'} value={formik.values.porcentaje} onChange={formik.handleChange} type='number' />
-        <div style={{display: 'flex', justifyContent: 'center'}} >
-          <ButtonUI label='Actualizar' onClick={formik.handleSubmit}/>
+        <Input label={'Porcentaje'} type='number' value={watch('porcentaje') ?? 0} {...register('porcentaje')} />
+        {errors.porcentaje && <p className="text-left text-red-500">{errors.porcentaje.message}</p>}
+        <div className='flex justify-center'>
+          <Button text='Actualizar' onClick={handleSubmit(onSubmit)}/>
         </div>
     </Modal>
   )

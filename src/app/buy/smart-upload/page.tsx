@@ -1,150 +1,78 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
-import styled from 'styled-components';
 import { getCurrentStep, resetWizard } from '@/redux/purchaseDocSlice';
 import { useAppDispatch } from '@/redux/hook';
 import UploadStep from '@/components/buy/smart-upload/UploadStep';
 import ReviewStep from '@/components/buy/smart-upload/ReviewStep';
-import { MdArrowBack } from 'react-icons/md';
+import { ArrowLeft } from 'lucide-react';
 
 export default function SmartUploadPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const currentStep = useSelector(getCurrentStep);
-  
+
   useEffect(() => {
     // Reset wizard al montar
     return () => {
       dispatch(resetWizard());
     };
   }, [dispatch]);
-  
+
   const handleGoBack = () => {
     router.push('/buy');
   };
-  
+
   return (
-    <Container>
-      <Header>
-        <BackButton onClick={handleGoBack}>
-          <MdArrowBack size={24} />
+    <div className='mx-auto flex w-full max-w-[1400px] flex-col gap-6 p-6'>
+      <div className='flex flex-col gap-2'>
+        <button
+          onClick={handleGoBack}
+          className='flex cursor-pointer items-center gap-2 border-none bg-transparent py-2 text-sm text-brand-primary hover:underline'
+        >
+          <ArrowLeft size={24} aria-hidden="true" />
           Volver al listado
-        </BackButton>
-        <Title>Carga Inteligente de Comprobantes</Title>
-        <Subtitle>
+        </button>
+        <h1 className='m-0 text-heading-sm font-semibold text-text-primary'>
+          Carga Inteligente de Comprobantes
+        </h1>
+        <p className='m-0 text-label text-text-muted'>
           Sube tu factura, remito o presupuesto y deja que el sistema identifique los productos automáticamente
-        </Subtitle>
-      </Header>
-      
-      <StepIndicator>
-        <Step active={currentStep === 'upload'} completed={currentStep === 'review'}>
-          <StepNumber>1</StepNumber>
-          <StepLabel>Subir Comprobante</StepLabel>
-        </Step>
-        <StepConnector />
-        <Step active={currentStep === 'review'}>
-          <StepNumber>2</StepNumber>
-          <StepLabel>Revisar y Confirmar</StepLabel>
-        </Step>
-      </StepIndicator>
-      
-      <Content>
+        </p>
+      </div>
+
+      <div className='flex items-center justify-center gap-4 py-6'>
+        <div
+          className='flex flex-col items-center gap-2'
+          style={{ opacity: currentStep === 'upload' || currentStep === 'review' ? 1 : 0.4 }}
+        >
+          <div className='flex h-10 w-10 items-center justify-center rounded-full bg-brand-primary font-semibold text-text-inverse'>
+            1
+          </div>
+          <span className='text-sm font-medium text-text-primary'>
+            Subir Comprobante
+          </span>
+        </div>
+        <div className='mb-6 h-0.5 w-[100px] bg-border-subtle' />
+        <div
+          className='flex flex-col items-center gap-2'
+          style={{ opacity: currentStep === 'review' ? 1 : 0.4 }}
+        >
+          <div className='flex h-10 w-10 items-center justify-center rounded-full bg-brand-primary font-semibold text-text-inverse'>
+            2
+          </div>
+          <span className='text-sm font-medium text-text-primary'>
+            Revisar y Confirmar
+          </span>
+        </div>
+      </div>
+
+      <div className='flex-1'>
         {currentStep === 'upload' && <UploadStep />}
         {currentStep === 'review' && <ReviewStep />}
-      </Content>
-    </Container>
+      </div>
+    </div>
   );
 }
-
-// Styled Components
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
-`;
-
-const Header = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`;
-
-const BackButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: none;
-  border: none;
-  color: #3764A0;
-  font-size: 14px;
-  cursor: pointer;
-  padding: 8px 0;
-  
-  &:hover {
-    text-decoration: underline;
-  }
-`;
-
-const Title = styled.h1`
-  font-size: 28px;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
-`;
-
-const Subtitle = styled.p`
-  font-size: 14px;
-  color: #666;
-  margin: 0;
-`;
-
-const StepIndicator = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 24px 0;
-`;
-
-const Step = styled.div<{ active?: boolean; completed?: boolean }>`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  opacity: ${props => (props.active || props.completed ? 1 : 0.4)};
-`;
-
-const StepNumber = styled.div`
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: #3764A0;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-`;
-
-const StepLabel = styled.span`
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-`;
-
-const StepConnector = styled.div`
-  width: 100px;
-  height: 2px;
-  background: #ddd;
-  margin-bottom: 24px;
-`;
-
-const Content = styled.div`
-  flex: 1;
-`;

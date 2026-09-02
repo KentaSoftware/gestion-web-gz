@@ -1,8 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
 import { useSelector } from 'react-redux';
-import styled from 'styled-components';
 import { useRouter } from 'next/navigation';
 import { useAppDispatch } from '@/redux/hook';
 import {
@@ -15,14 +13,14 @@ import {
   setDuplicateModalOpen,
 } from '@/redux/purchaseDocSlice';
 import { purchaseDocService } from '@/services/purchaseDoc.service';
-import { setAlert } from '@/redux/alertSlice';
+import { toast } from "sonner";
 import { LinkingStatus, DuplicateDecision } from '@/interfaces/purchaseDoc.interface';
 import ProgressIndicator from './ProgressIndicator';
 import HeaderCard from './HeaderCard';
 import ItemsReviewTable from './ItemsReviewTable';
 import DuplicateWarningModal from './DuplicateWarningModal';
-import Loading from '@/components/Loading';
-import { MdWarning } from 'react-icons/md';
+import Button from '@/components/Button';
+import { AlertTriangle } from 'lucide-react';
 
 export default function ReviewStep() {
   const dispatch = useAppDispatch();
@@ -30,33 +28,37 @@ export default function ReviewStep() {
   const { draftId, headerEdits, confirmLoading, duplicateCheck, duplicateDecision } = useSelector(getPurchaseDocState);
   const analysis = useSelector(getAnalysis);
   const itemLinks = useSelector(getItemLinks);
-  
+
   if (!analysis) {
-    return <ErrorContainer>No hay datos de análisis</ErrorContainer>;
+    return (
+      <div className="rounded-lg border border-state-error bg-state-error/10 p-6 text-center text-base text-state-error">
+        No hay datos de análisis
+      </div>
+    );
   }
-  
+
   // Validaciones
   const itemsArray = Object.values(itemLinks);
   const pendingItems = itemsArray.filter(link => link.status === LinkingStatus.PENDING);
   const linkedItems = itemsArray.filter(link => link.status === LinkingStatus.LINKED);
   const newProductItems = itemsArray.filter(link => link.status === LinkingStatus.NEW_PRODUCT);
-  
+
   const allItemsResolved = pendingItems.length === 0;
   const hasDuplicateWarning = duplicateCheck && duplicateCheck.isDuplicate;
-  
+
   const canConfirm = allItemsResolved && (!hasDuplicateWarning || duplicateDecision !== null);
-  
+
   const handleConfirm = async () => {
     if (!canConfirm || !draftId) return;
-    
+
     // Si hay duplicado y no se ha decidido, mostrar modal
     if (hasDuplicateWarning && duplicateDecision === null) {
       dispatch(setDuplicateModalOpen(true));
       return;
     }
-    
+
     dispatch(startConfirm());
-    
+
     try {
       // Construir el payload de confirmación
       const items = Object.entries(itemLinks).map(([lineId, link]) => {
@@ -73,7 +75,7 @@ export default function ReviewStep() {
         }
         throw new Error(`Item ${lineId} no tiene vinculación válida`);
       });
-      
+
       const result = await purchaseDocService.confirm(draftId, {
         headerEdits: headerEdits || undefined,
         items,
@@ -82,123 +84,57 @@ export default function ReviewStep() {
           decision: duplicateDecision,
         } : undefined,
       });
-      
+
       dispatch(confirmSuccess({ purchaseId: result.buyId }));
-      
-      dispatch(setAlert({
-        message: `Compra creada exitosamente (ID: ${result.buyId})`,
-        type: 'success',
-      }));
-      
+
+      toast.success(`Compra creada exitosamente (ID: ${result.buyId})`);
+
       // Redirigir al detalle de la compra
       router.push(`/buy/${result.buyId}`);
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Error al confirmar la compra';
       dispatch(confirmFailure(errorMessage));
-      dispatch(setAlert({
-        message: errorMessage,
-        type: 'error',
-      }));
+      toast.error(errorMessage);
     }
   };
-  
+
   return (
-    <Container>
+    <div className="flex flex-col gap-6">
       <ProgressIndicator />
-      
+
       <HeaderCard />
-      
+
       {pendingItems.length > 0 && (
-        <WarningBox>
-          <MdWarning size={24} />
-          <WarningText>
+        <div className="flex items-center gap-3 rounded-lg border border-state-warning bg-state-warning/10 p-4">
+          <AlertTriangle className="shrink-0 text-state-warning" size={24} aria-hidden="true" />
+          <span className="text-sm text-text-primary">
             Hay {pendingItems.length} ítems sin vincular. Debes vincular todos los ítems antes de confirmar.
-          </WarningText>
-        </WarningBox>
+          </span>
+        </div>
       )}
-      
+
       {hasDuplicateWarning && duplicateDecision === null && (
-        <WarningBox warning>
-          <MdWarning size={24} />
-          <WarningText>
+        <div className="flex items-center gap-3 rounded-lg border border-state-warning bg-state-warning/10 p-4">
+          <AlertTriangle className="shrink-0 text-state-warning" size={24} aria-hidden="true" />
+          <span className="text-sm text-text-primary">
             Se detectó un posible duplicado. Revisa la advertencia antes de confirmar.
-          </WarningText>
-        </WarningBox>
+          </span>
+        </div>
       )}
-      
+
       <ItemsReviewTable />
-      
-      <Actions>
-        <ConfirmButton onClick={handleConfirm} disabled={!canConfirm || confirmLoading}>
-          {confirmLoading ? 'Confirmando...' : 'Confirmar y Crear Compra'}
-        </ConfirmButton>
-      </Actions>
-      
+
+      <div className="mt-4 flex justify-end gap-4">
+        <Button
+          text={confirmLoading ? 'Confirmando...' : 'Confirmar y Crear Compra'}
+          variant="primary"
+          size="lg"
+          disabled={!canConfirm || confirmLoading}
+          onClick={handleConfirm}
+        />
+      </div>
+
       <DuplicateWarningModal />
-    </Container>
+    </div>
   );
 }
-
-// Styled Components
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-`;
-
-const WarningBox = styled.div<{ warning?: boolean }>`
-  background: ${props => props.warning ? '#fff3cd' : '#fff8e1'};
-  border: 1px solid ${props => props.warning ? '#ffc107' : '#ffb300'};
-  border-radius: 8px;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  
-  svg {
-    color: ${props => props.warning ? '#ff9800' : '#ffa726'};
-    flex-shrink: 0;
-  }
-`;
-
-const WarningText = styled.span`
-  font-size: 14px;
-  color: #333;
-`;
-
-const Actions = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  gap: 16px;
-  margin-top: 16px;
-`;
-
-const ConfirmButton = styled.button`
-  background: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 14px 32px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  
-  &:hover:not(:disabled) {
-    background: #45a049;
-  }
-  
-  &:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-  }
-`;
-
-const ErrorContainer = styled.div`
-  background: #ffebee;
-  border: 1px solid #f44336;
-  border-radius: 8px;
-  padding: 24px;
-  text-align: center;
-  color: #c62828;
-  font-size: 16px;
-`;

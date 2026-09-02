@@ -14,10 +14,11 @@ const EXPENSE_BASE_URL = '/expense';
 export const expenseService = {
   /**
    * Crear un nuevo egreso
+   * Backend may return { expense: {...} } wrapper or the object directly.
    */
   create: async (data: CreateExpenseDTO): Promise<Expense> => {
-    const response = await apiClient.post<Expense>(EXPENSE_BASE_URL, data);
-    return response.data;
+    const response = await apiClient.post<any>(EXPENSE_BASE_URL, data);
+    return response.data.expense ?? response.data;
   },
 
   /**
@@ -38,18 +39,20 @@ export const expenseService = {
 
   /**
    * Obtener egreso por ID
+   * Backend may return { expense: {...}, permissions?: {...} } wrapper or the object directly.
    */
   getById: async (id: string): Promise<Expense> => {
-    const response = await apiClient.get<Expense>(`${EXPENSE_BASE_URL}/${id}`);
-    return response.data;
+    const response = await apiClient.get<any>(`${EXPENSE_BASE_URL}/${id}`);
+    return response.data.expense ?? response.data;
   },
 
   /**
-   * Actualizar egreso (futuro)
+   * Actualizar egreso
+   * Backend may return { expense: {...} } wrapper or the object directly.
    */
   update: async (id: string, data: Partial<CreateExpenseDTO>): Promise<Expense> => {
-    const response = await apiClient.patch<Expense>(`${EXPENSE_BASE_URL}/${id}`, data);
-    return response.data;
+    const response = await apiClient.patch<any>(`${EXPENSE_BASE_URL}/${id}`, data);
+    return response.data.expense ?? response.data;
   },
 
   /**

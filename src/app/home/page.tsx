@@ -1,36 +1,68 @@
 'use client'
-import React, { useEffect, useState } from 'react'
-/* import { BarChart } from '@mui/x-charts/BarChart'; */
-import { PieChart } from '@mui/x-charts';
-import styled from 'styled-components';
+import React, { useEffect, useState, useCallback } from 'react'
 import apiClient from '@/utils/client';
 import { useDispatch } from 'react-redux';
 import { setLoading } from '@/redux/loadingSlice';
-import { useDate } from '@/hooks/useDate';
-import useInternetStatus from '@/hooks/useInternetStatus';
 import CustomDataSet from '@/components/CustomDataSet'
-import { setAlert } from '@/redux/alertSlice';
-import { AiOutlineDollar } from 'react-icons/ai';
-import { MdOutlineListAlt } from 'react-icons/md';
-import { motion, AnimatePresence, Variants } from "framer-motion";
-import { BarChart, Bar, Rectangle, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { AnimatedNumber } from '@/components/AnimatedNumber';
-import Button from '@/components/Button';
-import ButtonUI from '@/components/ButtonUI';
+import { toast } from "sonner";
+import { TrendingDown, TrendingUp } from 'lucide-react';
 import { addHours, endOfDay, startOfDay } from 'date-fns';
-import ExpenseKPICard from '@/components/dashboard/ExpenseKPICard';
-import ResultKPICard from '@/components/dashboard/ResultKPICard';
+import dynamic from 'next/dynamic';
 import { getDateRangeFromInterval } from '@/utils/dashboardHelpers';
+import { cashflowService } from '@/services/cashflow.service';
+import { expenseService } from '@/services/expense.service';
+import type { CashflowMovement } from '@/interfaces/cashflow.interface';
+import type { DatasetPeriod } from '@/interfaces/dashboard.interface';
+import { cn } from '@/lib/cn';
 
-const containerVariants: Variants = {
-  sales: { backgroundColor: "#99BC85", transition: { duration: 0.5 } },
-  purchases: { backgroundColor: "#DC8686", transition: { duration: 0.5 } },
-};
+const HomeChart = dynamic(() => import('@/components/dashboard/HomeChart'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-72 w-full animate-pulse rounded-xl bg-background-subtle md:h-80 lg:h-96" />
+  ),
+})
 
-const itemVariants: Variants = {
-  visible: { y: 0, opacity: 1, transition: { duration: 0.2 } },
-  hidden: { y: 10, opacity: 0 },
-}
+const ResultKPICard = dynamic(
+  () => import('@/components/dashboard/ResultKPICard'),
+  { ssr: false, loading: () => (
+    <div className="min-h-[220px] animate-pulse rounded-xl border border-border-subtle bg-surface-raised p-6 shadow-sm md:p-7">
+      <div className="flex flex-col gap-5">
+        <div className="flex items-start gap-3">
+          <div className="h-11 w-11 rounded-full bg-background-subtle" />
+          <div className="space-y-2">
+            <div className="h-4 w-24 rounded bg-background-subtle" />
+            <div className="h-5 w-40 rounded bg-background-subtle" />
+          </div>
+        </div>
+        <div className="space-y-3">
+          <div className="h-14 w-full rounded-xl bg-background-subtle" />
+          <div className="grid gap-3 md:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-24 rounded-xl bg-background-subtle" />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  ) },
+)
+
+const ExpenseKPICard = dynamic(
+  () => import('@/components/dashboard/ExpenseKPICard'),
+  { ssr: false, loading: () => (
+    <div className="min-h-[220px] animate-pulse rounded-xl border border-border-subtle bg-surface-raised p-6 shadow-sm md:p-7">
+      <div className="flex flex-col gap-4">
+        <div className="h-4 w-24 rounded bg-background-subtle" />
+        <div className="flex gap-2">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-8 w-16 rounded-full bg-background-subtle" />
+          ))}
+        </div>
+        <div className="h-16 w-full rounded-xl bg-background-subtle" />
+      </div>
+    </div>
+  ) },
+)
 
 interface Response {
   id: number
@@ -38,514 +70,450 @@ interface Response {
   salesCount: number;
   label: string,
   date: string,
-  totalSalesDifference: string,
-  salesCountDifference: string
+  totalSalesDifference: number | string,
+  salesCountDifference: number | string
 }
 
 const getTotalCardData = (dataSet: Response[], label: string) => {
-  const data = dataSet.find((item: Response)=>item.label === label)
-  return data
+  return dataSet.find((item: Response) => item.label === label)
 };
-
-const formatBarChartData = (data: { sales: Response[], buy: Response[] }) => {
-  const salesData = data.sales.map(item => item.totalSales);
-  const buyData = data.buy.map(item => item.totalSales);
-
-  
-  const labels = data.sales.map(item => item.label);
-
-  return {
-    series: [
-      { data: salesData, color: '#99BC85' }, 
-      { data: buyData, color: '#DC8686' },   
-    ],
-    xAxis: labels,
-  };
-};
-
-const transformData = (value: number) => {
-  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
-  return value;
-}
 
 const intervals = ['DIARIO', 'SEMANAL', 'MENSUAL', 'ANUAL', 'CUSTOM'];
 
+const MOVEMENT_LABELS: Record<CashflowMovement['source'], string> = {
+  sale: 'Venta',
+  buy: 'Compra',
+  expense: 'Egreso',
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+type GraphDataPoint = { label: string; ventas?: number; compras?: number }
+
+function formatDifference(value?: number | string) {
+  const numericValue = Number(value) || 0
+  return {
+    value: Number.isFinite(numericValue) ? numericValue : 0,
+    label: `${numericValue >= 0 ? '+' : ''}${numericValue.toFixed(1)}%`,
+  }
+}
+
+function formatMovementDate(date: string) {
+  return new Date(date).toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: 'short',
+  })
+}
+
+function getResultColor(resultado: number): string {
+  if (resultado > 0) return 'var(--color-state-success)'
+  if (resultado < 0) return 'var(--color-state-error)'
+  return 'var(--color-text-secondary)'
+}
+
+function translateIntervalToEnglish(interval: string): string {
+  switch (interval.toUpperCase()) {
+    case 'DIARIO':   return 'daily';
+    case 'SEMANAL':  return 'weekly';
+    case 'MENSUAL':  return 'monthly';
+    case 'ANUAL':    return 'annually';
+    default: throw new Error('Invalid interval');
+  }
+}
+
 export default function Home() {
   const [interval, setInterval] = useState<string>('DIARIO');
-  const [dataSet, setDataSet] = useState<{simple: Response[], graph: any}>({simple: [], graph: undefined})
+  const [dataSet, setDataSet] = useState<{period?: DatasetPeriod; simple: Response[], graph: { data: GraphDataPoint[] } | undefined}>({simple: [], graph: undefined})
+  const [expenseTotal, setExpenseTotal] = useState(0)
+  const [expenseOperativo, setExpenseOperativo] = useState(0)
+  const [expensePersonal, setExpensePersonal] = useState(0)
   const dispatch = useDispatch()
   const salesData = getTotalCardData(dataSet.simple, 'sale')
   const buyData = getTotalCardData(dataSet.simple, 'buy')
-  /* const pieChartData = transformData(dataSet.simple); */
-  /* const barChartData = formatBarChartData(dataSet.graph); */
   const [openCustomDataSet, setOpenCustomDataSet] = useState(false)
-  const [switchData, setSwitchData] = useState(true)
-  
-  // EG09: Estado del período para KPI de egresos
+  const [isSalesMode, setIsSalesMode] = useState(true)
   const [expensePeriod, setExpensePeriod] = useState(() => getDateRangeFromInterval('MENSUAL'))
   const [customDateRange, setCustomDateRange] = useState<{from: string; to: string} | null>(null)
+  const [recentMovements, setRecentMovements] = useState<CashflowMovement[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [hasError, setHasError] = useState(false)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
 
-  const handleSubmit = (startDate: Date, endDate: Date ) => {
+  // Derived metrics from page-level data
+  const ventasTotal = salesData?.totalSales ?? 0
+  const ventasCount = salesData?.salesCount ?? 0
+  const comprasTotal = buyData?.totalSales ?? 0
+  const comprasCount = buyData?.salesCount ?? 0
+  const ticketPromedio = isSalesMode
+    ? (ventasCount > 0 ? ventasTotal / ventasCount : 0)
+    : (comprasCount > 0 ? comprasTotal / comprasCount : 0)
+  const resultadoNeto = ventasTotal - comprasTotal - expenseTotal
+
+  const fetchRecentMovements = useCallback(async () => {
+    try {
+      const now = new Date()
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const data = await cashflowService.getMovements({
+        startDate: firstDayOfMonth.toISOString().split('T')[0],
+        endDate: now.toISOString().split('T')[0],
+      })
+      setRecentMovements(data.slice(-9).reverse())
+    } catch {
+      setRecentMovements([])
+    }
+  }, [])
+
+  const handleSubmit = (startDate: Date, endDate: Date) => {
     startDate = addHours(startOfDay(startDate), 3)
-    endDate = addHours(endOfDay(endDate), 3)
+    endDate   = addHours(endOfDay(endDate), 3)
     if (startDate >= endDate) {
-      dispatch(setAlert({
-        message: `La fecha DESDE no puede ser posterior a Hasta`,
-        type: 'warning'
-      }))
+      toast.warning('La fecha DESDE no puede ser posterior a Hasta')
       return
     }
+    setIsLoading(true)
+    setHasError(false)
     dispatch(setLoading(true))
-    
-    // EG09: Actualizar período para KPI de egresos
+
     const customRange = {
       from: startDate.toISOString().split('T')[0],
-      to: endDate.toISOString().split('T')[0]
+      to:   endDate.toISOString().split('T')[0]
     }
     setCustomDateRange(customRange)
     setExpensePeriod(customRange)
-    
-    apiClient.get(`/dataset/custom/${startDate}/${endDate}`)
-    .then(r=>{
-      setDataSet(r.data);
-      dispatch(setLoading(false))
-      setOpenCustomDataSet(false)
-      console.log("dataset",r.data)
-    })
-    .catch(e=>{console.log(e);dispatch(setLoading(false))})
+
+    Promise.all([
+      apiClient.get(`/dataset/custom/${customRange.from}/${customRange.to}`),
+      expenseService.getKPITotal({ from: customRange.from, to: customRange.to }),
+      expenseService.getKPITotal({ from: customRange.from, to: customRange.to, type: 'operativo' as any }),
+      expenseService.getKPITotal({ from: customRange.from, to: customRange.to, type: 'personal' as any }),
+    ])
+      .then(([datasetRes, expenseRes, expenseOpRes, expensePersonalRes]) => {
+        setDataSet(datasetRes.data)
+        setExpenseTotal(expenseRes.total)
+        setExpenseOperativo(expenseOpRes.total)
+        setExpensePersonal(expensePersonalRes.total)
+        setIsLoading(false)
+        setHasLoadedOnce(true)
+        dispatch(setLoading(false))
+        setOpenCustomDataSet(false)
+      })
+      .catch(e => {
+        console.log(e)
+        setHasError(true)
+        setHasLoadedOnce(true)
+        setIsLoading(false)
+        dispatch(setLoading(false))
+      })
   }
 
   useEffect(() => {
-
-    const getData = ()=> {
+    const getData = () => {
+      setIsLoading(true)
+      setHasError(false)
+      setHasLoadedOnce(false) // reset parent-data contract before new fetch
       dispatch(setLoading(true))
       const set = translateIntervalToEnglish(interval)
-      apiClient.get(`/dataset/${set}`)
-      .then(r=>{
-        setDataSet(r.data);
-        dispatch(setLoading(false))
-        console.log("dataset",r.data)
-      })
-      .catch(e=>{console.log(e);dispatch(setLoading(false))})
+      const newPeriod = getDateRangeFromInterval(interval as any)
+      setExpensePeriod(newPeriod)
+      setCustomDateRange(null)
+
+      Promise.all([
+        apiClient.get(`/dataset/${set}`),
+        expenseService.getKPITotal({ from: newPeriod.from, to: newPeriod.to }),
+        expenseService.getKPITotal({ from: newPeriod.from, to: newPeriod.to, type: 'operativo' as any }),
+        expenseService.getKPITotal({ from: newPeriod.from, to: newPeriod.to, type: 'personal' as any }),
+      ])
+        .then(([datasetRes, expenseRes, expenseOpRes, expensePersonalRes]) => {
+          setDataSet(datasetRes.data)
+          setExpenseTotal(expenseRes.total)
+          setExpenseOperativo(expenseOpRes.total)
+          setExpensePersonal(expensePersonalRes.total)
+          setIsLoading(false)
+          setHasLoadedOnce(true)
+          dispatch(setLoading(false))
+        })
+        .catch(e => {
+          console.log(e)
+          setHasError(true)
+          // Do NOT set hasLoadedOnce(true) on error — ResultKPICard uses isParentDataLoaded
+          // to decide whether to render parent props or show a loading/early-return state.
+          // Setting it true on error would make ResultKPICard render empty/default parent data.
+          setIsLoading(false)
+          dispatch(setLoading(false))
+        })
     }
 
     if (interval !== 'CUSTOM') {
       getData()
-      // EG09: Actualizar período para KPI de egresos cuando cambia intervalo
-      const newPeriod = getDateRangeFromInterval(interval as any)
-      setExpensePeriod(newPeriod)
-      setCustomDateRange(null) // Limpiar custom range
     }
   }, [interval, dispatch])
 
+  useEffect(() => {
+    fetchRecentMovements()
+  }, [fetchRecentMovements])
 
+  const totalDiff = formatDifference(
+    isSalesMode ? salesData?.totalSalesDifference : buyData?.totalSalesDifference
+  )
+  const countDiff = formatDifference(
+    isSalesMode ? salesData?.salesCountDifference : buyData?.salesCountDifference
+  )
+  const graphData = dataSet.graph?.data ?? []
 
   return (
-    <Container>
-      <MainContent>
-        <div style={{display: 'flex', justifyContent: 'center', marginTop: 15}} >
-          <ContainerInterval>
-            {intervals.map((label: string, index: number) => (
-              <ButtonUI label={label} key={index} isActive={label===interval} onClick={() => {
-                setInterval(label);
-                if (label === 'CUSTOM') {
-                  setOpenCustomDataSet(true);
-                }
-              }} />
-            ))}
-          </ContainerInterval>
+    <main className="flex min-h-full w-full flex-1 bg-background-canvas py-4 md:py-6">
+      <div className="mx-auto flex w-full min-w-0 max-w-[1440px] flex-col gap-4 px-5 md:px-6 lg:gap-5 lg:px-8 max-md:px-4">
+        <h1 className="sr-only">Panel de control</h1>
+
+        {/* ── Screen-reader status region for data loading ─────────────── */}
+        <div
+          aria-live="polite"
+          aria-atomic="true"
+          className="sr-only"
+        >
+          {isLoading ? 'Cargando datos del panel…' : hasError ? 'Error al cargar los datos' : 'Datos actualizados'}
         </div>
-        <CardContainer>
-          <WrapperContainer $switchData={switchData}>
-              <ContainerSwitch>
-                <IconWrapperCard style={{backgroundColor: '#99BC85', borderTopLeftRadius: 15}} $switchData={switchData}
-                  onClick={()=>setSwitchData(true)}
-                >
-                  <AiOutlineDollar/>
-                </IconWrapperCard>
-                <IconWrapperCard style={{backgroundColor: '#DC8686', borderBottomLeftRadius: 15}} $switchData={switchData}
-                  onClick={()=>setSwitchData(false)}
-                >
-                  <MdOutlineListAlt/>
-                </IconWrapperCard>
-              </ContainerSwitch>
-              <ContainerCardData $switchData={switchData}>
-                <WrapperContainerCardData $switchData={switchData}>
-                  <Card>
-                    <ContainerCardNumber>
-                      <CardNumbers style={{color: '#000'}} >
-                        {
-                          switchData ?
-                            salesData ? <AnimatedNumber  value={salesData.salesCount} /> : <AnimatedNumber value={0} />
-                          :
-                            buyData ? <AnimatedNumber value={buyData.salesCount} /> : <AnimatedNumber value={0} />
 
-                        }
+        {/* ── Unified operational controls ────────────────────────────── */}
+        <div className="flex flex-wrap items-center gap-3 rounded-xl bg-surface-raised p-3 shadow-sm" role="group" aria-label="Filtros del panel">
+          {/* Mode toggle — compact segmented control */}
+          <div className="flex rounded-lg bg-surface-base p-0.5" role="group" aria-label="Modo de visualización">
+            <button
+              type="button"
+              onClick={() => setIsSalesMode(true)}
+              aria-pressed={isSalesMode}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-xs font-semibold transition-all max-md:min-h-[36px]',
+                isSalesMode
+                  ? 'bg-brand-primary text-text-inverse shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary'
+              )}
+            >
+              Ventas
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsSalesMode(false)}
+              aria-pressed={!isSalesMode}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-xs font-semibold transition-all max-md:min-h-[36px]',
+                !isSalesMode
+                  ? 'bg-brand-primary text-text-inverse shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary'
+              )}
+            >
+              Compras
+            </button>
+          </div>
 
-                      </CardNumbers>
-                      <CardNumbers $porc={true} style={{color:`${salesData !== undefined && parseFloat(salesData?.salesCountDifference) < 0 ? '#DC8686': '#99BC85'}`}} >{salesData?.totalSalesDifference} %</CardNumbers>
-                    </ContainerCardNumber>
-                    <CardData style={{color: '#181C14', fontSize: 14}} >CANTIDAD</CardData>
-                  </Card>
-                  <Card>
-                    <ContainerCardNumber>
-                      <CardNumbers style={{color: '#000'}}>$ 
-                        {
-                          switchData ?
-                            salesData ? <AnimatedNumber value={salesData.totalSales} />  : <AnimatedNumber value={0} />
-                          :
-                            buyData ? <AnimatedNumber value={buyData.totalSales} />: <AnimatedNumber value={0} />
-                        }
-                      </CardNumbers>
-                      <CardNumbers $porc={true} style={{color:`${salesData !== undefined && parseFloat(salesData?.salesCountDifference) < 0 ? '#DC8686': '#99BC85'}`}} > {salesData?.salesCountDifference} %</CardNumbers>
-                    </ContainerCardNumber>
-                    <CardData style={{color: '#181C14', fontSize: 14}} >TOTAL</CardData>
-                  </Card>
-                  <Card>
-                    <ContainerCardNumber>
-                      <CardNumbers style={{color: '#000'}}  >
-                        {
-                          switchData ?
-                            salesData ? salesData.date : ''
-                          :
-                           buyData ? buyData.date : ''
-                        }
-                      </CardNumbers>
-                    </ContainerCardNumber>
-                    <CardData style={{color: '#181C14', fontSize: 14}} >INTERVALO</CardData>
-                  </Card>
-                </WrapperContainerCardData>
-              </ContainerCardData>
-          </WrapperContainer>
-        </CardContainer>
-        
-        {/* EG09: KPI Resultado Simple (Ventas - Compras - Egresos) */}
-        <ResultKPIContainer>
-          <ResultKPICard 
-            period={customDateRange || expensePeriod} 
-            interval={interval}
-          />
-        </ResultKPIContainer>
-        
-        {/* EG09: KPI de Egresos del Período + Gráfico de barras */}
-        <KPIAndChartContainer>
-          <ExpenseKPIContainer>
-            <ExpenseKPICard period={customDateRange || expensePeriod} />
-          </ExpenseKPIContainer>
-          
-          <ChartsContainer>
-            <div style={{ display: 'flex', flex: 1, justifyContent: 'center', overflowX: 'scroll' }}>
-              <BarChart width={730} height={350} data={dataSet.graph?.data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="label" />
-                <YAxis  
-                  tickFormatter={(value) => {
-                    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-                    if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
-                    return value;
-                  }} 
-                />
-                <Tooltip 
-                  formatter={(value: number) => {
-                    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-                    if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
-                    return value;
-                  }}
-                />
-                <Legend />
-                <Bar dataKey="ventas" fill="#99BC85" />
-                <Bar dataKey="compras" fill="#DC8686" />
-              </BarChart>
-            </div>
-          </ChartsContainer>
-        </KPIAndChartContainer>
-        <MovementsContainer>
-          <MovementsTitle>Ultimos movimientos :</MovementsTitle>
-          <MovementsList>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((item, index) => (
-              <MovementItem key={index}>
-                <MovementText>Venta</MovementText>
-                <MovementText color="#b33b3b">CREATE</MovementText>
-                <MovementText>25/5/2025 - 13:13</MovementText>
-              </MovementItem>
+          <span className="hidden h-5 w-px bg-border-subtle sm:block" aria-hidden="true" />
+
+          {/* Interval pills */}
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Selector de intervalo">
+            {intervals.map((label: string) => (
+              <button
+                type="button"
+                key={label}
+                aria-label={label === interval ? `Intervalo actual: ${label}` : `Seleccionar intervalo ${label}`}
+                aria-current={label === interval ? 'true' : undefined}
+                className={cn(
+                  'rounded-full px-3 py-1 text-[11px] font-semibold tracking-[0.08em] transition-all max-md:min-h-[32px]',
+                  label === interval
+                    ? 'bg-brand-primary text-text-inverse shadow-sm'
+                    : 'text-text-secondary hover:bg-surface-base hover:text-text-primary'
+                )}
+                onClick={() => {
+                  setInterval(label)
+                  if (label === 'CUSTOM') setOpenCustomDataSet(true)
+                }}
+              >
+                {label}
+              </button>
             ))}
-          </MovementsList>
-        </MovementsContainer>
-      </MainContent>
-      {
-        openCustomDataSet &&
-        <CustomDataSet open={openCustomDataSet} handleClose={()=>setOpenCustomDataSet(false)} handleSubmit={handleSubmit} />
-      }
-    </Container>
-  );
-}
+          </div>
 
-const ContainerCardNumber = styled.div `
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-direction: column;
-  @media only screen and (max-width: 780px) {
-  }
-`
+          <span className="hidden h-5 w-px bg-border-subtle sm:block" aria-hidden="true" />
 
-const ContainerSwitch = styled.div`
-  max-width: 15%;
-  @media only screen and (max-width: 780px) {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-  }
-`
+          {/* Period display — uses canonical label from API when available (P5) */}
+          <span className="text-xs font-medium text-text-muted">
+            Período: {dataSet.period?.label ?? `${customDateRange?.from ?? expensePeriod.from} a ${customDateRange?.to ?? expensePeriod.to}`}
+          </span>
+        </div>
 
-const ContainerInterval = styled.div `
-  display: flex;
-  padding: 15px;
-  border-radius: 25px;
-  border: 2px solid #d9d9d9;
-  box-shadow: inset 2px 2px 5px #9d9d9d,
-            inset -2px -2px 5px #ffffff;
-  @media only screen and (max-width: 780px) {
-    padding: 10px;
-  }
-  @media only screen and (max-width: 450px) {
-    overflow-x: scroll;
-  }
-`
+        {/* ── KPI band: 4 primary metrics ─────────────────────────────── */}
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4" role="group" aria-label="Indicadores principales">
+          {isLoading ? (
+            <>
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="min-w-0 rounded-xl bg-surface-base p-4 md:p-5" aria-hidden="true">
+                  <div className="h-3 w-20 animate-pulse rounded bg-background-subtle" />
+                  <div className="mt-4 h-7 w-28 animate-pulse rounded bg-background-subtle" />
+                  <div className="mt-3 h-5 w-16 animate-pulse rounded-full bg-background-subtle" />
+                </div>
+              ))}
+            </>
+          ) : hasError ? (
+            <div className="col-span-2 rounded-xl border border-dashed border-state-error/30 bg-surface-base p-5 text-center md:col-span-4">
+              <p className="text-sm font-medium text-state-error">No se pudieron cargar los datos</p>
+              <p className="mt-1 text-xs text-text-muted">Verificá tu conexión e intentá de nuevo seleccionando otro período.</p>
+            </div>
+          ) : dataSet.simple.length === 0 ? (
+            <div className="col-span-2 rounded-xl border border-dashed border-border-subtle bg-surface-base p-5 text-center md:col-span-4">
+              <p className="text-sm font-medium text-text-muted">No hay datos disponibles para este período</p>
+            </div>
+          ) : (
+            <>
+          {/* 1. Ventas del día */}
+          <div className="min-w-0 rounded-xl bg-surface-base p-4 md:p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">{isSalesMode ? 'Ventas' : 'Compras'}</p>
+            <p className="mt-2 text-[clamp(1.5rem,2.5vw,2.2rem)] font-semibold tracking-[-0.04em] text-text-primary">
+              {formatCurrency(isSalesMode ? ventasTotal : comprasTotal)}
+            </p>
+            <span
+              aria-label={`Variación: ${totalDiff.label}${totalDiff.value >= 0 ? ', positiva' : ', negativa'}`}
+              className={cn(
+              'mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+              totalDiff.value >= 0
+                ? 'bg-[color:color-mix(in_oklab,var(--color-state-success)_14%,white)] text-state-success'
+                : 'bg-[color:color-mix(in_oklab,var(--color-state-error)_12%,white)] text-state-error'
+            )}>
+              {totalDiff.value >= 0 ? <TrendingUp size={12} aria-hidden="true" /> : <TrendingDown size={12} aria-hidden="true" />}
+              {totalDiff.label}
+            </span>
+          </div>
 
-const CardContainer = styled.div `
-  display: flex;
-  justify-content: center;
-  @media only screen and (max-width: 780px) {
-    margin: 0 5px;
-  }
-`
+          {/* 2. Resultado neto */}
+          <div className="min-w-0 rounded-xl bg-surface-base p-4 md:p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">Resultado neto</p>
+            <p
+              className="mt-2 text-[clamp(1.5rem,2.5vw,2.2rem)] font-semibold tracking-[-0.04em]"
+              style={{ color: getResultColor(resultadoNeto) }}
+            >
+              <span className="sr-only">{resultadoNeto > 0 ? 'Positivo: ' : resultadoNeto < 0 ? 'Negativo: ' : 'Neutral: '}</span>
+              {formatCurrency(resultadoNeto)}
+            </p>
+          </div>
 
-// EG09: Container para KPI Resultado Simple
-const ResultKPIContainer = styled.div`
-  display: flex;
-  justify-content: center;
-  padding: 15px;
-  margin-top: 10px;
-  
-  > * {
-    flex: 1;
-    max-width: 800px;
-  }
+          {/* 3. Ticket promedio */}
+          <div className="min-w-0 rounded-xl bg-surface-base p-4 md:p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">{isSalesMode ? 'Ticket promedio' : 'Ticket promedio compras'}</p>
+            <p className="mt-2 text-[clamp(1.5rem,2.5vw,2.2rem)] font-semibold tracking-[-0.04em] text-text-primary">
+              {formatCurrency(ticketPromedio)}
+            </p>
+          </div>
 
-  @media only screen and (max-width: 780px) {
-    padding: 15px 5px;
-  }
-`
+          {/* 4. Cantidad de operaciones */}
+          <div className="min-w-0 rounded-xl bg-surface-base p-4 md:p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">{isSalesMode ? 'Operaciones' : 'Operaciones de compra'}</p>
+            <p className="mt-2 text-[clamp(1.5rem,2.5vw,2.2rem)] font-semibold tracking-[-0.04em] text-text-primary">
+              {(isSalesMode ? ventasCount : comprasCount).toLocaleString()}
+            </p>
+            <span
+              aria-label={`Variación: ${countDiff.label}${countDiff.value >= 0 ? ', positiva' : ', negativa'}`}
+              className={cn(
+              'mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+              countDiff.value >= 0
+                ? 'bg-[color:color-mix(in_oklab,var(--color-state-success)_14%,white)] text-state-success'
+                : 'bg-[color:color-mix(in_oklab,var(--color-state-error)_12%,white)] text-state-error'
+            )}>
+              {countDiff.value >= 0 ? <TrendingUp size={12} aria-hidden="true" /> : <TrendingDown size={12} aria-hidden="true" />}
+              {countDiff.label}
+            </span>
+          </div>
+            </>
+          )}
+        </div>
 
-// EG09: Container padre que agrupa KPI de Egresos + Gráfico
-const KPIAndChartContainer = styled.div`
-  display: flex;
-  gap: 20px;
-  padding: 15px;
-  margin-top: 10px;
-  
-  @media only screen and (max-width: 1024px) {
-    flex-direction: column;
-  }
-`
+        {/* ── Actividad reciente — visible in first viewport ─────────── */}
+        <div className="rounded-xl border border-border-subtle bg-surface-raised p-5 md:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">Movimientos del mes</p>
+              <h2 className="mt-1 text-lg font-semibold text-text-primary">Actividad reciente</h2>
+            </div>
+            <span className="rounded-full bg-background-subtle px-3 py-1 text-xs font-semibold text-text-secondary">
+              {recentMovements.length} registros
+            </span>
+          </div>
 
-// EG09: Container para KPI de Egresos
-const ExpenseKPIContainer = styled.div`
-  display: flex;
-  justify-content: center;
-  flex: 1;
-  min-width: 0;
-  
-  > * {
-    flex: 1;
-    max-width: 600px;
-  }
+          <ul className="mt-3 space-y-2">
+            {recentMovements.length === 0 ? (
+              <li className="rounded-lg border border-dashed border-border-subtle bg-surface-raised px-4 py-5 text-sm text-text-muted">
+                Sin movimientos en el período actual.
+              </li>
+            ) : (
+              recentMovements.slice(0, 5).map((mov, index) => (
+                <li
+                  key={`${mov.sourceId}-${index}`}
+                  className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border-subtle bg-surface-base px-3 py-2.5 shadow-sm"
+                >
+                  <span className={cn(
+                    'flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold',
+                    mov.type === 'inflow'
+                      ? 'bg-[color:color-mix(in_oklab,var(--color-state-success)_14%,white)] text-state-success'
+                      : 'bg-[color:color-mix(in_oklab,var(--color-state-error)_12%,white)] text-state-error'
+                  )}>
+                    {mov.type === 'inflow' ? '+' : '-'}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-text-primary">{MOVEMENT_LABELS[mov.source]}</p>
+                    <p className="truncate text-xs text-text-muted">{mov.description || 'Movimiento registrado'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={cn(
+                      'text-sm font-semibold',
+                      mov.type === 'inflow' ? 'text-state-success' : 'text-state-error'
+                    )}>
+                      {mov.type === 'inflow' ? '+' : '-'}{formatCurrency(mov.amount)}
+                    </p>
+                    <p className="text-xs text-text-muted">{formatMovementDate(mov.date)}</p>
+                  </div>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
 
-  @media only screen and (max-width: 780px) {
-    padding: 0 5px;
-  }
-`
+        {/* ══════════════════  Below the fold  ══════════════════ */}
 
-const WrapperContainer = styled.div<{$switchData: boolean}>`
-  margin-top: 15px;
-  border-radius: 15px;
-  background-color: ${({ $switchData }) => ($switchData ? '#99BC85' : '#DC8686')};
-  border: 1px solid #d9d9d9;
-  display: flex;
-  z-index: 1;
-  transition: background-color ease-in .5s ;
-  @media only screen and (max-width: 780px) {
-    flex: 1;
-  }
-`
+        {/* Chart section */}
+        <section className="rounded-xl border border-border-subtle bg-surface-raised p-4 md:p-5">
+          <div className="flex flex-col gap-4">
+            <div>
+              <h2 className="text-xl font-semibold tracking-[-0.03em] text-text-primary md:text-2xl">
+                Comparativa: {isSalesMode ? 'ventas y compras' : 'compras y ventas'}
+              </h2>
+            </div>
+            <div className="rounded-xl bg-surface-base p-3 md:p-4">
+              <HomeChart graphData={graphData} />
+            </div>
+          </div>
+        </section>
 
-const IconWrapperCard = styled.div<{$switchData: boolean}>`
-  font-size: 50px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 15px;
-  color: #fff;
-  border-top-right-radius: ${({ $switchData }) => ($switchData ? '15px' : '0px')};
-  border-bottom-right-radius: ${({ $switchData }) => (!$switchData ? '15px' : '0px')};
-  cursor: pointer;
-  @media only screen and (max-width: 780px) {
-    flex: 1;
-  }
-`
+        {/* KPI detail cards */}
+        <section className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+          <ResultKPICard
+            period={customDateRange || expensePeriod}
+            interval={interval}
+            dataset={dataSet}
+            expenseTotal={expenseTotal}
+            expenseOperativo={expenseOperativo}
+            expensePersonal={expensePersonal}
+            isParentDataLoaded={hasLoadedOnce}
+          />
+          <ExpenseKPICard period={customDateRange || expensePeriod} />
+        </section>
 
-const ContainerCardData = styled.div<{$switchData: boolean}> `
-  display: flex;
-  flex: 1;
-  background-color: ${({ $switchData }) => ($switchData ? '#DC8686' : '#99BC85')};
-  border-top-right-radius: 15px;
-  border-bottom-right-radius: 15px;
-  align-items: center;
-  justify-content: space-around;
-  transition: background-color ease-in .5s ;
-`
-
-const WrapperContainerCardData = styled.div<{$switchData: boolean}>`
-   display: flex;
-  flex: 1;
-  background-color: ${({ $switchData }) => ($switchData ? '#99BC85' : '#DC8686')};
-  border-top-right-radius: 15px;
-  border-bottom-right-radius: 15px;
-  align-items: center;
-  padding: 15px;
-  justify-content: space-around;
-  border-top-left-radius: ${({ $switchData }) => (!$switchData ? '15px' : '0')};
-  border-bottom-left-radius: ${({ $switchData }) => ($switchData ? '15px' : '0')};
-  height: 100%;
-  transition: background-color ease-in .5s ;
-  @media only screen and (max-width: 780px) {
-    flex-direction: column;
-  }
-`
-
-const Card = styled.div `
-  background: #fff;
-  border-radius: 10px;
-  margin: 0 15px;
-  padding: 0px 15px;
-  align-items: center;  
-  height: 90px;
-  border: 2px solid #d9d9d9;
-  background-image: url('/bgcircle.jpg');
-  background-size: 800px;
-  background-position: 20%;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-around;
-  min-width: 180px;
-  @media only screen and (max-width: 780px) {
-    width: 75%;
-    margin: 5px 0;
-  }
-`
-
-const CardData = styled.h2`
-  font-size: 18px;
-  font-weight: 500;
-  margin: 0;
-  color: white;
-  z-index: 1;
-  @media only screen and (max-width: 780px) {
-    margin: 0px;
-  }
-`;
-
-const CardNumbers = styled(CardData)<{$porc?: boolean}> `
-  font-weight: bold;
-  font-size: ${({ $porc }) => ($porc ? '14px' : '18px')};
-  @media only screen and (max-width: 780px) {
-    font-size: ${({ $porc }) => ($porc ? '14px' : '18px')};
-  }
-  @media only screen and (max-width: 400px) {
-    font-size: ${({ $porc }) => ($porc ? '14px' : '16px')};
-  }
-`
-
-const Container = styled.div`
-  display: flex;
-  flex: 1;
-  padding: 5px;
-  overflow-y: scroll;
-  @media only screen and (max-width: 500px) {
-    flex-direction: column;
-  }
-`;
-
-const MainContent = styled.div`
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  @media only screen and (max-width: 500px) {
-    width: 100%;
-  }
-`;
-
-
-const ChartsContainer = styled.div`
-  display: flex;
-  justify-content: space-around;
-  flex: 1;
-  min-width: 0;
-  
-  @media only screen and (max-width: 780px) {
-    padding: 0 5px;
-  }
-`;
-
-const MovementsContainer = styled.div`
-  display: flex;
-  padding: 15px;
-  flex-direction: column;
-  max-height: 380px;
-`;
-
-const MovementsTitle = styled.h2`
-  font-size: 18px;
-  font-weight: bold;
-  margin: 5px 15px;
-  color: #252525;
-`;
-
-const MovementsList = styled.ul`
-  display: flex;
-  flex-direction: column;
-  background-color: #f1f1f1;
-  border-radius: 15px;
-  padding: 15px;
-  overflow-y: scroll;
-`;
-
-const MovementItem = styled.li`
-  display: flex;
-  border-bottom: 2px solid #fff;
-  justify-content: space-around;
-  padding: 15px;
-`;
-
-const MovementText = styled.h2`
-  font-size: 18px;
-  font-weight: 500;
-  color: ${({ color }) => color || '#252525'};
-`; 
-
-function translateIntervalToEnglish(interval: string): string {
-  switch (interval.toUpperCase()) {
-    case 'DIARIO':
-      return 'daily';
-    case 'SEMANAL':
-      return 'weekly';
-    case 'MENSUAL':
-      return 'monthly';
-    case 'ANUAL':
-      return 'annually';
-    default:
-      throw new Error('Invalid interval');
-  }
+        {openCustomDataSet && (
+          <CustomDataSet open={openCustomDataSet} handleClose={() => setOpenCustomDataSet(false)} handleSubmit={handleSubmit} />
+        )}
+      </div>
+    </main>
+  )
 }

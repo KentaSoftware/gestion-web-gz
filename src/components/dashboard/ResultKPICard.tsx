@@ -1,16 +1,18 @@
 'use client'
-import React, { useState, useEffect, useRef } from 'react'
-import styled from 'styled-components'
-import { Switch, FormControlLabel } from '@mui/material'
-import { MdAttachMoney, MdInfo, MdRefresh } from 'react-icons/md'
+import { useState, useEffect, useRef, type FC, type ChangeEvent } from 'react'
+// MUI Switch + FormControlLabel removed — replaced with native checkbox toggle
+import { DollarSign, Info, ChevronRight, RefreshCw } from 'lucide-react'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/redux/store'
 import apiClient from '@/utils/client'
 import { expenseService } from '@/services/expense.service'
 import { ResultKPIProps, ResultKPIData } from '@/interfaces/dashboard.interface'
 import { trackDashboardResultKPIViewed, trackDashboardResultFilterChanged } from '@/utils/analytics'
+import { cn } from '@/lib/cn'
 
-const ResultKPICard: React.FC<ResultKPIProps> = ({ period, interval }) => {
+const CARD_CLASSNAME = 'rounded-xl border border-border-subtle bg-surface-raised p-6 shadow-md md:p-7'
+
+const ResultKPICard: FC<ResultKPIProps> = ({ period, interval, dataset, expenseTotal, expenseOperativo, expensePersonal, isParentDataLoaded }) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<ResultKPIData | null>(null)
@@ -18,6 +20,10 @@ const ResultKPICard: React.FC<ResultKPIProps> = ({ period, interval }) => {
   
   const user = useSelector((state: RootState) => state.user)
   const lastAnalyticsRef = useRef<string>('')
+
+  const hasParentData = (isParentDataLoaded === true)
+    && dataset !== undefined && dataset.simple !== undefined
+    && expenseTotal !== undefined && expenseOperativo !== undefined && expensePersonal !== undefined
 
   const fetchResultKPI = async () => {
     try {
@@ -113,11 +119,50 @@ const ResultKPICard: React.FC<ResultKPIProps> = ({ period, interval }) => {
   }
 
   useEffect(() => {
-    fetchResultKPI()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period.from, period.to, operativosOnly])
+    if (hasParentData && dataset) {
+      setError(null)
 
-  const handleToggleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const salesData = dataset.simple?.find((item: any) => item.label === 'sale')
+      const buyData = dataset.simple?.find((item: any) => item.label === 'buy')
+
+      const ventas = salesData?.totalSales || 0
+      const compras = buyData?.totalSales || 0
+      const egresosUsados = operativosOnly ? (expenseOperativo || 0) : (expenseTotal || 0)
+      const resultado = ventas - compras - egresosUsados
+
+      setData({
+        ventas,
+        compras,
+        resultado,
+        gastosPersonales: expensePersonal || 0,
+      })
+      setLoading(false)
+
+      // Analytics con guard anti-duplicados
+      const analyticsKey = `${period.from}-${period.to}-${operativosOnly}`
+      if (lastAnalyticsRef.current !== analyticsKey) {
+        trackDashboardResultKPIViewed({
+          usuario: user.nickname || 'desconocido',
+          periodo: { from: period.from, to: period.to, interval },
+          operativosOnly,
+          ventas,
+          compras,
+          egresosUsados,
+          resultado,
+          gastosPersonales: expensePersonal || 0,
+        })
+        lastAnalyticsRef.current = analyticsKey
+      }
+    } else if (isParentDataLoaded === false) {
+      // Parent is still loading initial data — don't fetch, stay in current state
+      return
+    } else {
+      fetchResultKPI()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period.from, period.to, operativosOnly, dataset, expenseTotal, expenseOperativo, expensePersonal])
+
+  const handleToggleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const newValue = event.target.checked
     
     // Analytics de cambio de filtro
@@ -141,289 +186,143 @@ const ResultKPICard: React.FC<ResultKPIProps> = ({ period, interval }) => {
   }
 
   const getResultColor = (resultado: number): string => {
-    if (resultado > 0) return '#99BC85' // Verde (positivo)
-    if (resultado < 0) return '#DC8686' // Rojo (negativo)
-    return '#666' // Gris (cero)
+    if (resultado > 0) return 'var(--color-state-success)'
+    if (resultado < 0) return 'var(--color-state-error)'
+    return 'var(--color-text-secondary)'
   }
+
+  const summaryData = data
+    ? [
+        { label: 'Ventas', value: data.ventas },
+        { label: 'Compras', value: data.compras },
+        { label: operativosOnly ? 'Egresos operativos' : 'Egresos totales', value: data.ventas - data.compras - data.resultado },
+      ]
+    : []
 
   // Loading state
   if (loading) {
     return (
-      <KPIContainer>
-        <KPIHeader>
-          <TitleContainer>
-            <IconWrapper>
-              <MdAttachMoney />
-            </IconWrapper>
-            <KPITitle>Resultado del Período</KPITitle>
-          </TitleContainer>
-        </KPIHeader>
-        <KPIBody>
-          <SkeletonAmount />
-          <SkeletonText />
-          <SkeletonText width="60%" />
-        </KPIBody>
-      </KPIContainer>
+      <div className={CARD_CLASSNAME}>
+        <div className="flex min-h-[220px] flex-col justify-between gap-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-raised text-brand-primary shadow-sm">
+                <DollarSign className="text-[22px]" aria-hidden="true" />
+              </div>
+              <div>
+                <span className="inline-flex rounded-full bg-[color:color-mix(in_oklab,var(--color-brand-primary)_12%,white)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-primary">
+                  Resultado simple
+                </span>
+                <h3 className="mt-3 text-xl font-semibold tracking-[-0.03em] text-text-primary">Resultado del período</h3>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="h-14 w-full animate-pulse rounded-xl bg-background-subtle" />
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="h-24 animate-pulse rounded-xl bg-background-subtle" />
+                <div className="h-24 animate-pulse rounded-xl bg-background-subtle" />
+                <div className="h-24 animate-pulse rounded-xl bg-background-subtle" />
+              </div>
+            </div>
+        </div>
+      </div>
     )
   }
 
   // Error state
   if (error) {
     return (
-      <KPIContainer>
-        <KPIHeader>
-          <TitleContainer>
-            <IconWrapper>
-              <MdAttachMoney />
-            </IconWrapper>
-            <KPITitle>Resultado del Período</KPITitle>
-          </TitleContainer>
-        </KPIHeader>
-        <KPIBody>
-          <ErrorContainer>
-            <ErrorText>{error}</ErrorText>
-            <RetryButton onClick={fetchResultKPI}>
-              <MdRefresh /> Reintentar
-            </RetryButton>
-          </ErrorContainer>
-        </KPIBody>
-      </KPIContainer>
+      <div className={CARD_CLASSNAME}>
+        <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-border-subtle bg-surface-raised p-6 text-center">
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-[color:color-mix(in_oklab,var(--color-state-error)_12%,white)] text-state-error">
+              <Info className="text-2xl" aria-hidden="true" />
+            </div>
+            <h3 className="text-lg font-semibold text-text-primary">No pudimos calcular el resultado</h3>
+            <p className="mt-2 max-w-[32ch] text-sm leading-6 text-state-error">{error}</p>
+            <button
+              onClick={fetchResultKPI}
+              className="group mt-5 flex cursor-pointer items-center gap-2 rounded-full border-none bg-brand-primary px-5 py-2.5 text-sm font-semibold text-text-inverse transition-colors duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-brand-primary-hover focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] focus-visible:ring-offset-2"
+            >
+              <RefreshCw aria-hidden="true" /> Reintentar
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/14 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-1">
+                <ChevronRight size={16} aria-hidden="true" />
+              </span>
+            </button>
+        </div>
+      </div>
     )
   }
 
   // Success state
   return (
-    <KPIContainer>
-      <KPIHeader>
-        <TitleContainer>
-          <IconWrapper>
-            <MdAttachMoney />
-          </IconWrapper>
-          <KPITitle>Resultado del Período</KPITitle>
-        </TitleContainer>
-        <ToggleContainer>
-          <StyledFormControlLabel
-            control={
-              <StyledSwitch
-                checked={operativosOnly}
-                onChange={handleToggleChange}
-                size="small"
-              />
-            }
-            label="Solo egresos operativos"
-          />
-        </ToggleContainer>
-      </KPIHeader>
-      <KPIBody>
-        <KPIAmount color={getResultColor(data?.resultado || 0)}>
-          {formatAmount(data?.resultado || 0)}
-        </KPIAmount>
-        <KPIFormula>Ventas - Compras - Egresos</KPIFormula>
-        <PersonalExpensesInfo>
-          <MdInfo style={{ fontSize: '16px', marginRight: '5px' }} />
-          Gastos personales: {formatAmount(data?.gastosPersonales || 0)}
-        </PersonalExpensesInfo>
-      </KPIBody>
-    </KPIContainer>
+    <div className={cn(CARD_CLASSNAME, 'overflow-hidden')}>
+      <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-3">
+              <span className="inline-flex rounded-full bg-[color:color-mix(in_oklab,var(--color-brand-primary)_12%,white)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-primary">
+                Resultado simple
+              </span>
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-raised text-brand-primary shadow-sm">
+                  <DollarSign className="text-[22px]" aria-hidden="true" />
+                </div>
+                <div>
+                  <h3 className="m-0 text-xl font-semibold tracking-[-0.03em] text-text-primary">Resultado del período</h3>
+                  <p className="mt-1 text-sm leading-6 text-text-secondary">Ventas menos compras y egresos, con un filtro inmediato para operación.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-surface-base px-4 py-3">
+              <label
+                className="flex cursor-pointer items-center gap-3 text-text-secondary text-label font-semibold select-none"
+              >
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={operativosOnly}
+                  onChange={handleToggleChange}
+                  style={{
+                    accentColor: 'var(--color-brand-primary)',
+                    outlineColor: 'var(--color-border-interactive)',
+                  }}
+                  className="h-5 w-5 cursor-pointer rounded focus-visible:ring-2 focus-visible:ring-offset-1"
+                />
+                Solo egresos operativos
+              </label>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+            <div className="rounded-xl bg-surface-base p-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">Resultado neto</p>
+              <div
+                className="mt-4 text-[clamp(2.4rem,4vw,3.6rem)] font-semibold tracking-[-0.06em]"
+                style={{ color: getResultColor(data?.resultado || 0) }}
+              >
+                {formatAmount(data?.resultado || 0)}
+              </div>
+              <p className="mt-3 text-sm leading-6 text-text-secondary">Ventas - Compras - Egresos</p>
+              <div className="mt-5 inline-flex items-center rounded-full bg-[color:color-mix(in_oklab,var(--color-brand-accent)_10%,white)] px-4 py-2 text-[13px] font-medium text-[color:color-mix(in_oklab,var(--color-brand-accent)_76%,black)]">
+                <Info className="mr-2 text-base" aria-hidden="true" />
+                Gastos personales: {formatAmount(data?.gastosPersonales || 0)}
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3 md:grid-cols-1">
+              {summaryData.map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-xl bg-surface-base p-4"
+                >
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">{item.label}</p>
+                  <p className="mt-3 text-xl font-semibold tracking-[-0.03em] text-text-primary">{formatAmount(item.value)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+      </div>
+    </div>
   )
 }
 
 export default ResultKPICard
-
-// Styled Components
-
-const KPIContainer = styled.div`
-  background: #fff;
-  border-radius: 10px;
-  border-left: 5px solid #8294C4;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  min-height: 200px;
-
-  @media only screen and (max-width: 780px) {
-    padding: 15px;
-  }
-`
-
-const KPIHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 10px;
-
-  @media only screen and (max-width: 768px) {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-`
-
-const TitleContainer = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-`
-
-const IconWrapper = styled.div`
-  font-size: 24px;
-  color: #3764A0;
-  display: flex;
-  align-items: center;
-`
-
-const KPITitle = styled.h3`
-  font-size: 18px;
-  font-weight: 600;
-  color: #3764A0;
-  margin: 0;
-
-  @media only screen and (max-width: 780px) {
-    font-size: 16px;
-  }
-`
-
-const ToggleContainer = styled.div`
-  display: flex;
-  align-items: center;
-
-  @media only screen and (max-width: 768px) {
-    width: 100%;
-  }
-`
-
-const StyledFormControlLabel = styled(FormControlLabel)`
-  margin: 0 !important;
-  
-  .MuiFormControlLabel-label {
-    font-size: 14px;
-    color: #666;
-    
-    @media only screen and (max-width: 768px) {
-      font-size: 13px;
-    }
-  }
-`
-
-const StyledSwitch = styled(Switch)`
-  .MuiSwitch-switchBase.Mui-checked {
-    color: #8294C4;
-  }
-  
-  .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track {
-    background-color: #8294C4;
-  }
-`
-
-const KPIBody = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  gap: 10px;
-`
-
-const KPIAmount = styled.div<{ color: string }>`
-  font-size: 32px;
-  font-weight: bold;
-  color: ${props => props.color};
-  margin: 10px 0;
-
-  @media only screen and (max-width: 780px) {
-    font-size: 28px;
-  }
-`
-
-const KPIFormula = styled.div`
-  font-size: 14px;
-  color: #666;
-  text-align: center;
-`
-
-const PersonalExpensesInfo = styled.div`
-  display: flex;
-  align-items: center;
-  font-size: 13px;
-  color: #EA906C;
-  background: #FFF4F0;
-  padding: 8px 15px;
-  border-radius: 20px;
-  margin-top: 10px;
-
-  @media only screen and (max-width: 780px) {
-    font-size: 12px;
-    padding: 6px 12px;
-  }
-`
-
-// Loading skeleton
-const SkeletonAmount = styled.div`
-  width: 200px;
-  height: 40px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
-  animation: loading 1.5s infinite;
-  border-radius: 5px;
-  margin: 10px 0;
-
-  @keyframes loading {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-`
-
-const SkeletonText = styled.div<{ width?: string }>`
-  width: ${props => props.width || '150px'};
-  height: 16px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
-  animation: loading 1.5s infinite;
-  border-radius: 5px;
-  margin: 5px 0;
-
-  @keyframes loading {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-`
-
-// Error state
-const ErrorContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 15px;
-  padding: 20px;
-`
-
-const ErrorText = styled.p`
-  font-size: 14px;
-  color: #d32f2f;
-  text-align: center;
-  margin: 0;
-`
-
-const RetryButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #8294C4;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  padding: 10px 20px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background 0.3s ease;
-
-  &:hover {
-    background: #637195;
-  }
-
-  svg {
-    font-size: 18px;
-  }
-`

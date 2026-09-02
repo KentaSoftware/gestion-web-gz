@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { usePermission } from '@/hooks/usePermission';
 import { Permission } from '@/interfaces/auth.interface';
 import AccessDenied from './AccessDenied';
-import Loading from './Loading';
+import { Spinner } from '@/components/ui/spinner';
 
 interface ProtectedRouteProps {
   /** Contenido a renderizar si el usuario tiene permisos */
@@ -120,7 +120,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Mostrar loading mientras se verifica
   if (isChecking) {
-    return <Loading />;
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Spinner className="size-12 text-brand-primary" />
+      </div>
+    );
   }
 
   // Si no tiene acceso y no hay redirección, mostrar AccessDenied
@@ -137,7 +141,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Si no tiene acceso y hay redirección, no renderizar nada (se redirige en el useEffect)
   if (!hasAccess && redirectTo) {
-    return <Loading />;
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Spinner className="size-12 text-brand-primary" />
+      </div>
+    );
   }
 
   // Si tiene acceso, renderizar el contenido

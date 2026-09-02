@@ -1,10 +1,8 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect, useState } from 'react'
-import styled, { CSSProperties } from 'styled-components';
+import { useEffect, useState, type CSSProperties } from 'react'
 import Table from '../Table';
 import apiClient from '@/utils/client';
 import useLocalStorage from '@/hooks/useLocalStorage';
-import { useDate } from '@/hooks/useDate';
 import Button from '../Button';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -50,8 +48,13 @@ export default function PrintSale({id}:{id: string | Types.ObjectId | undefined}
     
     const pdf = new jsPDF('p', 'mm', 'a4');
     for (let index = 0; index < [...Array(totalPartes)].length; index++) {
-      const element: any = document.getElementById(`print-${index}`);
-      await html2canvas(element).then((canvas) => {
+      const element = document.getElementById(`print-${index}`);
+
+      if (!element) {
+        continue
+      }
+
+      await html2canvas(element, { scale: 2, useCORS: true }).then((canvas) => {
         const imgData = canvas.toDataURL('image/png');
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
@@ -88,12 +91,12 @@ export default function PrintSale({id}:{id: string | Types.ObjectId | undefined}
   }
 
   if (!sale) {
-    return
+    return null
   }
 
   return (
-    <Container>
-      <div style={{ display: 'flex', justifyContent: 'end' }}>
+    <div className="overflow-y-scroll">
+      <div className="flex justify-end">
         <Button text={'Imprimir'} onClick={generatePdf} />
       </div>
       {[...Array(totalPartes)].map((_, index) => {
@@ -105,13 +108,12 @@ export default function PrintSale({id}:{id: string | Types.ObjectId | undefined}
         const parteActual = sale.itemsSale.slice(startIndex, endIndex);
 
         return (
-          <WrapperPrint key={index}>
-            <ContainerPrint id={`print-${index}`}>
+          <div key={index} id={`print-${index}`} className="mx-auto flex h-[297mm] w-[210mm] flex-1 flex-col whitespace-nowrap p-[10mm] font-body text-body text-text-primary text-ellipsis">
             <Logo/>
-            <h2 style={{fontSize: 18, color: '#252525'}}>Presupuesto</h2>
+            <h2 className="text-lg font-semibold text-text-primary">Presupuesto</h2>
             <div>
-                <Tag>CLIENTE : {sale.r.cliente}</Tag>
-                <Tag>FECHA : {sale.r.createdAt.split("T")[0]}</Tag>
+                <h5 className="my-2.5 px-[15px] text-lg font-semibold text-text-primary">CLIENTE : {sale.r.cliente}</h5>
+                <h5 className="my-2.5 px-[15px] text-lg font-semibold text-text-primary">FECHA : {sale.r.createdAt.split("T")[0]}</h5>
               </div>
               <div>
                 <Table
@@ -121,14 +123,15 @@ export default function PrintSale({id}:{id: string | Types.ObjectId | undefined}
                   onClick={() => ''}
                 />
             </div>
-            <Tag style={{ textAlign: 'end' }}>TOTAL : $ {sale.r.total}</Tag> 
-            <p style={{fontSize: 18, color: '#252525', fontWeight: 600}}>*No valido como factura</p>
-            <p style={{fontSize: 18, color: '#252525', textAlign: 'end', fontWeight: 500}}>Pagina {index+1} de {totalPartes}</p>
-            </ContainerPrint>
-          </WrapperPrint>
+            {index === totalPartes - 1 && (
+              <h5 className="my-2.5 px-[15px] text-right text-lg font-semibold text-text-primary">TOTAL : $ {sale.r.total}</h5>
+            )}
+            <p className="text-lg font-semibold text-text-primary">*No valido como factura</p>
+            <p className="text-right text-lg font-medium text-text-primary">Pagina {index+1} de {totalPartes}</p>
+          </div>
         );
       })}
-    </Container>
+    </div>
   );
 }
 
@@ -138,33 +141,3 @@ const columns: Column[] = [
   { label: 'P. unitario', field: 'precioUnitario', width: '20%', align: 'center', price: true },
   { label: 'Total', field: 'total', width: '20%', align: 'center', price: true },
 ];
-
-const Container = styled.div`
-  overflow-y: scroll;
-`;
-
-const WrapperPrint = styled.div`
-  overflow: scroll;
-  max-height: 500px;
-`;
-
-const ContainerPrint = styled.div`
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  width: 210mm; /* Tamaño A4 */
-  height: 297mm;
-  margin: 0 auto;
-  padding: 10mm; /* Márgenes de 10mm */
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 16px; /* Tamaño de fuente fijo */
-`;
-
-const Tag = styled.h5`
-  font-size: 18px;
-  padding: 0 15px;
-  font-weight: 600;
-  margin: 10px 0;
-  color: ${process.env.TEXT_COLOR};
-`;

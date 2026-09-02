@@ -1,169 +1,48 @@
 import { Product } from '@/interfaces/product.interface';
-import React, { useState } from 'react'
-import { MdEdit, MdInfo } from 'react-icons/md';
-import styled from 'styled-components';
-import ButtonUI from '../ButtonUI';
+import { useState } from 'react';
+import Button from '../Button';
 import { AnimatedNumber } from '../AnimatedNumber';
 
 export default function ItemsProducts({item, onClick, select = true, onClickItem, line = true}:{item: Product, onClick: ()=>void, select?:boolean, onClickItem?: ()=>void, line?:boolean}) {
     const [openInfo, setOpenInfo] = useState(false);
-    
+
     return (
-        <ItemProduct onClick={onClickItem} $line={line}>
-            <Container>
-                <Column>
-                    <Row>
-                        <Title>{item.descripcion}</Title>
-                        <Price>$ <AnimatedNumber value={item.precioUnitario} /></Price>
-                    </Row>
-                    <Row>
-                        <Subtitle>{item.NameCategoria}</Subtitle>
-                        <Subtitle>{item.NameMarca}</Subtitle>
-                    </Row>
-                </Column>
-                {select && 
-                    <ContainerButton>
-                        {/* <IconWrapper style={{color: '#A2CA71'}} onClick={onClick}>
-                            <MdEdit />
-                        </IconWrapper>
-                        <IconWrapper style={{color: '#6EACDA'}} onClick={() => setOpenInfo(!openInfo)}>
-                            <MdInfo />
-                        </IconWrapper> */}
-                      <ButtonUI label='EDITAR' onClick={onClick} />
-                      <ButtonUI label='+ INFO' onClick={()=>setOpenInfo(!openInfo)} />
-                    </ContainerButton>
+        <li
+            onClick={onClickItem}
+            className="list-none px-4 py-3 font-semibold w-full border border-surface-base mb-1.5 mt-1.5 rounded-xl flex flex-col shrink-0 justify-center min-h-[60px] h-auto bg-surface-base shadow-sm transition-colors duration-500 hover:border-brand-primary hover:bg-background-subtle max-sm:px-2"
+        >
+            <div className="flex flex-1 max-[480px]:flex-col">
+                <div className="flex flex-1 flex-col mr-4">
+                    <div className="flex justify-between">
+                        <h2 className="text-body font-semibold text-text-primary max-sm:text-label">{item.descripcion}</h2>
+                        <h2 className="text-body font-semibold text-brand-accent max-sm:text-label">
+                            $ <AnimatedNumber value={item.precioUnitario} />
+                        </h2>
+                    </div>
+                    <div className="flex justify-between">
+                        <h5 className="text-label font-normal text-text-muted">{item.NameCategoria}</h5>
+                        <h5 className="text-label font-normal text-text-muted">{item.NameMarca}</h5>
+                    </div>
+                </div>
+                {select &&
+                <div className="flex items-center gap-2 max-[480px]:justify-center max-[480px]:mt-2.5">
+                        <Button text='EDITAR' variant='ghost' onClick={onClick} />
+                        <Button text='+ INFO' variant='ghost' onClick={() => setOpenInfo(!openInfo)} />
+                    </div>
                 }
-            </Container>
-            {openInfo && 
-                <InfoContainer>
-                    <InfoText>Stock: {item?.stock || 'No definido'}</InfoText>
-                    <InfoText>Proveedor: {item?.NameProveedor || 'No definido'}</InfoText>
-                    <InfoText>Codigo de barra: {item?.codigoBarra || 'Sin codigo'}</InfoText>
-                    <InfoText>Peso: {item?.peso?.cantidad || 'No definido'} {item?.peso?.unidad}</InfoText>
-                    <InfoText>Bulto: {item?.bulto || 'No definido'}</InfoText>
-                    <InfoText>Precio Descuento: $ {item?.precioDescuento ? <AnimatedNumber value={item.precioDescuento} /> : 'No definido'}</InfoText>
-                    <InfoText>Precio por Bulto: $ {item?.precioBulto ? <AnimatedNumber value={item.precioBulto} /> : 'No definido'}</InfoText>
-                    <InfoText>Precio de compra: $ {item?.precioCompra ? <AnimatedNumber value={item.precioCompra} /> : 'No definido'}</InfoText>
-                </InfoContainer>
+            </div>
+            {openInfo &&
+                <div className="pt-4">
+                    <p className="text-label font-normal text-text-muted">Stock: {item?.stock || 'No definido'}</p>
+                    <p className="text-label font-normal text-text-muted">Proveedor: {item?.NameProveedor || 'No definido'}</p>
+                    <p className="text-label font-normal text-text-muted">Codigo de barra: {item?.codigoBarra || 'Sin codigo'}</p>
+                    <p className="text-label font-normal text-text-muted">Peso: {item?.peso?.cantidad || 'No definido'} {item?.peso?.unidad}</p>
+                    <p className="text-label font-normal text-text-muted">Bulto: {item?.bulto || 'No definido'}</p>
+                    <p className="text-label font-normal text-text-muted">Precio Descuento: $ {item?.precioDescuento ? <AnimatedNumber value={item.precioDescuento} /> : 'No definido'}</p>
+                    <p className="text-label font-normal text-text-muted">Precio por Bulto: $ {item?.precioBulto ? <AnimatedNumber value={item.precioBulto} /> : 'No definido'}</p>
+                    <p className="text-label font-normal text-text-muted">Precio de compra: $ {item?.precioCompra ? <AnimatedNumber value={item.precioCompra} /> : 'No definido'}</p>
+                </div>
             }
-        </ItemProduct>
+        </li>
     );
 }
-
-
-interface ItemProduct {
-    $line?: boolean;
-}
-
-const ContainerButton = styled.div `
-  display: flex;
-  @media (max-width: 480px) {  
-    justify-content: center;
-    margin-top: 10px;
-  }
-`
-
-const ItemProduct = styled.li <ItemProduct> `
-  list-style: none;
-  padding: 15px;
-  font-weight: 600;
-  width: 100%;
-  /* border: ${({ $line }) => ($line ? '1px solid #d1d1d1' : 'none')}; */
-  border: 1px solid #fff;
-  margin-bottom: 5px;
-  margin-top: 5px;
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;  
-  justify-content: center; 
-  min-height: 60px;  
-  height: auto;  
-  background-color: #fff;
-  box-shadow: 5px 5px 5px #e0e0e0;
-  transition: background-color .5s linear, border-color .1s ease;
-  &:hover {
-    border: 1px solid #6A5BCD;
-    background-color: rgba(217, 217, 217, 0.3);
-  }
-  @media only screen and (max-width: 500px) {
-    padding: 8px;
-  }
-`
-
-const IconWrapper = styled.div`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 32px;
-    color: #716A6A;
-    padding: 5px 15px;
-    margin: 0px 5px;
-    border-left: 1px solid #d9d9d9;
-    cursor: pointer;
-    &:hover {
-        background-color: #d9d9d9;
-    }
-    @media only screen and (max-width: 500px) {
-        font-size: 22px;
-        padding: 0px 8px;
-    }
-`
-
-const Container = styled.div`
-  display: flex;
-  flex: 1;
-  @media (max-width: 480px) {
-    flex-direction: column;
-  }
-`;
-
-const Column = styled.div`
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  margin-right: 15px;
-`;
-
-const Row = styled.div`
-  display: flex;
-  justify-content: space-between;
-`;
-
-const Title = styled.h2`
-  font-size: 18px;
-  color: #252525;
-  @media only screen and (max-width: 500px) {
-    font-size: 16px;
-  }
-`;
-
-const Price = styled(Title)`
-  color: #FA9B50;
-  font-size: 18px;
-  @media only screen and (max-width: 500px) {
-    font-size: 16px;
-  }
-`;
-
-const Subtitle = styled.h5`
-  font-size: 14px;
-  font-weight: 400;
-  color: #7F8487;
-  @media only screen and (max-width: 500px) {
-    font-size: 14px;
-  }
-`;
-
-const InfoContainer = styled.div`
-  padding: 15px 0;
-`;
-
-const InfoText = styled.h2`
-  font-size: 14px;
-  font-weight: 400;
-  color: #7F8487;
-  @media only screen and (max-width: 500px) {
-    font-size: 14px;
-  }
-`;

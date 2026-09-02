@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import styled from 'styled-components';
-import { Dialog, DialogTitle, DialogContent, DialogActions, TextField, Autocomplete } from '@mui/material';
-import { MdClose } from 'react-icons/md';
+import { useState, useEffect } from 'react';
+import Modal from '@/components/Modal';
+import { cn } from '@/lib/cn';
 
 interface ProductCreateModalProps {
   open: boolean;
@@ -45,6 +44,43 @@ const mockMarcas = [
   'Otras',
 ];
 
+const fieldClass = cn(
+  'w-full rounded-md border border-border-subtle bg-surface-base px-3 py-2',
+  'text-label text-text-primary placeholder:text-text-muted',
+  'transition-colors duration-base',
+  'focus:border-border-interactive focus:outline-none focus:ring-0'
+);
+
+const fieldErrorClass = cn(
+  'w-full rounded-md border border-state-error bg-surface-base px-3 py-2',
+  'text-label text-text-primary placeholder:text-text-muted',
+  'transition-colors duration-base',
+  'focus:border-state-error focus:outline-none focus:ring-0'
+);
+
+function Field({
+  label,
+  required,
+  error,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-medium text-text-secondary">
+        {label}
+        {required && <span className="ml-0.5 text-state-error">*</span>}
+      </label>
+      {children}
+      {error && <span className="text-xs text-state-error">{error}</span>}
+    </div>
+  );
+}
+
 export default function ProductCreateModal({ open, onClose, onCreate, initialDescription }: ProductCreateModalProps) {
   const [formData, setFormData] = useState<NewProduct>({
     descripcion: initialDescription || '',
@@ -55,18 +91,18 @@ export default function ProductCreateModal({ open, onClose, onCreate, initialDes
     precioVenta: undefined,
     stock: 0,
   });
-  
+
   const [errors, setErrors] = useState<Record<string, string>>({});
-  
+
   useEffect(() => {
     if (open && initialDescription) {
       setFormData(prev => ({ ...prev, descripcion: initialDescription }));
     }
   }, [open, initialDescription]);
-  
+
   const handleChange = (field: keyof NewProduct, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    
+
     // Limpiar error del campo
     if (errors[field]) {
       setErrors(prev => {
@@ -76,37 +112,37 @@ export default function ProductCreateModal({ open, onClose, onCreate, initialDes
       });
     }
   };
-  
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
-    
+
     if (!formData.descripcion.trim()) {
       newErrors.descripcion = 'La descripción es obligatoria';
     }
-    
+
     if (formData.precioCompra && formData.precioCompra < 0) {
       newErrors.precioCompra = 'El precio no puede ser negativo';
     }
-    
+
     if (formData.precioVenta && formData.precioVenta < 0) {
       newErrors.precioVenta = 'El precio no puede ser negativo';
     }
-    
+
     if (formData.stock && formData.stock < 0) {
       newErrors.stock = 'El stock no puede ser negativo';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-  
+
   const handleSubmit = () => {
     if (!validate()) return;
-    
+
     onCreate(formData);
     handleClose();
   };
-  
+
   const handleClose = () => {
     setFormData({
       descripcion: '',
@@ -120,188 +156,132 @@ export default function ProductCreateModal({ open, onClose, onCreate, initialDes
     setErrors({});
     onClose();
   };
-  
+
   return (
-    <StyledDialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <TitleBar>
-          <Title>Crear Nuevo Producto</Title>
-          <CloseButton onClick={handleClose}>
-            <MdClose size={24} />
-          </CloseButton>
-        </TitleBar>
-      </DialogTitle>
-      
-      <DialogContent>
-        <Form>
-          <TextField
-            label="Descripción"
+    <Modal
+      open={open}
+      eClose={handleClose}
+      title="Crear Nuevo Producto"
+      width="min(90vw, 640px)"
+      height="auto"
+    >
+      <div className="flex flex-col gap-5 py-2">
+        {/* Descripción */}
+        <Field label="Descripción" required error={errors.descripcion}>
+          <input
+            type="text"
             value={formData.descripcion}
             onChange={(e) => handleChange('descripcion', e.target.value)}
-            error={!!errors.descripcion}
-            helperText={errors.descripcion}
-            fullWidth
-            required
+            className={errors.descripcion ? fieldErrorClass : fieldClass}
+            placeholder="Descripción del producto"
             autoFocus
           />
-          
-          <Row>
-            <Autocomplete
-              options={mockCategorias}
-              value={formData.categoria || null}
-              onChange={(_, value) => handleChange('categoria', value)}
-              renderInput={(params) => (
-                <TextField {...params} label="Categoría" />
-              )}
-              fullWidth
-              freeSolo
+        </Field>
+
+        {/* Categoría / Marca */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label="Categoría">
+            <input
+              type="text"
+              list="categorias-list"
+              value={formData.categoria || ''}
+              onChange={(e) => handleChange('categoria', e.target.value || undefined)}
+              className={fieldClass}
+              placeholder="Seleccionar o escribir..."
             />
-            
-            <Autocomplete
-              options={mockMarcas}
-              value={formData.marca || null}
-              onChange={(_, value) => handleChange('marca', value)}
-              renderInput={(params) => (
-                <TextField {...params} label="Marca" />
-              )}
-              fullWidth
-              freeSolo
+            <datalist id="categorias-list">
+              {mockCategorias.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </Field>
+
+          <Field label="Marca">
+            <input
+              type="text"
+              list="marcas-list"
+              value={formData.marca || ''}
+              onChange={(e) => handleChange('marca', e.target.value || undefined)}
+              className={fieldClass}
+              placeholder="Seleccionar o escribir..."
             />
-          </Row>
-          
-          <TextField
-            label="Código de Barras"
+            <datalist id="marcas-list">
+              {mockMarcas.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
+          </Field>
+        </div>
+
+        {/* Código de barras */}
+        <Field label="Código de Barras">
+          <input
+            type="text"
             value={formData.codigoBarras}
             onChange={(e) => handleChange('codigoBarras', e.target.value)}
-            fullWidth
+            className={fieldClass}
+            placeholder="Opcional"
           />
-          
-          <Row>
-            <TextField
-              label="Precio de Compra"
+        </Field>
+
+        {/* Precios */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label="Precio de Compra" error={errors.precioCompra}>
+            <input
               type="number"
-              value={formData.precioCompra || ''}
+              value={formData.precioCompra ?? ''}
               onChange={(e) => handleChange('precioCompra', parseFloat(e.target.value) || undefined)}
-              error={!!errors.precioCompra}
-              helperText={errors.precioCompra}
-              inputProps={{ step: '0.01', min: '0' }}
-              fullWidth
+              className={errors.precioCompra ? fieldErrorClass : fieldClass}
+              placeholder="0.00"
+              step="0.01"
+              min="0"
             />
-            
-            <TextField
-              label="Precio de Venta"
+          </Field>
+
+          <Field label="Precio de Venta" error={errors.precioVenta}>
+            <input
               type="number"
-              value={formData.precioVenta || ''}
+              value={formData.precioVenta ?? ''}
               onChange={(e) => handleChange('precioVenta', parseFloat(e.target.value) || undefined)}
-              error={!!errors.precioVenta}
-              helperText={errors.precioVenta}
-              inputProps={{ step: '0.01', min: '0' }}
-              fullWidth
+              className={errors.precioVenta ? fieldErrorClass : fieldClass}
+              placeholder="0.00"
+              step="0.01"
+              min="0"
             />
-          </Row>
-          
-          <TextField
-            label="Stock Inicial"
+          </Field>
+        </div>
+
+        {/* Stock inicial */}
+        <Field label="Stock Inicial" error={errors.stock}>
+          <input
             type="number"
             value={formData.stock}
             onChange={(e) => handleChange('stock', parseInt(e.target.value) || 0)}
-            error={!!errors.stock}
-            helperText={errors.stock}
-            inputProps={{ step: '1', min: '0' }}
-            fullWidth
+            className={errors.stock ? fieldErrorClass : fieldClass}
+            placeholder="0"
+            step="1"
+            min="0"
           />
-        </Form>
-      </DialogContent>
-      
-      <DialogActions>
-        <CancelButton onClick={handleClose}>
-          Cancelar
-        </CancelButton>
-        <CreateButton onClick={handleSubmit}>
-          Crear Producto
-        </CreateButton>
-      </DialogActions>
-    </StyledDialog>
+        </Field>
+
+        {/* Actions */}
+        <div className="mt-2 flex justify-end gap-3 border-t border-border-subtle pt-4">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="cursor-pointer rounded-md border border-border-strong bg-transparent px-5 py-2 text-sm font-semibold text-text-secondary transition-colors hover:bg-background-subtle"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="cursor-pointer rounded-md border-0 bg-brand-primary px-5 py-2 text-sm font-semibold text-text-inverse transition-colors hover:bg-brand-primary-hover"
+          >
+            Crear Producto
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
-
-// Styled Components
-const StyledDialog = styled(Dialog)`
-  .MuiDialog-paper {
-    border-radius: 12px;
-  }
-`;
-
-const TitleBar = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-`;
-
-const Title = styled.h2`
-  font-size: 20px;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
-`;
-
-const CloseButton = styled.button`
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #666;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  
-  &:hover {
-    color: #333;
-  }
-`;
-
-const Form = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 16px 0;
-`;
-
-const Row = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
-const CancelButton = styled.button`
-  background: none;
-  border: 1px solid #ccc;
-  color: #666;
-  border-radius: 8px;
-  padding: 10px 24px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  
-  &:hover {
-    background: #f5f5f5;
-  }
-`;
-
-const CreateButton = styled.button`
-  background: #2196F3;
-  border: none;
-  color: white;
-  border-radius: 8px;
-  padding: 10px 24px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  
-  &:hover {
-    background: #1976D2;
-  }
-`;

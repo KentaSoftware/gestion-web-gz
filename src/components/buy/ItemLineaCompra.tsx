@@ -1,169 +1,126 @@
 import { ExtendItemBuy } from '@/interfaces/buy.interface'
-import { Product } from '@/interfaces/product.interface'
-import { ExtendItemSale, ItemSale } from '@/interfaces/sale.interface'
+import { ExtendItemSale } from '@/interfaces/sale.interface'
 import { Types } from 'mongoose'
-import React, { ChangeEvent, useEffect, useState } from 'react'
-import { BiPlus, BiTrash } from 'react-icons/bi'
-import styled, { css } from 'styled-components'
-import { FaPlus } from "react-icons/fa";
-import { MdOutlineAttachMoney } from 'react-icons/md'
+import React, { ChangeEvent, useState } from 'react'
+import { Trash2, Plus, DollarSign } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { AnimatedNumber } from '../AnimatedNumber'
-import SimpleCheckbox from '../SimpleCheckbox'
 import { useAppDispatch } from '@/redux/hook'
-import { onChangePrecioUnitarioSale } from '@/redux/saleSlice'
+import { cn } from '@/lib/cn'
 
 export default function ItemLineaCompra({elem, onClick, upQTY, downQTY, downQTY10, upQTY10, onChangePrecioCompra}:
-    {onClick:()=>void, upQTY:(id:string | Types.ObjectId| undefined)=>void, 
+    {onClick:()=>void, upQTY:(id:string | Types.ObjectId| undefined)=>void,
         onChangePrecioCompra?: (value:string, D: any)=>void
-        downQTY: (id:string | Types.ObjectId | undefined)=>void, upQTY10:(id:string | Types.ObjectId | undefined)=>void, 
+        downQTY: (id:string | Types.ObjectId | undefined)=>void, upQTY10:(id:string | Types.ObjectId | undefined)=>void,
         downQTY10:(id:string | Types.ObjectId | undefined)=>void, elem: ExtendItemSale | ExtendItemBuy, compra?: boolean}) {
 
     const [openHandler, setOpenHandler] = useState(false)
     const [openPrecioCompra, setOpenPrecioCompra] = useState(false)
-    const dispatch = useAppDispatch();
 
   return (
-    <Item >
-        <div style={{width: '100%'}}>
-            <ContainerElem>
-                <Description>{elem.descripcion}</Description>
-                <div  style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}} >
-                    <h2 style={{fontSize: 14, fontWeight: 600, color: '#7F8487'}}>X {elem.cantidad} UNIDAD</h2>
-                    <label style={{fontSize: 14, fontWeight: 600, color: '#FA9B50', marginRight: 5}}>
-                        $
-                        <AnimatedNumber value={elem.total} />
+    <li className="list-none px-2 py-2 font-semibold w-full border-b border-border-subtle flex justify-between cursor-pointer max-sm:flex-col max-sm:justify-center max-sm:py-4">
+        <div className="w-full">
+            <div>
+                <h2 className="text-base text-text-primary overflow-hidden whitespace-nowrap text-ellipsis max-w-[95%]">
+                    {elem.descripcion}
+                </h2>
+                <div className="flex justify-between items-center">
+                    <h2 className="text-sm font-semibold text-text-muted">X {elem.cantidad} UNIDAD</h2>
+                    <label className="text-sm font-semibold text-brand-accent mr-1">
+                        $ <AnimatedNumber value={elem.total} />
                     </label>
                 </div>
-            </ContainerElem>
-            <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '5px 0'}} >
-                <IconWrapper onClick={()=>setOpenHandler(!openHandler)} $open={openHandler}>
-                    <FaPlus style={{margin: '0 5px', color: '#7286D3'}} />
-                </IconWrapper>
-                <IconWrapper onClick={()=>setOpenPrecioCompra(!openPrecioCompra)} $open={openPrecioCompra}>
-                    <MdOutlineAttachMoney style={{fontSize: 20, margin: '0 5px', color: '#B0EBB4'}} />
-                </IconWrapper>
-                <IconWrapper>
-                    <BiTrash style={{fontSize: 20, margin: '0 5px', color: '#F7A4A4'}} onClick={onClick}/>
-                </IconWrapper>
             </div>
-            {
-                (openPrecioCompra && onChangePrecioCompra) &&
-                <div style={{display: 'flex', alignItems: 'center'}} >
-                    <label style={{fontSize: 14, fontWeight: 400, color: '#7F8487', marginRight: 5}}>Precio : $</label>
-                    {
-                        <Input value={elem.precio} onChange={(e:ChangeEvent<HTMLInputElement>)=>onChangePrecioCompra(e.target.value, elem.idProducto)} />
-                    } 
-                </div>
-            }
-            {
-                (openHandler) &&
-                <ContainerHandler>
-                    <div>
-                        <div style={{display: 'flex', width: '100%'}}>
-                            <div style={{display: 'flex'}}>
-                                <ButtonHandler onClick={()=>downQTY10(elem.idProducto)}>-10</ButtonHandler>
-                                <ButtonHandler onClick={()=>downQTY(elem.idProducto)}>-</ButtonHandler>
+            <TooltipProvider>
+                <div className="flex justify-center items-center my-1.5">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div
+                                onClick={() => setOpenHandler(!openHandler)}
+                                className={cn(
+                                    'flex items-center justify-center p-1.5 rounded-[15px] cursor-pointer transition-transform duration-500 hover:bg-border-subtle',
+                                    openHandler ? 'rotate-[135deg]' : 'rotate-0'
+                                )}
+                                aria-label="Ajustar cantidad"
+                            >
+                                <Plus className="mx-1 text-brand-primary" aria-hidden="true" />
                             </div>
-                            <QtyHandler><AnimatedNumber value={elem.cantidad} /></QtyHandler>
-                            <div style={{display: 'flex'}}>
-                                <ButtonHandler onClick={()=>upQTY(elem.idProducto)} >+</ButtonHandler>
-                                <ButtonHandler onClick={()=>upQTY10(elem.idProducto)}>+10</ButtonHandler>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Ajustar cantidad</p>
+                        </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div
+                                onClick={() => setOpenPrecioCompra(!openPrecioCompra)}
+                                className={cn(
+                                    'flex items-center justify-center p-1.5 rounded-[15px] cursor-pointer transition-transform duration-500 hover:bg-border-subtle',
+                                    openPrecioCompra ? 'rotate-180' : 'rotate-0'
+                                )}
+                                aria-label="Cambiar precio de compra"
+                            >
+                                <DollarSign className="text-xl mx-1 text-state-success" aria-hidden="true" />
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Cambiar precio de compra</p>
+                        </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div className="flex items-center justify-center p-1.5 rounded-[15px] cursor-pointer hover:bg-border-subtle" aria-label="Eliminar línea">
+                                <Trash2 className="text-xl mx-1 text-state-error" onClick={onClick} aria-hidden="true" />
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Eliminar línea</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </div>
+            </TooltipProvider>
+            {(openPrecioCompra && onChangePrecioCompra) && (
+                <div className="flex items-center">
+                    <label className="text-sm font-normal text-text-muted mr-1">Precio : $</label>
+                    <input
+                        value={elem.precio}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => onChangePrecioCompra(e.target.value, elem.idProducto)}
+                        className="px-2.5 py-1 text-base max-w-[100px] rounded-xl border border-border-subtle text-text-primary bg-surface-base transition-colors focus:outline-none focus:border-brand-primary"
+                    />
+                </div>
+            )}
+            {openHandler && (
+                <div className="flex w-full justify-center items-center">
+                    <div>
+                        <div className="flex w-full">
+                            <div className="flex">
+                                <div
+                                    onClick={() => downQTY10(elem.idProducto)}
+                                    className="text-sm font-normal text-text-muted px-2.5 py-1 cursor-pointer hover:bg-border-subtle hover:rounded-full hover:text-brand-primary"
+                                >-10</div>
+                                <div
+                                    onClick={() => downQTY(elem.idProducto)}
+                                    className="text-sm font-normal text-text-muted px-2.5 py-1 cursor-pointer hover:bg-border-subtle hover:rounded-full hover:text-brand-primary"
+                                >-</div>
+                            </div>
+                            <div className="text-base text-text-primary px-2.5 py-1 hover:bg-border-subtle hover:rounded-full hover:text-brand-primary">
+                                <AnimatedNumber value={elem.cantidad} />
+                            </div>
+                            <div className="flex">
+                                <div
+                                    onClick={() => upQTY(elem.idProducto)}
+                                    className="text-sm font-normal text-text-muted px-2.5 py-1 cursor-pointer hover:bg-border-subtle hover:rounded-full hover:text-brand-primary"
+                                >+</div>
+                                <div
+                                    onClick={() => upQTY10(elem.idProducto)}
+                                    className="text-sm font-normal text-text-muted px-2.5 py-1 cursor-pointer hover:bg-border-subtle hover:rounded-full hover:text-brand-primary"
+                                >+10</div>
                             </div>
                         </div>
                     </div>
-                </ContainerHandler>
-            }
+                </div>
+            )}
         </div>
-    </Item>
+    </li>
   )
 }
-
-const QtyHandler = styled.div `
-    font-size: 16px;
-    color: #252552;
-    padding: 5px 10px;
-    &:hover {
-        background-color: #d9d9d9;
-        border-radius: 100%;
-        color: #6A5BCD;
-    }
-`
-
-const ButtonHandler = styled.div `
-    font-size: 14px; 
-    font-weight: 400; 
-    color: #7F8487; 
-    padding: 5px 10px;
-    &:hover {
-        background-color: #d9d9d9;
-        border-radius: 100%;
-        color: #6A5BCD;
-    }
-`
-
-const Input = styled.input<{ $focused?: boolean; $hasPrefix?: boolean; }>`
-  padding: 5px 10px;
-  font-size: 16px;
-  max-width: 100px;
-  color: ${props => props.color};
-  border-radius: 10px;
-  border: ${({ $focused }) => ($focused ? '2px solid #7286D3' : '1px solid #d9d9d9')};
-  transition: border-color 0.2s ease-in-out;
-  padding-left: ${({ $hasPrefix }) => ($hasPrefix ? '30px' : '10px')};
-
-  &:focus {
-    outline: none;
-  }
-`;
-
-const Description = styled.h2 `
-    font-size: 16px;
-    color: #252525;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    max-width: 95%;
-    @media only screen and (max-width: 500px) { 
-        font-size: 16px
-    } 
-`
-
-const ContainerHandler = styled.div `
-    display: flex;
-    width: 100%;
-    justify-content: center;
-    align-items: center;
-`
-
-const ContainerElem = styled.div`
-`
-
-const Item = styled.li `
-  list-style: none;
-  padding: 8px;
-  font-weight: 600;
-  width: 100%;
-  border-bottom: 1px solid #d1d1d1;
-  display: flex;
-  justify-content: space-between;
-  cursor: pointer;
-  @media only screen and (max-width: 500px) {
-    flex-direction: column;
-    justify-content: center;
-    padding: 15px 0;
-  }
-`
-
-const IconWrapper = styled.div<{$open?: boolean}>`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 5px;
-    border-radius: 15px;
-    transform: ${({$open})=>$open ? css`rotate(180deg)` : css`rotate(0deg)`};
-    transition: transform .5s linear;
-    cursor: pointer;
-    &:hover {
-        background-color: #d1d1d1;
-    }
-`

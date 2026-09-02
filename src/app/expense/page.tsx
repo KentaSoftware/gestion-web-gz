@@ -1,7 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 'use client'
-import React, { Suspense, useEffect, useState } from 'react'
-import styled from 'styled-components'
+import { Suspense, useEffect, useState, type ChangeEvent } from 'react'
 import Button from '@/components/Button'
 import { useAppDispatch } from '@/redux/hook'
 import { useSelector } from 'react-redux'
@@ -10,14 +9,53 @@ import useLocalStorage from '@/hooks/useLocalStorage'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 import { setLoading } from '@/redux/loadingSlice'
-import { Expense, ExpenseType, PaymentMethod, PaginationMetadata, ExpensePermissions, ExpenseUser } from '@/interfaces/expense.interface'
+import { Expense, ExpenseType, PaymentMethod, PaginationMetadata, ExpenseUser, ListExpensesParams } from '@/interfaces/expense.interface'
 import { expenseService } from '@/services/expense.service'
 import { setExpenses, removeExpense } from '@/redux/expenseSlice'
-import { setAlert } from '@/redux/alertSlice'
-import { MdEdit, MdDelete, MdVisibility, MdSearch, MdFilterList, MdClose } from 'react-icons/md'
+import { toast } from "sonner";
+import { Pencil, Trash2, Eye, Search, Filter, X } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Confirm from '@/components/Confirm'
 import { trackExpenseDeleted, trackExpenseListViewed, trackFilterChange, trackExpenseSearch } from '@/utils/analytics'
 import { usePermission } from '@/hooks/usePermission'
+import ProtectedRoute from '@/components/ProtectedRoute'
+import { Permission } from '@/interfaces/auth.interface'
+import { cn } from '@/lib/cn'
+import { PageContainer, PageHeader } from '@/components/layout/PageLayout'
+import DataTable from '@/components/DataTable'
+import type { DataColumn } from '@/components/DataTable'
+
+const inputBaseClass = 'w-full rounded-md border border-border-subtle bg-surface-base px-2.5 py-2.5 text-label text-text-primary transition-colors focus:border-brand-primary focus:outline-none'
+
+const dateInputClass = 'w-full rounded-sm border border-border-strong bg-surface-base px-3 py-2 text-label text-text-primary transition-colors duration-[120ms] focus:border-border-interactive focus:outline-none'
+
+const getTypeBadgeClass = (type: string) => cn(
+  'whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold',
+  type === 'operativo' && 'bg-state-success/10 text-state-success',
+  type === 'personal' && 'bg-state-warning/10 text-state-warning',
+  type !== 'operativo' && type !== 'personal' && 'bg-state-error/10 text-state-error'
+)
+
+const getQuickFilterClass = (active: boolean) => cn(
+  'rounded-2xl border px-3 py-1.5 text-[13px] transition-colors',
+  active
+    ? 'border-brand-primary bg-brand-primary font-semibold text-text-inverse'
+    : 'border-border-subtle bg-background-subtle text-text-secondary hover:border-brand-primary hover:bg-brand-primary hover:text-text-inverse'
+)
+
+const ACTION_VARIANT = {
+  DANGER: 'danger',
+} as const
+
+type ActionVariant = (typeof ACTION_VARIANT)[keyof typeof ACTION_VARIANT]
+
+const getActionButtonClass = (variant?: ActionVariant) => cn(
+  'flex items-center justify-center rounded-md bg-transparent px-2.5 py-1.5 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-state-focus',
+  variant === ACTION_VARIANT.DANGER
+    ? 'text-state-error hover:bg-state-error/10'
+    : 'text-brand-primary hover:bg-background-subtle'
+)
 
 interface ExpenseFilters {
   page: number;
@@ -30,6 +68,126 @@ interface ExpenseFilters {
   search: string;
   sort: string;
 }
+
+const buildExpenseListParams = (filters: ExpenseFilters): ListExpensesParams => ({
+  page: filters.page,
+  limit: filters.limit,
+  from: filters.from,
+  to: filters.to,
+  type: filters.type || undefined,
+  category: filters.category || undefined,
+  paymentMethod: filters.paymentMethod || undefined,
+  search: filters.search || undefined,
+  sort: filters.sort,
+})
+
+const buildExpenseQueryParams = (filters: ExpenseFilters): URLSearchParams => {
+  const params = new URLSearchParams()
+  const payload = buildExpenseListParams(filters)
+
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') {
+      params.set(key, String(value))
+    }
+  })
+
+  return params
+}
+
+// ---------------------------------------------------------------------------
+// Pure helpers — declared at module level (no hooks, no component state)
+// ---------------------------------------------------------------------------
+
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+const formatAmount = (amount: number) =>
+  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount)
+
+const truncate = (text: string, maxLength: number) => {
+  if (text.length <= maxLength) return text
+  return text.substring(0, maxLength) + '...'
+}
+
+const getUserName = (createdBy: ExpenseUser | string | any): string => {
+  if (typeof createdBy === 'string') return 'Desconocido'
+  return createdBy?.name || 'Desconocido'
+}
+
+const getExpenseId = (expense: Expense): string => {
+  if (expense._id) {
+    return typeof expense._id === 'object' ? expense._id.toString() : expense._id.toString()
+  }
+  return (expense as any).id?.toString() || ''
+}
+
+// ---------------------------------------------------------------------------
+// Column definitions — module level, uses only pure helpers above
+// ---------------------------------------------------------------------------
+
+const expenseColumns: DataColumn<Expense>[] = [
+  {
+    key: 'date',
+    header: 'Fecha',
+    width: '120px',
+    render: (v) => formatDate(v as string),
+  },
+  {
+    key: 'description',
+    header: 'Descripcion',
+    width: '220px',
+    render: (v) => (
+      <span
+        className="block max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap"
+        title={String(v ?? 'Sin descripción')}
+      >
+        {truncate(String(v ?? 'Sin descripción'), 50)}
+      </span>
+    ),
+  },
+  {
+    key: 'category',
+    header: 'Categoria',
+    width: '150px',
+  },
+  {
+    key: 'type',
+    header: 'Tipo',
+    width: '130px',
+    render: (v) => (
+      <span className={getTypeBadgeClass(String(v))}>
+        {v === 'operativo' ? 'Operativo' : v === 'personal' ? 'Personal' : 'Otro Negocio'}
+      </span>
+    ),
+  },
+  {
+    key: 'amount',
+    header: 'Monto',
+    width: '140px',
+    render: (v) => (
+      <span className="whitespace-nowrap font-semibold text-brand-primary">
+        {formatAmount(v as number)}
+      </span>
+    ),
+  },
+  {
+    key: 'paymentMethod',
+    header: 'Medio de Pago',
+    width: '160px',
+  },
+  {
+    key: 'createdBy',
+    header: 'Usuario',
+    width: '160px',
+    render: (v) => (
+      <div className="flex flex-col">
+        <div className="text-label text-text-primary">{getUserName(v)}</div>
+      </div>
+    ),
+  },
+]
 
 function ExpenseScreenContent() {
   const [valueStorage] = useLocalStorage("user", "")
@@ -45,10 +203,6 @@ function ExpenseScreenContent() {
     page: 1,
     limit: 20,
     pages: 1,
-  })
-  const [permissions, setPermissions] = useState<ExpensePermissions>({
-    canEdit: true,
-    canDelete: true,
   })
   const [filters, setFilters] = useState<ExpenseFilters>(getDefaultFilters())
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -100,10 +254,7 @@ function ExpenseScreenContent() {
 
   // Actualizar URL cuando cambien filtros
   useEffect(() => {
-    const params = new URLSearchParams()
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value) params.set(key, value.toString())
-    })
+    const params = buildExpenseQueryParams(filters)
     router.replace(`?${params.toString()}`, { scroll: false })
   }, [filters])
 
@@ -118,17 +269,7 @@ function ExpenseScreenContent() {
     try {
       dispatch(setLoading(true))
       
-      const response = await expenseService.list({
-        page: filters.page,
-        limit: filters.limit,
-        from: filters.from,
-        to: filters.to,
-        type: filters.type || undefined,
-        category: filters.category || undefined,
-        paymentMethod: filters.paymentMethod || undefined,
-        search: filters.search || undefined,
-        sort: filters.sort,
-      })
+      const response = await expenseService.list(buildExpenseListParams(filters))
       
       // Transformar amountCents a amount (pesos)
       const expensesWithAmount = response.expenses.map(expense => ({
@@ -138,7 +279,6 @@ function ExpenseScreenContent() {
       
       setData(expensesWithAmount)
       setPagination(response.pagination)
-      setPermissions(response.permissions)
       dispatch(setExpenses({ expenses: expensesWithAmount, total: response.pagination.total }))
       
       // Analytics: Emitir evento de búsqueda si hay término activo (EG07)
@@ -174,43 +314,17 @@ function ExpenseScreenContent() {
       console.error('Error al cargar egresos:', error)
       
       if (error.response?.status === 403) {
-        dispatch(setAlert({ message: 'No tiene permisos para ver egresos', type: 'error' }))
+        toast.error('No tiene permisos para ver egresos')
         router.push('/home')
       } else if (error.response?.status === 400) {
         setSearchError('Búsqueda inválida. Debe tener entre 2 y 100 caracteres.')
-        dispatch(setAlert({ message: 'Error en los filtros de búsqueda', type: 'error' }))
+        toast.error('Error en los filtros de búsqueda')
       } else {
-        dispatch(setAlert({ message: 'Error al cargar los egresos', type: 'error' }))
+        toast.error('Error al cargar los egresos')
       }
     } finally {
       dispatch(setLoading(false))
     }
-  }
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  }
-
-  const formatAmount = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount)
-  }
-
-  const truncate = (text: string, maxLength: number) => {
-    if (text.length <= maxLength) return text
-    return text.substring(0, maxLength) + '...'
-  }
-
-  const getUserName = (createdBy: ExpenseUser | string | any): string => {
-    if (typeof createdBy === 'string') return 'Desconocido'
-    return createdBy?.name || 'Desconocido'
-  }
-
-  const getExpenseId = (expense: Expense): string => {
-    if (expense._id) {
-      return typeof expense._id === 'object' ? expense._id.toString() : expense._id.toString()
-    }
-    return (expense as any).id?.toString() || ''
   }
 
   const openDeleteConfirm = (expense: Expense) => {
@@ -253,17 +367,17 @@ function ExpenseScreenContent() {
         medio_pago: expenseToDelete.paymentMethod,
       })
       
-      dispatch(setAlert({ message: 'Egreso eliminado exitosamente', type: 'success' }))
+      toast.success('Egreso eliminado exitosamente')
       closeDeleteConfirm()
     } catch (error: any) {
       console.error('Error al eliminar egreso:', error)
       
       if (error.response?.status === 403) {
-        dispatch(setAlert({ message: 'No tiene permisos para eliminar egresos', type: 'error' }))
+        toast.error('No tiene permisos para eliminar egresos')
       } else if (error.response?.status === 404) {
-        dispatch(setAlert({ message: 'El egreso no existe o ya fue eliminado', type: 'error' }))
+        toast.error('El egreso no existe o ya fue eliminado')
       } else {
-        dispatch(setAlert({ message: 'Error al eliminar el egreso', type: 'error' }))
+        toast.error('Error al eliminar el egreso')
       }
     } finally {
       dispatch(setLoading(false))
@@ -276,7 +390,7 @@ function ExpenseScreenContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const handleLimitChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleLimitChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const newLimit = parseInt(event.target.value)
     setFilters({ ...filters, limit: newLimit, page: 1 })
   }
@@ -408,77 +522,97 @@ function ExpenseScreenContent() {
   }
 
   return (
-    <Container>
-      <Header>
-        <Title>Egresos</Title>
-        <HeaderActions>
-          <FilterToggleButton onClick={() => setShowFilters(!showFilters)}>
-            <MdFilterList size={20} />
-            {showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'}
-            {getActiveFiltersCount() > 0 && (
-              <FilterBadge>{getActiveFiltersCount()}</FilterBadge>
+    <PageContainer>
+      <PageHeader
+        title="Egresos"
+        actions={
+          <div className="flex items-center gap-2.5 max-md:flex-col">
+            <button
+              type="button"
+              onClick={() => setShowFilters(!showFilters)}
+              className="relative flex items-center gap-2 rounded-md border border-border-interactive bg-transparent px-5 py-2.5 text-label font-semibold text-brand-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-state-focus hover:bg-background-subtle"
+            >
+              <Filter size={20} aria-hidden="true" />
+              {showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'}
+              {getActiveFiltersCount() > 0 && (
+                <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-state-warning px-1.5 text-[11px] font-bold text-text-inverse">
+                  {getActiveFiltersCount()}
+                </span>
+              )}
+            </button>
+            {canCreateExpense && (
+              <Button text="Nuevo Egreso" onClick={() => {}} to="/expense/newExpense" />
             )}
-          </FilterToggleButton>
-          {canCreateExpense && (
-            <Button text="Nuevo Egreso" onClick={() => {}} to="/expense/newExpense" />
-          )}
-        </HeaderActions>
-      </Header>
+          </div>
+        }
+      />
 
       {/* Chips de filtros activos (EG06 - UX) */}
       {(filters.type || filters.category || filters.paymentMethod || filters.search.trim()) && (
-        <ActiveFiltersRow>
-          <ActiveFiltersLabel>Filtros activos:</ActiveFiltersLabel>
+        <div className="mb-5 flex flex-wrap items-center gap-2.5 rounded-lg bg-background-subtle px-4 py-3">
+          <span className="text-[13px] font-semibold text-text-secondary">Filtros activos:</span>
           {filters.type && (
-            <ActiveFilterChip>
+            <div className="flex items-center gap-1 rounded-full bg-brand-primary/10 px-2.5 py-0.5 text-[13px] font-medium text-brand-primary">
               Tipo: {filters.type === 'operativo' ? 'Operativo' : filters.type === 'personal' ? 'Personal' : 'Otro Negocio'}
-              <MdClose 
-                size={16} 
-                onClick={() => removeFilter('type')} 
-                style={{ cursor: 'pointer', marginLeft: '6px' }}
-              />
-            </ActiveFilterChip>
+              <button
+                type="button"
+                onClick={() => removeFilter('type')}
+                aria-label="Eliminar filtro de tipo"
+                className="ml-1 flex items-center rounded-full transition-transform hover:scale-125 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary"
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            </div>
           )}
           {filters.category && (
-            <ActiveFilterChip>
+            <div className="flex items-center gap-1 rounded-full bg-brand-primary/10 px-2.5 py-0.5 text-[13px] font-medium text-brand-primary">
               Categoría: {filters.category}
-              <MdClose 
-                size={16} 
-                onClick={() => removeFilter('category')} 
-                style={{ cursor: 'pointer', marginLeft: '6px' }}
-              />
-            </ActiveFilterChip>
+              <button
+                type="button"
+                onClick={() => removeFilter('category')}
+                aria-label="Eliminar filtro de categoría"
+                className="ml-1 flex items-center rounded-full transition-transform hover:scale-125 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary"
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            </div>
           )}
           {filters.paymentMethod && (
-            <ActiveFilterChip>
+            <div className="flex items-center gap-1 rounded-full bg-brand-primary/10 px-2.5 py-0.5 text-[13px] font-medium text-brand-primary">
               Pago: {filters.paymentMethod}
-              <MdClose 
-                size={16} 
-                onClick={() => removeFilter('paymentMethod')} 
-                style={{ cursor: 'pointer', marginLeft: '6px' }}
-              />
-            </ActiveFilterChip>
+              <button
+                type="button"
+                onClick={() => removeFilter('paymentMethod')}
+                aria-label="Eliminar filtro de medio de pago"
+                className="ml-1 flex items-center rounded-full transition-transform hover:scale-125 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary"
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            </div>
           )}
           {filters.search.trim() && (
-            <ActiveFilterChip>
+            <div className="flex items-center gap-1 rounded-full bg-brand-primary/10 px-2.5 py-0.5 text-[13px] font-medium text-brand-primary">
               Búsqueda: &quot;{filters.search.trim()}&quot;
-              <MdClose 
-                size={16} 
-                onClick={() => removeFilter('search')} 
-                style={{ cursor: 'pointer', marginLeft: '6px' }}
-              />
-            </ActiveFilterChip>
+              <button
+                type="button"
+                onClick={() => removeFilter('search')}
+                aria-label="Eliminar filtro de búsqueda"
+                className="ml-1 flex items-center rounded-full transition-transform hover:scale-125 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary"
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            </div>
           )}
-        </ActiveFiltersRow>
+        </div>
       )}
 
       {showFilters && (
-        <FiltersCard>
-          <FilterSection>
-            <FilterLabel>Rango de Fechas</FilterLabel>
-            <FilterRow>
-              <DateInput $hasError={!!dateError}>
-                <label>Desde</label>
+        <div className="mb-5 rounded-lg border border-border-subtle bg-surface-base p-5 shadow-md">
+          <div className="mb-5 last:mb-0">
+            <h3 className="mb-4 mt-0 text-base font-semibold text-brand-primary">Rango de Fechas</h3>
+            <div className="mb-4 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+              <div className="flex flex-col gap-1">
+                <label className={cn('text-label font-medium', dateError ? 'text-state-error' : 'text-text-secondary')}>Desde</label>
                 <input 
                   type="date" 
                   value={filters.from} 
@@ -487,10 +621,11 @@ function ExpenseScreenContent() {
                     setActiveQuickFilter(null)
                     setDateError('')
                   }}
+                  className={cn(dateInputClass, dateError && 'border-state-error focus:border-state-error')}
                 />
-              </DateInput>
-              <DateInput $hasError={!!dateError}>
-                <label>Hasta</label>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className={cn('text-label font-medium', dateError ? 'text-state-error' : 'text-text-secondary')}>Hasta</label>
                 <input 
                   type="date" 
                   value={filters.to} 
@@ -499,26 +634,27 @@ function ExpenseScreenContent() {
                     setActiveQuickFilter(null)
                     setDateError('')
                   }}
+                  className={cn(dateInputClass, dateError && 'border-state-error focus:border-state-error')}
                 />
-              </DateInput>
-            </FilterRow>
-            {dateError && <ErrorText>{dateError}</ErrorText>}
-            <QuickFilters>
-              <Chip $active={activeQuickFilter === 'today'} onClick={() => setQuickFilter('today')}>Hoy</Chip>
-              <Chip $active={activeQuickFilter === 'thisWeek'} onClick={() => setQuickFilter('thisWeek')}>Esta semana</Chip>
-              <Chip $active={activeQuickFilter === 'thisMonth'} onClick={() => setQuickFilter('thisMonth')}>Este mes</Chip>
-              <Chip $active={activeQuickFilter === 'lastMonth'} onClick={() => setQuickFilter('lastMonth')}>Mes anterior</Chip>
-              <Chip $active={activeQuickFilter === 'last7Days'} onClick={() => setQuickFilter('last7Days')}>Últimos 7 días</Chip>
-              <Chip $active={activeQuickFilter === 'last30Days'} onClick={() => setQuickFilter('last30Days')}>Últimos 30 días</Chip>
-              <Chip $active={activeQuickFilter === 'thisYear'} onClick={() => setQuickFilter('thisYear')}>Este año</Chip>
-            </QuickFilters>
-          </FilterSection>
+              </div>
+            </div>
+            {dateError && <div className="mt-2 text-[13px] font-medium text-state-error">{dateError}</div>}
+            <div className="mt-2.5 flex flex-wrap gap-2.5">
+              <button type="button" className={getQuickFilterClass(activeQuickFilter === 'today')} onClick={() => setQuickFilter('today')}>Hoy</button>
+              <button type="button" className={getQuickFilterClass(activeQuickFilter === 'thisWeek')} onClick={() => setQuickFilter('thisWeek')}>Esta semana</button>
+              <button type="button" className={getQuickFilterClass(activeQuickFilter === 'thisMonth')} onClick={() => setQuickFilter('thisMonth')}>Este mes</button>
+              <button type="button" className={getQuickFilterClass(activeQuickFilter === 'lastMonth')} onClick={() => setQuickFilter('lastMonth')}>Mes anterior</button>
+              <button type="button" className={getQuickFilterClass(activeQuickFilter === 'last7Days')} onClick={() => setQuickFilter('last7Days')}>Últimos 7 días</button>
+              <button type="button" className={getQuickFilterClass(activeQuickFilter === 'last30Days')} onClick={() => setQuickFilter('last30Days')}>Últimos 30 días</button>
+              <button type="button" className={getQuickFilterClass(activeQuickFilter === 'thisYear')} onClick={() => setQuickFilter('thisYear')}>Este año</button>
+            </div>
+          </div>
 
-          <FilterSection>
-            <FilterLabel>Búsqueda y Filtros</FilterLabel>
-            <FilterRow>
-              <SearchInputWrapper $hasError={!!searchError}>
-                <MdSearch size={20} />
+          <div className="mb-0">
+            <h3 className="mb-4 mt-0 text-base font-semibold text-brand-primary">Búsqueda y Filtros</h3>
+            <div className="mb-4 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+              <div className={cn('flex items-center gap-2.5 rounded-md border border-border-subtle bg-surface-base p-2.5 transition-colors focus-within:border-brand-primary', searchError && 'border-state-error focus-within:border-state-error')}>
+                <Search size={20} className={cn(searchError ? 'text-state-error' : 'text-text-secondary')} aria-hidden="true" />
                 <input
                   type="text"
                   placeholder="Buscar en descripción..."
@@ -527,23 +663,24 @@ function ExpenseScreenContent() {
                     setFilters({ ...filters, search: e.target.value })
                     if (searchError) setSearchError('')
                   }}
+                  className="min-w-0 flex-1 border-0 bg-transparent text-label text-text-primary outline-none"
                 />
-              </SearchInputWrapper>
-              {searchError && <ErrorText>{searchError}</ErrorText>}
-              
-              <SelectInput>
-                <label>Tipo</label>
-                <select value={filters.type} onChange={(e) => setFilters({ ...filters, type: e.target.value as ExpenseType | '' })}>
+              </div>
+              {searchError && <div className="mt-2 text-[13px] font-medium text-state-error">{searchError}</div>}
+               
+              <div className="flex flex-col gap-1">
+                <label className="text-label font-medium text-text-secondary">Tipo</label>
+                <select className={inputBaseClass} value={filters.type} onChange={(e) => setFilters({ ...filters, type: e.target.value as ExpenseType | '' })}>
                   <option value="">Todos</option>
                   <option value="operativo">Operativo</option>
                   <option value="personal">Personal</option>
                   <option value="otro_negocio">Otro Negocio</option>
                 </select>
-              </SelectInput>
-              
-              <SelectInput>
-                <label>Medio de Pago</label>
-                <select value={filters.paymentMethod} onChange={(e) => setFilters({ ...filters, paymentMethod: e.target.value as PaymentMethod | '' })}>
+              </div>
+               
+              <div className="flex flex-col gap-1">
+                <label className="text-label font-medium text-text-secondary">Medio de Pago</label>
+                <select className={inputBaseClass} value={filters.paymentMethod} onChange={(e) => setFilters({ ...filters, paymentMethod: e.target.value as PaymentMethod | '' })}>
                   <option value="">Todos</option>
                   <option value="efectivo">Efectivo</option>
                   <option value="transferencia">Transferencia</option>
@@ -551,170 +688,169 @@ function ExpenseScreenContent() {
                   <option value="cheque">Cheque</option>
                   <option value="otro">Otro</option>
                 </select>
-              </SelectInput>
-              
-              <TextInput>
-                <label>Categoría</label>
+              </div>
+               
+              <div className="flex flex-col gap-1">
+                <label className="text-label font-medium text-text-secondary">Categoría</label>
                 <input
                   type="text"
                   placeholder="Filtrar por categoría..."
                   value={filters.category}
                   onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+                  className={inputBaseClass}
                 />
-              </TextInput>
-            </FilterRow>
+              </div>
+            </div>
             
-            <FilterActions>
-              <ClearButton onClick={clearFilters}>Limpiar</ClearButton>
-              <ApplyButton onClick={applyFilters}>Aplicar</ApplyButton>
-            </FilterActions>
-          </FilterSection>
-        </FiltersCard>
+            <div className="mt-4 flex justify-end gap-2.5">
+              <Button text="Limpiar" variant="ghost" onClick={clearFilters} size="sm" />
+              <Button text="Aplicar" variant="primary" onClick={applyFilters} size="sm" />
+            </div>
+          </div>
+        </div>
       )}
 
-      <Content>
-        <Stats>
-          <StatCard>
-            <StatLabel>Total de Egresos</StatLabel>
-            <StatValue>{pagination.total}</StatValue>
-          </StatCard>
-          <StatCard>
-            <StatLabel>Monto Total</StatLabel>
-            <StatValue>
+      <div className="rounded-lg border border-border-subtle bg-surface-base p-6 shadow-md">
+        <div className="mb-6 flex gap-5 max-md:flex-col">
+          <div className="flex-1 rounded-lg border border-border-subtle border-t-4 border-t-brand-primary bg-surface-base p-5">
+            <div className="mb-2 text-label text-text-secondary">Total de Egresos</div>
+            <div className="text-[28px] font-bold text-text-primary">{pagination.total}</div>
+          </div>
+          <div className="flex-1 rounded-lg border border-border-subtle border-t-4 border-t-state-error bg-surface-base p-5">
+            <div className="mb-2 text-label text-text-secondary">Monto Total</div>
+            <div className="text-[28px] font-bold text-text-primary">
               {formatAmount(data.reduce((sum, exp) => sum + exp.amount, 0))}
-            </StatValue>
-          </StatCard>
-          <StatCard>
-            <StatLabel>Página</StatLabel>
-            <StatValue>{pagination.page} / {pagination.pages}</StatValue>
-          </StatCard>
-        </Stats>
+            </div>
+          </div>
+          <div className="flex-1 rounded-lg border border-border-subtle border-t-4 border-t-text-secondary bg-surface-base p-5">
+            <div className="mb-2 text-label text-text-secondary">Página</div>
+            <div className="text-[28px] font-bold text-text-primary">{pagination.page} / {pagination.pages}</div>
+          </div>
+        </div>
 
         {data.length === 0 ? (
-          <EmptyState>
-            <EmptyIcon>{filters.search.trim() ? '🔍' : '📋'}</EmptyIcon>
-            <EmptyText>
+          <div className="flex flex-col items-center justify-center px-5 py-[60px]">
+            <div className="mb-5 text-[64px]">{filters.search.trim() ? '🔍' : '📋'}</div>
+            <h2 className="mb-2.5 text-center text-2xl font-semibold text-text-secondary">
               {filters.search.trim() 
                 ? `No se encontraron egresos con "${filters.search.trim()}"`
                 : 'No hay egresos en el período seleccionado'
               }
-            </EmptyText>
-            <EmptySubText>
+            </h2>
+            <p className="text-center text-base text-text-muted">
               {filters.search.trim()
                 ? 'Intenta con otro término de búsqueda o limpia los filtros'
                 : 'Intenta ajustar los filtros o crear un nuevo egreso'
               }
-            </EmptySubText>
-          </EmptyState>
+            </p>
+          </div>
         ) : (
           <>
-            <TableContainer>
-              <Table>
-                <thead>
-                  <tr>
-                    <Th>Fecha</Th>
-                    <Th>Descripción</Th>
-                    <Th>Categoría</Th>
-                    <Th>Tipo</Th>
-                    <Th>Monto</Th>
-                    <Th>Medio de Pago</Th>
-                    <Th>Usuario</Th>
-                    <Th>Acciones</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.map((expense) => (
-                    <tr key={getExpenseId(expense)}>
-                      <Td>{formatDate(expense.date)}</Td>
-                      <Td>
-                        <Description title={expense.description || 'Sin descripción'}>
-                          {truncate(expense.description || 'Sin descripción', 50)}
-                        </Description>
-                      </Td>
-                      <Td>{expense.category}</Td>
-                      <Td>
-                        <TypeBadge type={expense.type}>
-                          {expense.type === 'operativo' ? 'Operativo' : 
-                           expense.type === 'personal' ? 'Personal' : 'Otro Negocio'}
-                        </TypeBadge>
-                      </Td>
-                      <Td><Amount>{formatAmount(expense.amount)}</Amount></Td>
-                      <Td>{expense.paymentMethod}</Td>
-                      <Td>
-                        <UserInfo>
-                          <UserName>{getUserName(expense.createdBy)}</UserName>
-                        </UserInfo>
-                      </Td>
-                      <Td>
-                        <ActionContainer>
-                          <ActionButton 
-                            onClick={() => router.push(`/expense/${getExpenseId(expense)}`)}
+            <div className="mb-5">
+              <DataTable
+                columns={expenseColumns}
+                data={data}
+                keyExtractor={(row) => getExpenseId(row)}
+                actions={(row) => (
+                  <TooltipProvider>
+                    <div className="flex flex-nowrap gap-2">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/expense/${getExpenseId(row)}`)}
                             title="Ver detalle"
+                            aria-label="Ver detalle"
+                            className={getActionButtonClass()}
                           >
-                            <MdVisibility size={18} />
-                          </ActionButton>
-                          {canUpdateExpense && (
-                            <ActionButton 
-                              onClick={() => router.push(`/expense/${getExpenseId(expense)}/edit`)}
+                            <Eye size={18} aria-hidden="true" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Ver detalle</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      {canUpdateExpense && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => router.push(`/expense/${getExpenseId(row)}/edit`)}
                               title="Editar"
+                              aria-label="Editar egreso"
+                              className={getActionButtonClass()}
                             >
-                              <MdEdit size={18} />
-                            </ActionButton>
-                          )}
-                          {canDeleteExpense && (
-                            <ActionButton 
-                              onClick={() => openDeleteConfirm(expense)} 
-                              $variant="danger"
+                              <Pencil size={18} aria-hidden="true" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Editar egreso</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {canDeleteExpense && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => openDeleteConfirm(row)}
                               title="Eliminar"
+                              aria-label="Eliminar egreso"
+                              className={getActionButtonClass('danger')}
                             >
-                              <MdDelete size={18} />
-                            </ActionButton>
-                          )}
-                        </ActionContainer>
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </TableContainer>
+                              <Trash2 size={18} aria-hidden="true" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Eliminar egreso</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                  </TooltipProvider>
+                )}
+              />
+            </div>
 
-            <PaginationContainer>
-              <PaginationInfo>
+            <div className="flex items-center justify-between gap-5 py-5 max-md:flex-col max-md:items-stretch">
+              <div className="text-label text-text-secondary">
                 Mostrando {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total} egresos
-              </PaginationInfo>
+              </div>
               
-              <PaginationControls>
-                <PaginationButton 
-                  onClick={() => handlePageChange(pagination.page - 1)}
+              <div className="flex items-center gap-4">
+                <Button
+                  text="← Anterior"
+                  variant="primary"
+                  size="sm"
                   disabled={pagination.page === 1}
-                >
-                  ← Anterior
-                </PaginationButton>
+                  onClick={() => handlePageChange(pagination.page - 1)}
+                />
                 
-                <PageInfo>Página {pagination.page} de {pagination.pages}</PageInfo>
+                <div className="text-label font-semibold text-text-primary">Página {pagination.page} de {pagination.pages}</div>
                 
-                <PaginationButton 
-                  onClick={() => handlePageChange(pagination.page + 1)}
+                <Button
+                  text="Siguiente →"
+                  variant="primary"
+                  size="sm"
                   disabled={pagination.page === pagination.pages}
-                >
-                  Siguiente →
-                </PaginationButton>
-              </PaginationControls>
+                  onClick={() => handlePageChange(pagination.page + 1)}
+                />
+              </div>
               
-              <LimitSelector>
+              <div className="flex items-center gap-2 text-label text-text-secondary">
                 Mostrar: 
-                <select value={filters.limit} onChange={handleLimitChange}>
+                <select className="rounded-md border border-border-subtle bg-surface-base px-2.5 py-1 text-label text-text-primary focus:border-brand-primary focus:outline-none" value={filters.limit} onChange={handleLimitChange}>
                   <option value="10">10</option>
                   <option value="20">20</option>
                   <option value="50">50</option>
                   <option value="100">100</option>
                 </select>
                 por página
-              </LimitSelector>
-            </PaginationContainer>
+              </div>
+            </div>
           </>
         )}
-      </Content>
+      </div>
 
       <Confirm
         open={confirmOpen}
@@ -722,581 +858,23 @@ function ExpenseScreenContent() {
         handleClose={closeDeleteConfirm}
         handleConfirm={handleDeleteExpense}
       />
-    </Container>
+    </PageContainer>
   )
 }
 
 export default function ExpenseScreen() {
   return (
-    <Suspense fallback={
-      <LoadingContainer>
-        <LoadingText>Cargando egresos...</LoadingText>
-      </LoadingContainer>
-    }>
-      <ExpenseScreenContent />
-    </Suspense>
+    <ProtectedRoute
+      requiredPermission={Permission.READ_EXPENSE}
+      deniedMessage="No tienes permisos para ver egresos. Contacta a tu administrador si necesitas acceso."
+    >
+      <Suspense fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background-canvas">
+          <div className="text-base text-text-secondary">Cargando egresos...</div>
+        </div>
+      }>
+        <ExpenseScreenContent />
+      </Suspense>
+    </ProtectedRoute>
   )
 }
-
-// Styled Components
-const LoadingContainer = styled.div`
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  background: #f5f5f5;
-`
-
-const LoadingText = styled.div`
-  font-size: 16px;
-  color: #666;
-`
-
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  padding: 20px;
-  background: #f5f5f5;
-`
-
-const Header = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-
-  @media only screen and (max-width: 768px) {
-    flex-direction: column;
-    gap: 15px;
-    align-items: stretch;
-  }
-`
-
-const HeaderActions = styled.div`
-  display: flex;
-  gap: 10px;
-  align-items: center;
-
-  @media only screen and (max-width: 768px) {
-    flex-direction: column;
-  }
-`
-
-const Title = styled.h1`
-  color: #3764A0;
-  font-size: 32px;
-  margin: 0;
-`
-
-const FilterToggleButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background: white;
-  border: 2px solid #8294C4;
-  border-radius: 8px;
-  color: #8294C4;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
-
-  &:hover {
-    background: #8294C4;
-    color: white;
-  }
-`
-
-const FilterBadge = styled.span`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  background: #EA906C;
-  color: white;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 700;
-  margin-left: 4px;
-`
-
-const ActiveFiltersRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
-  padding: 12px 16px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  flex-wrap: wrap;
-`
-
-const ActiveFiltersLabel = styled.span`
-  font-size: 13px;
-  font-weight: 600;
-  color: #666;
-`
-
-const ActiveFilterChip = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  background: #8294C4;
-  color: white;
-  border-radius: 16px;
-  font-size: 13px;
-  font-weight: 500;
-  transition: all 0.2s;
-
-  &:hover {
-    background: #637195;
-  }
-
-  svg {
-    transition: transform 0.2s;
-
-    &:hover {
-      transform: scale(1.2);
-    }
-  }
-`
-
-const FiltersCard = styled.div`
-  background: white;
-  border-radius: 10px;
-  padding: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-`
-
-const FilterSection = styled.div`
-  margin-bottom: 20px;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-`
-
-const FilterLabel = styled.h3`
-  color: #3764A0;
-  font-size: 16px;
-  margin: 0 0 15px 0;
-`
-
-const FilterRow = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 15px;
-  margin-bottom: 15px;
-`
-
-const DateInput = styled.div<{ $hasError?: boolean }>`
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-
-  label {
-    font-size: 14px;
-    color: ${props => props.$hasError ? '#d32f2f' : '#666'};
-    font-weight: 500;
-  }
-
-  input {
-    padding: 10px;
-    border: 1px solid ${props => props.$hasError ? '#d32f2f' : '#B4B4B8'};
-    border-radius: 5px;
-    font-size: 14px;
-    transition: border-color 0.2s;
-
-    &:focus {
-      outline: none;
-      border-color: ${props => props.$hasError ? '#d32f2f' : '#8294C4'};
-    }
-  }
-`
-
-const SearchInputWrapper = styled.div<{ $hasError?: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid ${props => props.$hasError ? '#d32f2f' : '#B4B4B8'};
-  border-radius: 5px;
-  background: white;
-  transition: border-color 0.2s;
-
-  &:focus-within {
-    border-color: ${props => props.$hasError ? '#d32f2f' : '#8294C4'};
-  }
-
-  svg {
-    color: ${props => props.$hasError ? '#d32f2f' : '#666'};
-  }
-
-  input {
-    flex: 1;
-    border: none;
-    outline: none;
-    font-size: 14px;
-  }
-`
-
-const SelectInput = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-
-  label {
-    font-size: 14px;
-    color: #666;
-    font-weight: 500;
-  }
-
-  select {
-    padding: 10px;
-    border: 1px solid #B4B4B8;
-    border-radius: 5px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: border-color 0.2s;
-
-    &:focus {
-      outline: none;
-      border-color: #8294C4;
-    }
-  }
-`
-
-const TextInput = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-
-  label {
-    font-size: 14px;
-    color: #666;
-    font-weight: 500;
-  }
-
-  input {
-    padding: 10px;
-    border: 1px solid #B4B4B8;
-    border-radius: 5px;
-    font-size: 14px;
-    transition: border-color 0.2s;
-
-    &:focus {
-      outline: none;
-      border-color: #8294C4;
-    }
-  }
-`
-
-const QuickFilters = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 10px;
-`
-
-const ErrorText = styled.div`
-  color: #d32f2f;
-  font-size: 13px;
-  margin-top: 8px;
-  font-weight: 500;
-`
-
-const Chip = styled.button<{ $active?: boolean }>`
-  padding: 6px 12px;
-  background: ${props => props.$active ? '#8294C4' : '#f0f0f0'};
-  border: 1px solid ${props => props.$active ? '#8294C4' : '#ddd'};
-  border-radius: 16px;
-  font-size: 13px;
-  color: ${props => props.$active ? 'white' : '#666'};
-  cursor: pointer;
-  transition: all 0.2s;
-  font-weight: ${props => props.$active ? '600' : '400'};
-
-  &:hover {
-    background: #8294C4;
-    color: white;
-    border-color: #8294C4;
-  }
-`
-
-const FilterActions = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 15px;
-`
-
-const ClearButton = styled.button`
-  padding: 10px 20px;
-  background: #f0f0f0;
-  border: none;
-  border-radius: 5px;
-  color: #666;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-
-  &:hover {
-    background: #e0e0e0;
-  }
-`
-
-const ApplyButton = styled.button`
-  padding: 10px 20px;
-  background: #8294C4;
-  border: none;
-  border-radius: 5px;
-  color: white;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-
-  &:hover {
-    background: #637195;
-  }
-`
-
-const Content = styled.div`
-  background: white;
-  border-radius: 10px;
-  padding: 30px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-`
-
-const EmptyState = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-`
-
-const EmptyIcon = styled.div`
-  font-size: 64px;
-  margin-bottom: 20px;
-`
-
-const EmptyText = styled.h2`
-  color: #666;
-  font-size: 24px;
-  margin-bottom: 10px;
-  text-align: center;
-`
-
-const EmptySubText = styled.p`
-  color: #999;
-  font-size: 16px;
-  text-align: center;
-`
-
-const Stats = styled.div`
-  display: flex;
-  gap: 20px;
-  margin-bottom: 30px;
-
-  @media only screen and (max-width: 768px) {
-    flex-direction: column;
-  }
-`
-
-const StatCard = styled.div`
-  flex: 1;
-  background: linear-gradient(135deg, #8294C4 0%, #637195 100%);
-  padding: 20px;
-  border-radius: 10px;
-  color: white;
-`
-
-const StatLabel = styled.div`
-  font-size: 14px;
-  opacity: 0.9;
-  margin-bottom: 8px;
-`
-
-const StatValue = styled.div`
-  font-size: 28px;
-  font-weight: bold;
-`
-
-const TableContainer = styled.div`
-  overflow-x: auto;
-  margin-bottom: 20px;
-`
-
-const Table = styled.table`
-  width: 100%;
-  border-collapse: collapse;
-`
-
-const Th = styled.th`
-  text-align: left;
-  padding: 12px;
-  border-bottom: 2px solid #e0e0e0;
-  color: #666;
-  font-weight: 600;
-  font-size: 14px;
-  white-space: nowrap;
-`
-
-const Td = styled.td`
-  padding: 12px;
-  border-bottom: 1px solid #f0f0f0;
-  font-size: 14px;
-`
-
-const Description = styled.span`
-  display: block;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-const TypeBadge = styled.span<{ type: string }>`
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  background: ${props => 
-    props.type === 'operativo' ? '#B6E2A1' : 
-    props.type === 'personal' ? '#EA906C' : '#F7A4A4'};
-  color: ${props => 
-    props.type === 'operativo' ? '#2d5016' : 
-    props.type === 'personal' ? '#5c2d0f' : '#5c0f0f'};
-`
-
-const Amount = styled.span`
-  font-weight: 600;
-  color: #8294C4;
-  white-space: nowrap;
-`
-
-const UserInfo = styled.div`
-  display: flex;
-  flex-direction: column;
-`
-
-const UserName = styled.div`
-  font-size: 14px;
-  color: #333;
-`
-
-const ActionContainer = styled.div`
-  display: flex;
-  gap: 8px;
-  flex-wrap: nowrap;
-`
-
-const ActionButton = styled.button<{ $variant?: 'danger' }>`
-  background: transparent;
-  border: none;
-  color: ${props => props.$variant === 'danger' ? '#d32f2f' : '#8294C4'};
-  cursor: pointer;
-  padding: 5px 10px;
-  border-radius: 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-
-  &:hover {
-    background: ${props => props.$variant === 'danger' ? '#ffebee' : '#f0f0f0'};
-    color: ${props => props.$variant === 'danger' ? '#b71c1c' : '#637195'};
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`
-
-const PaginationContainer = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 0;
-  gap: 20px;
-
-  @media only screen and (max-width: 768px) {
-    flex-direction: column;
-    align-items: stretch;
-  }
-`
-
-const PaginationInfo = styled.div`
-  font-size: 14px;
-  color: #666;
-`
-
-const PaginationControls = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 15px;
-`
-
-const PaginationButton = styled.button`
-  padding: 8px 16px;
-  background: #8294C4;
-  border: none;
-  border-radius: 5px;
-  color: white;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-
-  &:hover:not(:disabled) {
-    background: #637195;
-  }
-
-  &:disabled {
-    background: #e0e0e0;
-    color: #999;
-    cursor: not-allowed;
-  }
-`
-
-const PageInfo = styled.div`
-  font-size: 14px;
-  font-weight: 600;
-  color: #333;
-`
-
-const LimitSelector = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #666;
-
-  select {
-    padding: 5px 10px;
-    border: 1px solid #B4B4B8;
-    border-radius: 5px;
-    font-size: 14px;
-    cursor: pointer;
-
-    &:focus {
-      outline: none;
-      border-color: #8294C4;
-    }
-  }
-`

@@ -1,27 +1,27 @@
 import React, { useState } from 'react'
-import styled from 'styled-components'
 import ListLineaCompra from './ListLineaCompra'
-import InputSelectAdd from '../InputSelectAdd'
+import { AsyncComboboxWithActions } from '@/components/ui/async-combobox'
 import { useAppDispatch, useAppSelector } from '@/redux/hook'
 import { getBuy, onChangeProveedor, resetBuy, setItemsBuy } from '@/redux/buySlice'
-import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers'
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { AnimatedNumber } from '../AnimatedNumber'
-import ButtonUI from '../ButtonUI'
-import { setAlert } from '@/redux/alertSlice'
+import Button from '../Button'
+import { toast } from "sonner";
 import { setLoading } from '@/redux/loadingSlice'
 import apiClient from '@/utils/client'
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { useRouter } from 'next/navigation';
 import useLocalStorage from '@/hooks/useLocalStorage'
 import ModalAutoGenerate from './ModalAutoGenerate'
-import { addHours, endOfDay, format, isSunday, isValid, previousSunday, startOfDay, subDays } from 'date-fns';
+import { addHours, endOfDay, format, startOfDay } from 'date-fns';
 
 export default function LineaCompra({edit}:{edit?: boolean}) {
 
     const buy = useAppSelector(getBuy)
     const dispatch = useAppDispatch();
     const [date, setDate] = React.useState<Date>(new Date());
+    const [dateOpen, setDateOpen] = React.useState(false);
     const router: AppRouterInstance = useRouter()
     const [valueStorage , setValue] = useLocalStorage("user", "")
     const [openAutoGenerate, setOpenAutoGenerate] = useState<boolean>(false)
@@ -37,10 +37,7 @@ export default function LineaCompra({edit}:{edit?: boolean}) {
           })
           .then((r)=>{
             dispatch(setLoading(false))
-            dispatch(setAlert({
-              message: `Generado correctamente`,
-              type: 'success'
-            }))
+            toast.success('Generado correctamente')
             console.log(r)
             dispatch(setItemsBuy({itemsBuy: r.data}))
             setOpenAutoGenerate(false)
@@ -48,10 +45,7 @@ export default function LineaCompra({edit}:{edit?: boolean}) {
           .catch((e)=>{
             console.log(e.response)
             dispatch(setLoading(false))
-            dispatch(setAlert({
-            message: `${e.response.data.error}`,
-            type: 'error'
-            }))
+            toast.error(e.response.data.error)
           })
           return
         }
@@ -62,10 +56,7 @@ export default function LineaCompra({edit}:{edit?: boolean}) {
         })
         .then((r)=>{
           dispatch(setLoading(false))
-          dispatch(setAlert({
-            message: `Generado correctamente`,
-            type: 'success'
-          }))
+          toast.success('Generado correctamente')
           console.log(r)
           dispatch(setItemsBuy({itemsBuy: r.data}))
           setOpenAutoGenerate(false)
@@ -73,77 +64,73 @@ export default function LineaCompra({edit}:{edit?: boolean}) {
         .catch((e)=>{
           console.log(e.response)
           dispatch(setLoading(false))
-          dispatch(setAlert({
-          message: `${e.response.data.error}`,
-          type: 'error'
-          }))
+          toast.error(e.response.data.error)
         })
         return
       }
 
   return (
-    <ContainerListLineaCompra>
-        <div style={{display: 'flex', flex: 1, flexDirection: 'column', padding: 15}}>
-          <h2 style={{fontSize: 18, color: '#6B7280', textAlign: 'center'}} >CARRITO</h2>
-          <div style={{borderBottom: '2px solid #d9d9d9', margin: '15px', borderRadius: '100%'}} ></div>
+    <div className="flex flex-1 w-1/2 flex-col max-[940px]:w-full max-[940px]:h-[90%]">
+        <div className="flex flex-1 flex-col p-4">
+          <h2 className="text-lg text-text-secondary text-center">CARRITO</h2>
+          <div className="border-b-2 border-border-subtle mx-4 my-4 rounded-full" />
           <ListLineaCompra edit={edit} />
         </div>
-        <div style={{display: 'flex', justifyContent: 'center', flexDirection: 'column', padding: '0 15px'}}>
-            <InputSelectAdd type={'text'} label={'Proveedor'} name={'proveedor'} path={'provider'} 
-                value={buy.proveedor} 
-                onChange={(id:any, item:any)=>dispatch(onChangeProveedor({proveedor: item.descripcion}))} 
-            /> 
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <DatePicker
-                label="Seleccionar fecha"
-                format="dd/MM/yyyy"
-                value={date}
-                onChange={(newValue) => {
-                  if (newValue) {
-                    setDate(newValue);
-                  }
-                }}
-              />
-            </LocalizationProvider>
-            <div style={{display: 'flex', justifyContent: 'space-between', margin:'15px 0'}} >
-              <Total><AnimatedNumber value={buy.itemsBuy.length} /> productos </Total>
-              <Total>Total: $ <AnimatedNumber value={buy.total} /> </Total>
+        <div className="flex justify-center flex-col px-4">
+            <AsyncComboboxWithActions name={'Proveedor'} path={'provider'}
+                value={buy.proveedor}
+                onChange={(id:any, item:any)=>dispatch(onChangeProveedor({proveedor: item?.descripcion ?? ''}))}
+            />
+            <Popover open={dateOpen} onOpenChange={setDateOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-10 items-center justify-center rounded-md border border-border-subtle bg-surface-base px-4 text-label text-text-primary hover:bg-background-subtle transition-colors"
+                >
+                  {format(date, 'dd/MM/yyyy')}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent>
+                <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={(newValue) => {
+                    if (newValue) setDate(newValue);
+                    setDateOpen(false);
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+            <div className="flex justify-between my-4">
+              <h2 className="text-lg text-text-secondary max-[940px]:hidden">
+                <AnimatedNumber value={buy.itemsBuy.length} /> productos
+              </h2>
+              <h2 className="text-lg text-text-secondary max-[940px]:hidden">
+                Total: $ <AnimatedNumber value={buy.total} />
+              </h2>
             </div>
-            <div style={{display: 'flex', justifyContent: 'center',  margin: '15px 0'}}>
-              {
-                !edit &&
-                <ButtonUI label='VACIAR' onClick={()=>{dispatch(resetBuy({}))}}/>
-              }
-              <ButtonUI label='AUTO Generar' onClick={()=>{
+            <div className="flex justify-center my-4">
+              {!edit && (
+                <Button text='VACIAR' variant='secondary' className="mx-1 my-1 px-3.5 shadow-sm hover:bg-brand-primary hover:text-text-inverse hover:border-brand-primary active:translate-y-px" onClick={()=>{dispatch(resetBuy({}))}}/>
+              )}
+              <Button text='AUTO Generar' variant='secondary' className="mx-1 my-1 px-3.5 shadow-sm hover:bg-brand-primary hover:text-text-inverse hover:border-brand-primary active:translate-y-px" onClick={()=>{
                 if (buy.proveedor === '') {
-                  dispatch(setAlert({
-                    message: `Primero elige un proveedor`,
-                    type: 'warning'
-                  }))
+                  toast.warning('Primero elige un proveedor')
                   return
                 }
                 if (buy.itemsBuy.length > 0) {
-                  dispatch(setAlert({
-                    message: `Primero quita los productos de la lista`,
-                    type: 'warning'
-                  }))
+                  toast.warning('Primero quita los productos de la lista')
                   return
                 }
                 setOpenAutoGenerate(true)
               }}/>
-              <ButtonUI label='Crear' onClick={()=>{
+              <Button text='Crear' variant='secondary' className="mx-1 my-1 px-3.5 shadow-sm hover:bg-brand-primary hover:text-text-inverse hover:border-brand-primary active:translate-y-px" onClick={()=>{
                 if (buy.itemsBuy.length===0 || buy.total <= 0) {
-                  dispatch(setAlert({
-                    message: `No se agregaron productos al carrito`,
-                    type: 'warning'
-                  }))
+                  toast.warning('No se agregaron productos al carrito')
                   return
                 }
                 if (buy.proveedor==='' || buy.proveedor === undefined) {
-                  dispatch(setAlert({
-                    message: `No se ingreso ningun proveedor`,
-                    type: 'warning'
-                  }))
+                  toast.warning('No se ingreso ningun proveedor')
                   return
                 }
                 dispatch(setLoading(true))
@@ -154,45 +141,20 @@ export default function LineaCompra({edit}:{edit?: boolean}) {
                 })
                 .then((r)=>{
                   dispatch(setLoading(false))
-                  dispatch(setAlert({
-                    message: `Compra creada correctamente`,
-                    type: 'success'
-                  }))
+                  toast.success('Compra creada correctamente')
                   router.back()
                 })
                 .catch((e)=>{
                   console.log(e.response)
                   dispatch(setLoading(false))
-                  dispatch(setAlert({
-                  message: `${e.response.data.error}`,
-                  type: 'error'
-                  }))
+                  toast.error(e.response.data.error)
                 })
               }} />
             </div>
         </div>
-        {
-            openAutoGenerate &&
+        {openAutoGenerate && (
             <ModalAutoGenerate open={openAutoGenerate} handleClose={()=>setOpenAutoGenerate(false)} handleSubmit={generateAutoBuy} />
-        }
-    </ContainerListLineaCompra>
+        )}
+    </div>
   )
 }
-
-const ContainerListLineaCompra = styled.div`
-  display: flex;
-  flex: 1;
-  width: 50%;
-  flex-direction: column;
-  @media only screen and (max-width: 940px) {
-    width: 100%;
-    height: 90%;
-  }
-`
-const Total = styled.h2 `
-  font-size: 18px;
-  color: #6B7280;
-  @media only screen and (max-width: 940px) {
-    display: none;
-  }
-`
