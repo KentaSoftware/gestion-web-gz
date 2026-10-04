@@ -3,7 +3,8 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePermission } from '@/hooks/usePermission';
-import { Permission } from '@/interfaces/auth.interface';
+import { useSessionAccess } from '@/hooks/useSessionAccess';
+import { Permission, SESSION_STATUS } from '@/interfaces/auth.interface';
 import AccessDenied from './AccessDenied';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -65,30 +66,28 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireAuth = true,
 }) => {
   const router = useRouter();
+  const { status } = useSessionAccess();
   const { hasPermission, hasAnyPermission } = usePermission();
   const [isChecking, setIsChecking] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
 
+  const hydrating = status === SESSION_STATUS.HYDRATING;
+  const anonymous = status === SESSION_STATUS.ANONYMOUS;
+
   useEffect(() => {
-    // Verificar autenticación si se requiere
-    if (requireAuth) {
-      const userStorage = localStorage.getItem('user');
-      if (!userStorage) {
-        router.push('/');
-        return;
-      }
-      
-      try {
-        const userData = JSON.parse(userStorage);
-        if (!userData.token) {
-          router.push('/');
-          return;
-        }
-      } catch (error) {
-        console.error('Error al parsear usuario de localStorage:', error);
-        router.push('/');
-        return;
-      }
+    // While the session is hydrating, never evaluate access: show loading only.
+    if (hydrating) {
+      setIsChecking(true);
+      return;
+    }
+
+    // Require authentication when configured; a genuinely absent session
+    // redirects, it does not flash the forbidden UI.
+    if (requireAuth && anonymous) {
+      setIsChecking(false);
+      setHasAccess(false);
+      router.push('/');
+      return;
     }
 
     // Si no se especificó permiso, solo verificar auth
@@ -99,15 +98,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
 
     // Verificar permisos
-    let permitted = false;
-
-    if (Array.isArray(requiredPermission)) {
-      // Si es un array, verificar que tenga al menos uno de los permisos
-      permitted = hasAnyPermission(requiredPermission);
-    } else {
-      // Si es un solo permiso, verificar que lo tenga
-      permitted = hasPermission(requiredPermission);
-    }
+    const permitted = Array.isArray(requiredPermission)
+      ? hasAnyPermission(requiredPermission)
+      : hasPermission(requiredPermission);
 
     setHasAccess(permitted);
     setIsChecking(false);
@@ -116,10 +109,19 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     if (!permitted && redirectTo) {
       router.push(redirectTo);
     }
-  }, [requiredPermission, redirectTo, requireAuth, hasPermission, hasAnyPermission, router]);
+  }, [hydrating, anonymous, requiredPermission, redirectTo, requireAuth, hasPermission, hasAnyPermission, router]);
 
-  // Mostrar loading mientras se verifica
-  if (isChecking) {
+  // Mostrar loading mientras se verifica o durante la hidratación de sesión
+  if (hydrating || isChecking) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Spinner className="size-12 text-brand-primary" />
+      </div>
+    );
+  }
+
+  // Sesión ausente con autenticación requerida: se redirige en el useEffect
+  if (requireAuth && anonymous) {
     return (
       <div className="flex items-center justify-center p-8">
         <Spinner className="size-12 text-brand-primary" />

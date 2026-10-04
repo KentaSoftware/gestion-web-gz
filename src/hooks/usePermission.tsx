@@ -1,68 +1,68 @@
 'use client';
 
-import { useAppSelector } from '@/redux/hook';
-import { getUser } from '@/redux/userSlice';
-import { Permission } from '@/interfaces/auth.interface';
+import { useCallback } from 'react';
+import { Permission, SESSION_STATUS } from '@/interfaces/auth.interface';
+import { useSessionAccess } from '@/hooks/useSessionAccess';
 
 /**
  * Hook personalizado para verificar permisos del usuario
- * 
- * @returns Objeto con funciones para verificar permisos
- * 
+ *
+ * Returns permission helpers plus the session status. While the session is
+ * `hydrating`, helpers report no permission but `hydrating` is true so callers
+ * render loading instead of a forbidden state.
+ *
  * @example
  * ```tsx
- * const { hasPermission, canCreateExpense, canEditExpense } = usePermission();
- * 
+ * const { hasPermission, hydrating, canCreateExpense } = usePermission();
+ *
+ * if (hydrating) {
+ *   return <Spinner />
+ * }
+ *
  * if (canCreateExpense) {
  *   return <button onClick={handleCreate}>Crear Egreso</button>
  * }
- * 
+ *
  * if (hasPermission(Permission.DELETE_EXPENSE)) {
  *   return <button onClick={handleDelete}>Eliminar</button>
  * }
  * ```
  */
 export const usePermission = () => {
-  const user = useAppSelector(getUser);
+  const { status, permissions } = useSessionAccess();
+  const hydrating = status === SESSION_STATUS.HYDRATING;
 
   /**
    * Verifica si el usuario tiene un permiso específico
    * @param permission - Permiso a verificar (usar enum Permission)
    * @returns true si el usuario tiene el permiso, false en caso contrario
    */
-  const hasPermission = (permission: Permission | string): boolean => {
-    if (!user || !user.role || !user.role.permissions) {
-      return false;
-    }
-
-    return user.role.permissions.includes(permission);
-  };
+  const hasPermission = useCallback(
+    (permission: Permission | string): boolean => permissions.includes(permission),
+    [permissions]
+  );
 
   /**
    * Verifica si el usuario tiene al menos uno de los permisos especificados
-   * @param permissions - Array de permisos a verificar
+   * @param required - Array de permisos a verificar
    * @returns true si el usuario tiene al menos uno de los permisos
    */
-  const hasAnyPermission = (permissions: (Permission | string)[]): boolean => {
-    if (!user || !user.role || !user.role.permissions) {
-      return false;
-    }
-
-    return permissions.some(permission => user.role!.permissions.includes(permission));
-  };
+  const hasAnyPermission = useCallback(
+    (required: (Permission | string)[]): boolean =>
+      required.some((permission) => permissions.includes(permission)),
+    [permissions]
+  );
 
   /**
    * Verifica si el usuario tiene todos los permisos especificados
-   * @param permissions - Array de permisos a verificar
+   * @param required - Array de permisos a verificar
    * @returns true si el usuario tiene todos los permisos
    */
-  const hasAllPermissions = (permissions: (Permission | string)[]): boolean => {
-    if (!user || !user.role || !user.role.permissions) {
-      return false;
-    }
-
-    return permissions.every(permission => user.role!.permissions.includes(permission));
-  };
+  const hasAllPermissions = useCallback(
+    (required: (Permission | string)[]): boolean =>
+      required.every((permission) => permissions.includes(permission)),
+    [permissions]
+  );
 
   // Helpers específicos para egresos (shortcuts)
   const canCreateExpense = hasPermission(Permission.CREATE_EXPENSE);
@@ -77,6 +77,8 @@ export const usePermission = () => {
   const isReadOnly = canReadExpense && !canCreateExpense && !canUpdateExpense && !canDeleteExpense;
 
   return {
+    hydrating,
+    status,
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,

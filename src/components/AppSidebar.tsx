@@ -4,6 +4,8 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useSelector } from 'react-redux'
 import useLocalStorage from '@/hooks/useLocalStorage'
+import { useSessionAccess } from '@/hooks/useSessionAccess'
+import { SESSION_STATUS } from '@/interfaces/auth.interface'
 import { getUser } from '@/redux/userSlice'
 import {
   Sidebar,
@@ -54,8 +56,13 @@ export default function AppSidebar() {
   const user: any = useSelector(getUser)
   const [valueStorage, , clearValue] = useLocalStorage('user', '')
   const { theme, setTheme } = useTheme()
+  const { status } = useSessionAccess()
 
-  const userName = valueStorage?.user || user?.nickname || 'Usuario'
+  // While the session hydrates, the user name is unknown: render a neutral
+  // placeholder instead of treating the session as logged out.
+  const hydrating = status === SESSION_STATUS.HYDRATING
+  const userName = valueStorage?.nickname || user?.nickname || ''
+  const displayName = userName || (hydrating ? '' : 'Usuario')
 
   function getHref(item: { path: string }): string {
     return '/' + item.path.toLowerCase().split(' ').join('')
@@ -128,15 +135,23 @@ export default function AppSidebar() {
               type="button"
               className="flex h-11 w-full min-w-0 items-center gap-3 rounded-lg px-3 text-left text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:overflow-hidden"
               aria-label="Abrir menú de usuario"
+              aria-busy={hydrating}
             >
               <Avatar className="size-8 shrink-0 rounded-lg group-data-[collapsible=icon]:size-6">
                 <AvatarFallback className="rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  {userName.charAt(0).toUpperCase()}
+                  {userName ? userName.charAt(0).toUpperCase() : hydrating ? '' : 'U'}
                 </AvatarFallback>
               </Avatar>
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold group-data-[collapsible=icon]:hidden">
-                {userName}
-              </span>
+              {hydrating && userName === '' ? (
+                <span
+                  className="h-3 min-w-0 flex-1 animate-pulse rounded bg-sidebar-accent group-data-[collapsible=icon]:hidden"
+                  aria-hidden="true"
+                />
+              ) : (
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold group-data-[collapsible=icon]:hidden">
+                  {displayName}
+                </span>
+              )}
               <ChevronUp className="ml-auto size-4 shrink-0 group-data-[collapsible=icon]:hidden" />
             </button>
           </DropdownMenuTrigger>
