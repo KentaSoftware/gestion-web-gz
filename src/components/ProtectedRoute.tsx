@@ -1,9 +1,12 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, type ReactNode } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { usePermission } from '@/hooks/usePermission';
-import { Permission } from '@/interfaces/auth.interface';
+import { useSessionAccess } from '@/hooks/useSessionAccess';
+import { Permission, SESSION_STATUS } from '@/interfaces/auth.interface';
+import { MODULE_REGISTRY, type ModuleRegistryEntry } from '@/config/moduleRegistry';
+import { ModuleGate } from '@/components/module-gate';
 import AccessDenied from './AccessDenied';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -65,30 +68,29 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireAuth = true,
 }) => {
   const router = useRouter();
+  const pathname = usePathname();
+  const { status } = useSessionAccess();
   const { hasPermission, hasAnyPermission } = usePermission();
   const [isChecking, setIsChecking] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
 
+  const hydrating = status === SESSION_STATUS.HYDRATING;
+  const anonymous = status === SESSION_STATUS.ANONYMOUS;
+
   useEffect(() => {
-    // Verificar autenticación si se requiere
-    if (requireAuth) {
-      const userStorage = localStorage.getItem('user');
-      if (!userStorage) {
-        router.push('/');
-        return;
-      }
-      
-      try {
-        const userData = JSON.parse(userStorage);
-        if (!userData.token) {
-          router.push('/');
-          return;
-        }
-      } catch (error) {
-        console.error('Error al parsear usuario de localStorage:', error);
-        router.push('/');
-        return;
-      }
+    // While the session is hydrating, never evaluate access: show loading only.
+    if (hydrating) {
+      setIsChecking(true);
+      return;
+    }
+
+    // Require authentication when configured; a genuinely absent session
+    // redirects, it does not flash the forbidden UI.
+    if (requireAuth && anonymous) {
+      setIsChecking(false);
+      setHasAccess(false);
+      router.push('/');
+      return;
     }
 
     // Si no se especificó permiso, solo verificar auth
@@ -99,15 +101,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
 
     // Verificar permisos
-    let permitted = false;
-
-    if (Array.isArray(requiredPermission)) {
-      // Si es un array, verificar que tenga al menos uno de los permisos
-      permitted = hasAnyPermission(requiredPermission);
-    } else {
-      // Si es un solo permiso, verificar que lo tenga
-      permitted = hasPermission(requiredPermission);
-    }
+    const permitted = Array.isArray(requiredPermission)
+      ? hasAnyPermission(requiredPermission)
+      : hasPermission(requiredPermission);
 
     setHasAccess(permitted);
     setIsChecking(false);
@@ -116,19 +112,33 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     if (!permitted && redirectTo) {
       router.push(redirectTo);
     }
-  }, [requiredPermission, redirectTo, requireAuth, hasPermission, hasAnyPermission, router]);
+  }, [hydrating, anonymous, requiredPermission, redirectTo, requireAuth, hasPermission, hasAnyPermission, router]);
 
-  // Mostrar loading mientras se verifica
-  if (isChecking) {
-    return (
+  const moduleEntry = [...MODULE_REGISTRY]
+    .sort((first, second) => second.href.length - first.href.length)
+    .find((entry): entry is ModuleRegistryEntry =>
+      (entry.flag !== null || entry.gate !== null) &&
+      (pathname === entry.href || pathname.startsWith(`${entry.href}/`))
+    );
+
+  let content: ReactNode;
+
+  // Mostrar loading mientras se verifica o durante la hidratación de sesión
+  if (hydrating || isChecking) {
+    content = (
       <div className="flex items-center justify-center p-8">
         <Spinner className="size-12 text-brand-primary" />
       </div>
     );
-  }
-
-  // Si no tiene acceso y no hay redirección, mostrar AccessDenied
-  if (!hasAccess && !redirectTo) {
+  } else if (requireAuth && anonymous) {
+    // Sesión ausente con autenticación requerida: se redirige en el useEffect
+    content = (
+      <div className="flex items-center justify-center p-8">
+        <Spinner className="size-12 text-brand-primary" />
+      </div>
+    );
+  } else if (!hasAccess && !redirectTo) {
+    // Si no tiene acceso y no hay redirección, mostrar AccessDenied
     const permissionText = Array.isArray(requiredPermission)
       ? requiredPermission.join(', ')
       : requiredPermission || 'desconocido';
@@ -136,20 +146,20 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     const defaultMessage = deniedMessage || 
       `No tienes permisos suficientes para acceder a esta página. Se requiere: ${permissionText}`;
 
-    return <AccessDenied message={defaultMessage} />;
-  }
-
-  // Si no tiene acceso y hay redirección, no renderizar nada (se redirige en el useEffect)
-  if (!hasAccess && redirectTo) {
-    return (
+    content = <AccessDenied message={defaultMessage} />;
+  } else if (!hasAccess && redirectTo) {
+    // Si no tiene acceso y hay redirección, no renderizar nada (se redirige en el useEffect)
+    content = (
       <div className="flex items-center justify-center p-8">
         <Spinner className="size-12 text-brand-primary" />
       </div>
     );
+  } else {
+    // Si tiene acceso, renderizar el contenido
+    content = <>{children}</>;
   }
 
-  // Si tiene acceso, renderizar el contenido
-  return <>{children}</>;
+  return <ModuleGate entry={moduleEntry}>{content}</ModuleGate>;
 };
 
 export default ProtectedRoute;
