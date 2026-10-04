@@ -11,3 +11,9 @@ export const REPARTIDOR_ACCESS: SessionAccess = {
     simulation: false,
   },
 }
+
+/** A ready session that has no access to the enabled route module. */
+export const WITHOUT_ROUTE_READ_ACCESS: SessionAccess = {
+  ...REPARTIDOR_ACCESS,
+  permissions: [],
+}

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route } from 'lucide-react'
 import { SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
 import type { ModuleRegistryEntry } from '@/config/moduleRegistry'
+import { REPARTIDOR_ACCESS, WITHOUT_ROUTE_READ_ACCESS } from '@/test/fixtures/sessionAccess'
 
 const { refresh, useSessionAccess, isModuleEnabled, moduleFlags } = vi.hoisted(() => ({
   refresh: vi.fn(),
@@ -64,5 +65,24 @@ describe('ModuleGate', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('Módulo no disponible')
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+  })
+
+  it('allows the enabled Rutas module for the Repartidor fixture', () => {
+    useSessionAccess.mockReturnValue(REPARTIDOR_ACCESS)
+    isModuleEnabled.mockReturnValue(true)
+
+    render(<ModuleGate entry={entry}>Visible content</ModuleGate>)
+
+    expect(screen.getByText('Visible content')).toBeInTheDocument()
+  })
+
+  it('denies direct Rutas access without read_route_plan', () => {
+    useSessionAccess.mockReturnValue(WITHOUT_ROUTE_READ_ACCESS)
+    isModuleEnabled.mockReturnValue(false)
+
+    render(<ModuleGate entry={entry}>Visible content</ModuleGate>)
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Acceso restringido')
+    expect(screen.queryByText('Visible content')).not.toBeInTheDocument()
   })
 })

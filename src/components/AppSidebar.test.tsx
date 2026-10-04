@@ -2,8 +2,12 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { SESSION_STATUS } from '@/interfaces/auth.interface'
 import { SidebarProvider } from '@/components/ui/sidebar'
+import { REPARTIDOR_ACCESS, WITHOUT_ROUTE_READ_ACCESS } from '@/test/fixtures/sessionAccess'
 
-const { useSessionAccess } = vi.hoisted(() => ({ useSessionAccess: vi.fn() }))
+const { useSessionAccess, isModuleEnabled } = vi.hoisted(() => ({
+  useSessionAccess: vi.fn(),
+  isModuleEnabled: vi.fn(),
+}))
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/home',
@@ -18,21 +22,51 @@ vi.mock('next-themes', () => ({ useTheme: () => ({ theme: 'light', setTheme: vi.
 vi.mock('react-redux', () => ({ useSelector: () => ({ nickname: 'Repartidor' }) }))
 vi.mock('@/hooks/useLocalStorage', () => ({ default: () => ['', vi.fn(), vi.fn()] }))
 vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess }))
+vi.mock('@/config/moduleRegistry', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/config/moduleRegistry')>()
+  return { ...actual, isModuleEnabled }
+})
 
 import AppSidebar from './AppSidebar'
 
 describe('AppSidebar', () => {
+  const routeEnabledForRepartidor = (entry: { id: string }, access: { permissions: string[]; gates: Record<string, boolean> }) =>
+    entry.id === 'home' || (
+      entry.id === 'route' &&
+      access.gates.route === true &&
+      access.permissions.includes('read_route_plan')
+    )
+
   it('hides blocked modules and disables prefetch for enabled navigation', () => {
     useSessionAccess.mockReturnValue({
       status: SESSION_STATUS.READY,
       permissions: [],
       gates: { route: false, stock: false, finance: false, simulation: false },
     })
+    isModuleEnabled.mockImplementation(routeEnabledForRepartidor)
 
     render(<SidebarProvider><AppSidebar /></SidebarProvider>)
 
     expect(screen.getByRole('link', { name: 'Inicio' })).toHaveAttribute('data-prefetch', 'false')
     expect(screen.queryByRole('link', { name: 'Rutas' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Stock' })).not.toBeInTheDocument()
+  })
+
+  it('shows the enabled Rutas navigation link to the Repartidor fixture', () => {
+    useSessionAccess.mockReturnValue(REPARTIDOR_ACCESS)
+    isModuleEnabled.mockImplementation(routeEnabledForRepartidor)
+
+    render(<SidebarProvider><AppSidebar /></SidebarProvider>)
+
+    expect(screen.getByRole('link', { name: 'Rutas' })).toHaveAttribute('href', '/route')
+  })
+
+  it('does not show Rutas to a user without read_route_plan', () => {
+    useSessionAccess.mockReturnValue(WITHOUT_ROUTE_READ_ACCESS)
+    isModuleEnabled.mockImplementation(routeEnabledForRepartidor)
+
+    render(<SidebarProvider><AppSidebar /></SidebarProvider>)
+
+    expect(screen.queryByRole('link', { name: 'Rutas' })).not.toBeInTheDocument()
   })
 })
