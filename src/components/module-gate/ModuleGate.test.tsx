@@ -1,0 +1,68 @@
+import { render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Route } from 'lucide-react'
+import { SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
+import type { ModuleRegistryEntry } from '@/config/moduleRegistry'
+
+const { refresh, useSessionAccess, isModuleEnabled, moduleFlags } = vi.hoisted(() => ({
+  refresh: vi.fn(),
+  useSessionAccess: vi.fn(),
+  isModuleEnabled: vi.fn(),
+  moduleFlags: { route: true, stock: true, finance: true, simulation: true },
+}))
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }))
+vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess }))
+vi.mock('@/config/moduleRegistry', () => ({
+  MODULE_FLAGS: moduleFlags,
+  isModuleEnabled,
+}))
+
+import { ModuleGate } from './ModuleGate'
+
+const entry: ModuleRegistryEntry = {
+  id: 'route',
+  href: '/route',
+  label: 'Rutas',
+  icon: Route,
+  flag: 'route',
+  gate: 'route',
+  requiredPermissions: ['read_route_plan'],
+}
+
+const access = (status: SessionAccess['status'], gates: Readonly<Record<string, boolean>>): SessionAccess => ({
+  status,
+  permissions: ['read_route_plan'],
+  gates,
+})
+
+describe('ModuleGate', () => {
+  beforeEach(() => {
+    isModuleEnabled.mockReturnValue(false)
+    useSessionAccess.mockReturnValue(access(SESSION_STATUS.READY, { route: true }))
+  })
+
+  it('announces loading while session access is hydrating', () => {
+    useSessionAccess.mockReturnValue(access(SESSION_STATUS.HYDRATING, {}))
+
+    render(<ModuleGate entry={entry}>Visible content</ModuleGate>)
+
+    expect(screen.getByRole('status')).toHaveTextContent('Verificando el acceso a Rutas')
+    expect(screen.queryByText('Visible content')).not.toBeInTheDocument()
+  })
+
+  it('renders a forbidden state when the module is enabled but permissions are absent', () => {
+    render(<ModuleGate entry={entry}>Visible content</ModuleGate>)
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Acceso restringido')
+  })
+
+  it('renders an unavailable state when gate evidence is absent', () => {
+    useSessionAccess.mockReturnValue(access(SESSION_STATUS.READY, { route: false }))
+
+    render(<ModuleGate entry={entry}>Visible content</ModuleGate>)
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Módulo no disponible')
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+  })
+})
