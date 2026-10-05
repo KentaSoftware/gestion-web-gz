@@ -5,13 +5,14 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import { Permission } from '@/interfaces/auth.interface'
 import { PageContainer, PageHeader } from '@/components/layout/PageLayout'
 import { Spinner } from '@/components/ui/spinner'
+import { RoutePlanner } from '@/components/route/RoutePlanner'
 
 /**
- * Route planning page shell (T-F.1 / T-F.C1).
+ * Route planning page shell (T-F.1 / T-F.C1) with candidate review (T-F.3).
  *
- * Establishes the gated entry point for Optimización de Rutas. Candidate
- * fetching, preview and saved plans belong to later work units; this shell
- * only provides navigation, module gating and the accessible page frame.
+ * Establishes the gated entry point for Optimización de Rutas. Preview, map and
+ * saved plans belong to later work units; this page provides navigation, module
+ * gating, the accessible page frame and the read-only candidate review panel.
  */
 function RoutePlanningContent() {
   return (
@@ -21,17 +22,7 @@ function RoutePlanningContent() {
         description="Planificación de rutas de reparto. Seleccioná una fecha y una zona para revisar los candidatos."
       />
 
-      <section
-        aria-labelledby="route-planning-status"
-        className="rounded-lg border border-border-subtle bg-surface-base p-6 shadow-md"
-      >
-        <h2 id="route-planning-status" className="mb-2 text-base font-semibold text-text-primary">
-          Planificación de rutas
-        </h2>
-        <p className="text-label text-text-secondary">
-          La revisión de candidatos va a estar disponible en una próxima actualización.
-        </p>
-      </section>
+      <RoutePlanner />
     </PageContainer>
   )
 }

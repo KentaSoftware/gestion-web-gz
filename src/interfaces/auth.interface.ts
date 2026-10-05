@@ -41,7 +41,10 @@ export enum Permission {
   CONFIRM_PURCHASE_PAYMENT = 'confirm_purchase_payment',
   RECEIVE_PURCHASE = 'receive_purchase',
   ADJUST_STOCK = 'adjust_stock',
+
+  // Route planning
   READ_ROUTE_PLAN = 'read_route_plan',
+  CREATE_ROUTE_PLAN = 'create_route_plan',
 }
 
 /** Session access states. Hydration must never be treated as denied. */

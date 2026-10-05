@@ -32,6 +32,14 @@ vi.mock('@/config/moduleRegistry', () => ({
     },
   ],
 }))
+// Keep the shell tests deterministic: the planner panel is covered by its own
+// suite and must not perform real zone/network work here.
+vi.mock('@/services/routePlan.service', () => ({
+  routePlanService: {
+    getActiveDeliveryZones: () => new Promise(() => undefined),
+    getCandidates: vi.fn(),
+  },
+}))
 
 import RouteScreen from './page'
 
