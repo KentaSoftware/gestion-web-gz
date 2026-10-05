@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest'
 import type { RoutePreview as RoutePreviewData } from '@/interfaces/routePlan.interface'
 import { RoutePreview } from './RoutePreview'
 
+// Deterministic map fallback: RouteMap must resolve to its non-terminal
+// no-key state so these tests never load the live Google Maps script.
+delete process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+
 const PREVIEW: RoutePreviewData = {
   route: {
     depot: { id: 'deposito_1', name: 'Depósito Central', latitude: -34.6, longitude: -58.4 },
@@ -103,6 +107,16 @@ describe('RoutePreview', () => {
     expect(
       screen.getByText('La visualización en mapa no está disponible. Se muestra el recorrido como lista.')
     ).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('keeps metrics and the ordered list when the map is unavailable', () => {
+    render(<RoutePreview status="ready" preview={PREVIEW} />)
+
+    expect(screen.getByText('3,5 km')).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Paradas del recorrido' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Mapa del recorrido' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(/no está configurado/i)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 

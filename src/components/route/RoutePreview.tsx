@@ -6,6 +6,7 @@ import {
   routePreviewErrorMessage,
   type RoutePreview as RoutePreviewData,
 } from '@/interfaces/routePlan.interface'
+import { RouteMap } from './RouteMap'
 
 export type RoutePreviewStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -41,12 +42,16 @@ const warningLabel = (warning: string): string => ROUTE_PREVIEW_WARNING_LABEL[wa
 const factorLabel = (factor: string): string => ROUTE_FACTOR_LABEL[factor] ?? factor
 
 /**
- * Focused route preview output (T-F.4).
+ * Focused route preview output (T-F.4) with the map boundary (T-F.5a).
  *
  * Renders loading, terminal error, empty and ready states. `MAP_UNAVAILABLE` is
  * a non-terminal warning: the calculated data stays visible and the ordered
- * stop list acts as the text fallback when no map is available. The client must
- * never reorder `route.stops`; the backend already returns them in route order.
+ * stop list acts as the text fallback when no map is available. When the
+ * backend does not flag the map as unavailable, `RouteMap` is rendered as a
+ * progressive enhancement; it keeps its own accessible fallback when the key or
+ * API is unavailable, so metrics, warnings and the ordered list are never
+ * hidden. The client must never reorder `route.stops`; the backend already
+ * returns them in route order.
  */
 export function RoutePreview({ status, preview, errorCode, errorMessage }: RoutePreviewProps) {
   if (status === 'idle') return null
@@ -122,6 +127,12 @@ export function RoutePreview({ status, preview, errorCode, errorMessage }: Route
           </dd>
         </div>
       </dl>
+
+      {!mapUnavailable && (
+        <div className="mt-5">
+          <RouteMap route={preview.route} />
+        </div>
+      )}
 
       <div className="mt-5">
         <h4 className="text-sm font-semibold text-text-primary">Paradas del recorrido</h4>
