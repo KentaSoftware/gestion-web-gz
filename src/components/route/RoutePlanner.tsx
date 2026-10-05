@@ -3,12 +3,21 @@
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
 import { routePlanService } from '@/services/routePlan.service'
-import type { CandidateResult, DeliveryZone } from '@/interfaces/routePlan.interface'
+import type {
+  CandidateEntry,
+  CandidateResult,
+  DeliveryZone,
+  RoutePreview as RoutePreviewData,
+  RoutePreviewErrorResponse,
+} from '@/interfaces/routePlan.interface'
+import { Permission } from '@/interfaces/auth.interface'
+import { usePermission } from '@/hooks/usePermission'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { StopList } from './StopList'
 import { BlockedDestinations } from './BlockedDestinations'
+import { RoutePreview, type RoutePreviewStatus } from './RoutePreview'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 type ZoneStatus = 'loading' | 'ready' | 'error'
@@ -24,15 +33,37 @@ const isValidCivilDate = (value: string): boolean => {
 }
 
 /**
- * Candidate review panel (T-F.3).
+ * Reads the stable error envelope from a rejected preview request without
+ * coupling the component to axios. Unknown shapes return null so the caller can
+ * fall back to a generic retry message.
+ */
+const extractPreviewError = (error: unknown): RoutePreviewErrorResponse | null => {
+  if (typeof error !== 'object' || error === null) return null
+  const response = (error as { response?: { data?: unknown } }).response
+  if (typeof response !== 'object' || response === null) return null
+  const data = (response as { data?: unknown }).data
+  if (typeof data !== 'object' || data === null) return null
+  const code = (data as { code?: unknown }).code
+  if (typeof code !== 'string') return null
+  const message = (data as { message?: unknown }).message
+  return { code, message: typeof message === 'string' ? message : code }
+}
+
+/**
+ * Route planner panel (T-F.3 candidate review, T-F.4 preview controls).
  *
- * Read-only: the form collects a civil service date and an active delivery zone,
- * loads candidates on an explicit action and renders eligible and blocked
- * destinations. It never previews, saves or mutates plans.
+ * Read the candidates for a civil date and active zone, select the eligible
+ * sales to include, then request a deterministic preview. Selection is sent as
+ * plain `saleIds`; grouping sales of the same client into one stop remains
+ * backend behavior. Preview never mutates sales or persists plans.
  */
 export function RoutePlanner() {
   const dateFieldId = useId()
   const zoneFieldId = useId()
+  const selectionFieldId = useId()
+
+  const { hasPermission } = usePermission()
+  const canCreateRoutePlan = hasPermission(Permission.CREATE_ROUTE_PLAN)
 
   const [zones, setZones] = useState<DeliveryZone[]>([])
   const [zoneStatus, setZoneStatus] = useState<ZoneStatus>('loading')
@@ -42,6 +73,12 @@ export function RoutePlanner() {
   const [candidates, setCandidates] = useState<CandidateResult | null>(null)
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('idle')
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [selectedSaleIds, setSelectedSaleIds] = useState<string[]>([])
+  const [selectionError, setSelectionError] = useState<string | null>(null)
+  const [previewStatus, setPreviewStatus] = useState<RoutePreviewStatus>('idle')
+  const [previewData, setPreviewData] = useState<RoutePreviewData | null>(null)
+  const [previewErrorCode, setPreviewErrorCode] = useState<string | null>(null)
+  const [previewErrorMessage, setPreviewErrorMessage] = useState<string | null>(null)
 
   const loadZones = useCallback(async () => {
     setZoneStatus('loading')
@@ -59,6 +96,15 @@ export function RoutePlanner() {
     void loadZones()
   }, [loadZones])
 
+  const resetPreview = useCallback(() => {
+    setSelectedSaleIds([])
+    setSelectionError(null)
+    setPreviewStatus('idle')
+    setPreviewData(null)
+    setPreviewErrorCode(null)
+    setPreviewErrorMessage(null)
+  }, [])
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setValidationError(null)
@@ -73,6 +119,7 @@ export function RoutePlanner() {
       return
     }
 
+    resetPreview()
     setCandidates(null)
     setLoadError(null)
     setLoadStatus('loading')
@@ -86,9 +133,82 @@ export function RoutePlanner() {
     }
   }
 
+  const toggleSale = (saleId: string, checked: boolean) => {
+    setSelectionError(null)
+    setSelectedSaleIds((previous) => {
+      if (checked) return previous.includes(saleId) ? previous : [...previous, saleId]
+      return previous.filter((id) => id !== saleId)
+    })
+  }
+
+  const selectAll = () => {
+    setSelectionError(null)
+    setSelectedSaleIds(candidates?.eligible.map((candidate) => candidate.saleId) ?? [])
+  }
+
+  const clearSelection = () => {
+    setSelectionError(null)
+    setSelectedSaleIds([])
+  }
+
+  const handlePreview = async () => {
+    setSelectionError(null)
+
+    if (selectedSaleIds.length === 0) {
+      setSelectionError('Seleccioná al menos una parada para calcular el recorrido.')
+      return
+    }
+
+    setPreviewData(null)
+    setPreviewErrorCode(null)
+    setPreviewErrorMessage(null)
+    setPreviewStatus('loading')
+    try {
+      const result = await routePlanService.preview({ serviceDate, deliveryZoneId, saleIds: selectedSaleIds })
+      setPreviewData(result)
+      setPreviewStatus('ready')
+    } catch (error) {
+      const parsed = extractPreviewError(error)
+      setPreviewErrorCode(parsed?.code ?? null)
+      setPreviewErrorMessage(parsed?.message ?? null)
+      setPreviewStatus('error')
+    }
+  }
+
   const isLoading = loadStatus === 'loading'
   const isEmpty =
     candidates !== null && candidates.eligible.length === 0 && candidates.blocked.length === 0
+  const allEligibleSelected =
+    candidates !== null &&
+    candidates.eligible.length > 0 &&
+    selectedSaleIds.length === candidates.eligible.length
+  const noneSelected = selectedSaleIds.length === 0
+
+  const eligibleCheckbox = (candidate: CandidateEntry) => {
+    const checked = selectedSaleIds.includes(candidate.saleId)
+    const name = candidate.displayName ?? candidate.saleId
+    const id = `${selectionFieldId}-${candidate.saleId}`
+    return (
+      <li
+        key={candidate.saleId}
+        className="flex items-start gap-3 rounded-md border border-border-subtle bg-background-subtle p-3"
+      >
+        <Checkbox
+          id={id}
+          className="mt-0.5"
+          checked={checked}
+          aria-label={name}
+          onCheckedChange={(value) => toggleSale(candidate.saleId, value === true)}
+        />
+        <Label htmlFor={id} className="flex flex-1 cursor-pointer flex-col items-start gap-0.5">
+          <span className="text-sm font-medium text-text-primary">{name}</span>
+          {candidate.addressSummary && (
+            <span className="text-xs font-normal text-text-secondary">{candidate.addressSummary}</span>
+          )}
+        </Label>
+      </li>
+    )
+  }
 
   return (
     <section aria-labelledby="route-planner-title" className="flex flex-col gap-6">
@@ -203,11 +323,79 @@ export function RoutePlanner() {
       )}
 
       {loadStatus === 'ready' && candidates !== null && !isEmpty && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <StopList candidates={candidates.eligible} />
-          <BlockedDestinations candidates={candidates.blocked} />
+        <div className="flex flex-col gap-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <section
+              aria-labelledby="eligible-destinations-title"
+              className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md"
+            >
+              <h3 id="eligible-destinations-title" className="text-sm font-semibold text-brand-primary">
+                Destinos elegibles ({candidates.eligible.length})
+              </h3>
+              <p className="mt-1 text-xs text-text-secondary">
+                Seleccioná las ventas a incluir en el recorrido. Las ventas del mismo cliente se agrupan en
+                una sola parada.
+              </p>
+              <ul className="mt-3 flex flex-col gap-2" aria-label="Destinos elegibles">
+                {candidates.eligible.map(eligibleCheckbox)}
+              </ul>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={selectAll}
+                  disabled={allEligibleSelected || candidates.eligible.length === 0}
+                >
+                  Seleccionar todo
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={clearSelection}
+                  disabled={noneSelected}
+                >
+                  Limpiar selección
+                </Button>
+              </div>
+            </section>
+
+            <BlockedDestinations candidates={candidates.blocked} />
+          </div>
+
+          <div className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md">
+            {canCreateRoutePlan ? (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button type="button" onClick={() => void handlePreview()} disabled={previewStatus === 'loading'}>
+                    Calcular recorrido
+                  </Button>
+                  <p className="text-xs text-text-secondary">
+                    Se seleccionaron {selectedSaleIds.length} de {candidates.eligible.length} ventas elegibles.
+                  </p>
+                </div>
+                {selectionError && (
+                  <p role="alert" className="text-sm font-medium text-state-error">
+                    {selectionError}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p role="note" className="text-sm text-text-secondary">
+                Necesitás el permiso de creación de rutas para calcular el recorrido.
+              </p>
+            )}
+          </div>
         </div>
       )}
+
+      <RoutePreview
+        status={previewStatus}
+        preview={previewData}
+        errorCode={previewErrorCode}
+        errorMessage={previewErrorMessage}
+      />
     </section>
   )
 }

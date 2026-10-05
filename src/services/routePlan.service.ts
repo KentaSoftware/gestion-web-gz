@@ -3,17 +3,21 @@ import type {
   CandidateQueryParams,
   CandidateResult,
   DeliveryZone,
+  RoutePreview,
+  RoutePreviewRequest,
 } from '@/interfaces/routePlan.interface'
 
 const DELIVERY_ZONE_URL = '/deliveryZone'
 const CANDIDATES_URL = '/routePlan/candidates'
+const PREVIEW_URL = '/routePlan/preview'
 
 /**
- * Read-only HTTP client for route candidate review (T-F.2).
+ * HTTP client for route planning (T-F.2 candidate review, T-F.4 preview).
  *
- * Both calls require the `read_route_plan` permission on the backend. The
- * service deliberately exposes no preview or save operation: candidate review
- * must not mutate sales or persist plans.
+ * Read calls require `read_route_plan`; preview requires `create_route_plan`.
+ * The service exposes no save snapshot operation: preview must not mutate sales
+ * or persist plans. Request failures propagate unchanged so callers keep the
+ * existing apiClient error behavior.
  */
 export const routePlanService = {
   /**
@@ -37,6 +41,24 @@ export const routePlanService = {
   }: CandidateQueryParams): Promise<CandidateResult> => {
     const response = await apiClient.get<CandidateResult>(CANDIDATES_URL, {
       params: { serviceDate, deliveryZoneId },
+    })
+    return response.data
+  },
+
+  /**
+   * Deterministic route preview for the selected sales of one service date and
+   * zone. The backend groups selected sales by client and returns ordered stops.
+   * Requires: create_route_plan permission.
+   */
+  preview: async ({
+    serviceDate,
+    deliveryZoneId,
+    saleIds,
+  }: RoutePreviewRequest): Promise<RoutePreview> => {
+    const response = await apiClient.post<RoutePreview>(PREVIEW_URL, {
+      serviceDate,
+      deliveryZoneId,
+      saleIds,
     })
     return response.data
   },
