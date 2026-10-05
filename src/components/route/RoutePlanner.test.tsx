@@ -395,4 +395,49 @@ describe('RoutePlanner', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('El proveedor de rutas no está disponible')
     expect(push).not.toHaveBeenCalled()
   })
+
+  it('does not offer the save action when the preview request fails', async () => {
+    preview.mockRejectedValue(new Error('boom'))
+    await loadCandidates()
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Almacén Sur' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Calcular recorrido' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo calcular el recorrido')
+    expect(screen.queryByRole('button', { name: 'Guardar plan' })).not.toBeInTheDocument()
+  })
+
+  it('hides the save action when the selection is cleared after a preview', async () => {
+    await loadPreview()
+
+    expect(screen.getByRole('button', { name: 'Guardar plan' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Limpiar selección' }))
+
+    expect(screen.queryByRole('button', { name: 'Guardar plan' })).not.toBeInTheDocument()
+  })
+
+  it('renders an error and does not navigate when the saved plan has no identifier', async () => {
+    save.mockResolvedValue({ ...SAVED_PLAN, _id: undefined })
+    await loadPreview()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar plan' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No se pudo obtener el identificador del plan guardado'
+    )
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('renders an error and does not navigate for an unknown saved identifier shape', async () => {
+    save.mockResolvedValue({ ...SAVED_PLAN, _id: { toString: () => '' } })
+    await loadPreview()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar plan' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No se pudo obtener el identificador del plan guardado'
+    )
+    expect(push).not.toHaveBeenCalled()
+  })
 })

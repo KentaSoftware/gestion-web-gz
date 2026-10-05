@@ -130,4 +130,37 @@ describe('RoutePreview', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('El recorrido no tiene paradas')
   })
+
+  it('keeps a mixed warning set non-terminal and renders every warning', () => {
+    render(
+      <RoutePreview
+        status="ready"
+        preview={{ ...PREVIEW, warnings: ['MAP_UNAVAILABLE', 'TIME_WINDOWS_NOT_CONSIDERED'] }}
+      />
+    )
+
+    expect(screen.getByText('3,5 km')).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Paradas del recorrido' })).toBeInTheDocument()
+    expect(
+      screen.getByText('Se muestra el recorrido como lista porque el mapa no está disponible.')
+    ).toBeInTheDocument()
+
+    const warnings = screen.getByRole('list', { name: 'Advertencias' })
+    expect(within(warnings).getByText('No se consideran ventanas horarias.')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('falls back to the raw code for an unknown warning', () => {
+    render(<RoutePreview status="ready" preview={{ ...PREVIEW, warnings: ['FUTURE_WARNING'] }} />)
+
+    const warning = screen.getByText('FUTURE_WARNING')
+    expect(warning).toHaveAttribute('data-warning', 'FUTURE_WARNING')
+  })
+
+  it('falls back to the raw code for an unknown factor', () => {
+    render(<RoutePreview status="ready" preview={{ ...PREVIEW, factorsConsidered: ['FUTURE_FACTOR'] }} />)
+
+    const factors = screen.getByRole('list', { name: 'Factores considerados' })
+    expect(within(factors).getByText('FUTURE_FACTOR')).toBeInTheDocument()
+  })
 })

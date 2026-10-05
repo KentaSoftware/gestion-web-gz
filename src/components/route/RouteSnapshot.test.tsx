@@ -87,4 +87,19 @@ describe('RouteSnapshot', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/no está configurado/i)
     expect(screen.getByRole('list', { name: 'Paradas del recorrido' })).toBeInTheDocument()
   })
+
+  it('falls back to the raw value when a stored date is invalid', () => {
+    render(
+      <RouteSnapshot
+        snapshot={{
+          ...SNAPSHOT,
+          planningDate: 'not-a-date',
+          audit: { ...SNAPSHOT.audit, createdAt: 'still-not-a-date' },
+        }}
+      />
+    )
+
+    expect(screen.getByText('not-a-date')).toBeInTheDocument()
+    expect(screen.getByText('still-not-a-date')).toBeInTheDocument()
+  })
 })
