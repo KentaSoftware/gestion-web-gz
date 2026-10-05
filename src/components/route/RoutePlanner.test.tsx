@@ -4,19 +4,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Permission } from '@/interfaces/auth.interface'
 import type { RoutePreview as RoutePreviewData } from '@/interfaces/routePlan.interface'
 
-const { getActiveDeliveryZones, getCandidates, preview, hasPermission } = vi.hoisted(() => ({
+const { getActiveDeliveryZones, getCandidates, preview, save, hasPermission, push } = vi.hoisted(() => ({
   getActiveDeliveryZones: vi.fn(),
   getCandidates: vi.fn(),
   preview: vi.fn(),
+  save: vi.fn(),
   hasPermission: vi.fn(),
+  push: vi.fn(),
 }))
 
 vi.mock('@/services/routePlan.service', () => ({
-  routePlanService: { getActiveDeliveryZones, getCandidates, preview },
+  routePlanService: { getActiveDeliveryZones, getCandidates, preview, save },
 }))
 
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: () => ({ hasPermission }),
+}))
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push }),
 }))
 
 import { RoutePlanner } from './RoutePlanner'
@@ -82,7 +88,9 @@ describe('RoutePlanner', () => {
     getActiveDeliveryZones.mockReset()
     getCandidates.mockReset()
     preview.mockReset()
+    save.mockReset()
     hasPermission.mockReset()
+    push.mockReset()
     getActiveDeliveryZones.mockResolvedValue([zoneA, zoneB])
     hasPermission.mockReturnValue(true)
   })
@@ -300,5 +308,91 @@ describe('RoutePlanner', () => {
 
     expect(await screen.findByRole('checkbox', { name: 'Almacén Sur' })).not.toBeChecked()
     expect(screen.queryByRole('heading', { name: 'Recorrido propuesto' })).not.toBeInTheDocument()
+  })
+
+  const SAVED_ID = 'f'.repeat(24)
+  const SAVED_PLAN = {
+    _id: SAVED_ID,
+    snapshotVersion: 1,
+    planningDate: '2026-10-04T03:00:00.000Z',
+    zoneSnapshot: { code: 'NORTE', normalizedName: 'zona norte', name: 'Zona Norte' },
+    selectedSaleIds: [SALE_ID],
+    depot: { name: 'Depósito Central', latitude: -34.6, longitude: -58.4 },
+    stops: [
+      { clientId: CLIENT_ID, saleIds: [SALE_ID], sequence: 1, latitude: -34.61, longitude: -58.41 },
+    ],
+    segments: [
+      { fromStopSequence: 0, toStopSequence: 1, distanceMeters: 3500, durationSeconds: 900 },
+      { fromStopSequence: 1, toStopSequence: 0, distanceMeters: 3500, durationSeconds: 900 },
+    ],
+    metrics: { distanceMeters: 3500, durationSeconds: 900, stopCount: 1, fuelLiters: 0.3 },
+    algorithm: { name: 'nearest-neighbor-2opt-v1', version: 'nearest-neighbor-2opt-v1', provider: 'google-routes' },
+    routingConfigRevision: 3,
+    ruleVersion: 'candidate-eligibility-v1',
+    encodedPolyline: 'encoded-polyline',
+    warnings: ['TIME_WINDOWS_NOT_CONSIDERED'],
+    audit: { createdBy: 'user-1', createdAt: '2026-10-04T03:05:00.000Z' },
+  }
+
+  const loadPreview = async (): Promise<void> => {
+    preview.mockResolvedValue(PREVIEW)
+    await loadCandidates()
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Almacén Sur' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Calcular recorrido' }))
+    await screen.findByRole('heading', { name: 'Recorrido propuesto' })
+  }
+
+  it('does not render the save action before a valid preview exists', async () => {
+    await loadCandidates()
+
+    expect(screen.queryByRole('button', { name: 'Guardar plan' })).not.toBeInTheDocument()
+  })
+
+  it('only renders the save action with the create route plan permission', async () => {
+    hasPermission.mockReturnValue(false)
+
+    await loadCandidates()
+
+    expect(screen.queryByRole('button', { name: 'Guardar plan' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Calcular recorrido' })).not.toBeInTheDocument()
+  })
+
+  it('saves the current preview and navigates to the saved plan on success', async () => {
+    save.mockResolvedValue(SAVED_PLAN)
+    await loadPreview()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar plan' }))
+
+    expect(save).toHaveBeenCalledWith({
+      serviceDate: '2026-10-04',
+      deliveryZoneId: ZONE_A,
+      saleIds: [SALE_ID],
+    })
+    await waitFor(() => expect(push).toHaveBeenCalledWith(`/route/${SAVED_ID}`))
+  })
+
+  it('prevents duplicate submits while the plan is saving', async () => {
+    save.mockReturnValue(new Promise(() => undefined))
+    await loadPreview()
+
+    const saveButton = screen.getByRole('button', { name: 'Guardar plan' })
+    await userEvent.click(saveButton)
+    await userEvent.click(saveButton)
+
+    expect(await screen.findByText(/Guardando plan/)).toBeInTheDocument()
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('renders an accessible error when the save fails', async () => {
+    save.mockRejectedValue({
+      response: { data: { code: 'ROUTING_PROVIDER_UNAVAILABLE', message: 'provider down' } },
+    })
+    await loadPreview()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar plan' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('El proveedor de rutas no está disponible')
+    expect(push).not.toHaveBeenCalled()
   })
 })

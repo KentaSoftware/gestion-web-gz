@@ -3,6 +3,8 @@ import type {
   CandidateQueryParams,
   CandidateResult,
   DeliveryZone,
+  RoutePlan,
+  RoutePlanSaveRequest,
   RoutePreview,
   RoutePreviewRequest,
 } from '@/interfaces/routePlan.interface'
@@ -10,14 +12,17 @@ import type {
 const DELIVERY_ZONE_URL = '/deliveryZone'
 const CANDIDATES_URL = '/routePlan/candidates'
 const PREVIEW_URL = '/routePlan/preview'
+const ROUTE_PLAN_URL = '/routePlan'
 
 /**
- * HTTP client for route planning (T-F.2 candidate review, T-F.4 preview).
+ * HTTP client for route planning (T-F.2 candidate review, T-F.4 preview,
+ * T-F.6 saved plans).
  *
- * Read calls require `read_route_plan`; preview requires `create_route_plan`.
- * The service exposes no save snapshot operation: preview must not mutate sales
- * or persist plans. Request failures propagate unchanged so callers keep the
- * existing apiClient error behavior.
+ * Read calls require `read_route_plan`; preview and save require
+ * `create_route_plan`. Saving persists the current preview immediately and
+ * returns the immutable snapshot; reading returns the stored snapshot only and
+ * never recomputes the route or calls the provider. Request failures propagate
+ * unchanged so callers keep the existing apiClient error behavior.
  */
 export const routePlanService = {
   /**
@@ -60,6 +65,34 @@ export const routePlanService = {
       deliveryZoneId,
       saleIds,
     })
+    return response.data
+  },
+
+  /**
+   * Persists the current preview as an immutable snapshot and returns it.
+   * The backend recomputes and validates the preview before saving; there is no
+   * partial save. Requires: create_route_plan permission.
+   */
+  save: async ({
+    serviceDate,
+    deliveryZoneId,
+    saleIds,
+  }: RoutePlanSaveRequest): Promise<RoutePlan> => {
+    const response = await apiClient.post<RoutePlan>(ROUTE_PLAN_URL, {
+      serviceDate,
+      deliveryZoneId,
+      saleIds,
+    })
+    return response.data
+  },
+
+  /**
+   * Reads one stored snapshot by identifier. This never recomputes the route or
+   * calls the routing provider: saved plans remain viewable when providers are
+   * unavailable. Requires: read_route_plan permission.
+   */
+  getById: async (id: string): Promise<RoutePlan> => {
+    const response = await apiClient.get<RoutePlan>(`${ROUTE_PLAN_URL}/${id}`)
     return response.data
   },
 }

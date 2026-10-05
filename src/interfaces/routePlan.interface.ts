@@ -194,3 +194,116 @@ export interface RoutePreviewRequest {
   deliveryZoneId: string
   saleIds: string[]
 }
+
+/**
+ * Saved-route-plan contracts (T-F.6).
+ *
+ * These mirror the immutable snapshot persisted by the backend on
+ * `POST /routePlan` and read back on `GET /routePlan/:id`. A snapshot is
+ * append-only: it stores the zone, the selected sales, the ordered stops,
+ * segments, metrics, warnings and the algorithm/rule revisions that produced
+ * it. Rendering must preserve the stored order and never recompute the route.
+ */
+
+/** Frozen delivery-zone identity stored with a saved plan. */
+export interface RoutePlanZoneSnapshot {
+  readonly code: string
+  readonly normalizedName: string
+  readonly name: string
+}
+
+/** Depot endpoint stored with a saved plan (always `deposito_1`). */
+export interface RoutePlanDepot {
+  readonly name: string
+  readonly latitude: number
+  readonly longitude: number
+}
+
+/** One ordered stop, grouping every selected sale of a single client. */
+export interface RoutePlanStop {
+  readonly clientId: string
+  readonly saleIds: readonly string[]
+  readonly sequence: number
+  readonly latitude: number
+  readonly longitude: number
+}
+
+/** One leg of the stored route, keyed by server stop sequence (`0` = depot). */
+export interface RoutePlanSegment {
+  readonly fromStopSequence: number
+  readonly toStopSequence: number
+  readonly distanceMeters: number
+  readonly durationSeconds: number
+}
+
+/** Algorithm identity that produced the saved plan. */
+export interface RoutePlanAlgorithm {
+  readonly name: string
+  readonly version: string
+  readonly provider: string
+}
+
+/** Audit metadata: who saved the plan and when. */
+export interface RoutePlanAudit {
+  readonly createdBy: string
+  readonly createdAt: string
+}
+
+/**
+ * Immutable route-plan snapshot returned by the save and get-by-id endpoints.
+ * Array order is the server order and must be rendered as received.
+ */
+export interface RoutePlan {
+  readonly _id?: string
+  readonly snapshotVersion: number
+  readonly planningDate: string
+  readonly zoneSnapshot: RoutePlanZoneSnapshot
+  readonly selectedSaleIds: readonly string[]
+  readonly depot: RoutePlanDepot
+  readonly stops: readonly RoutePlanStop[]
+  readonly segments: readonly RoutePlanSegment[]
+  readonly metrics: RoutePreviewMetrics
+  readonly algorithm: RoutePlanAlgorithm
+  readonly routingConfigRevision: number
+  readonly ruleVersion: string
+  readonly encodedPolyline: string
+  readonly warnings: readonly string[]
+  readonly audit: RoutePlanAudit
+  readonly createdAt?: string
+}
+
+/** Body accepted by the save endpoint (`POST /routePlan`). */
+export type RoutePlanSaveRequest = RoutePreviewRequest
+
+/**
+ * Stable error codes emitted by the backend when saving or reading a snapshot.
+ * Save can also surface any {@link ROUTE_PREVIEW_ERROR} code because the backend
+ * recomputes the preview before persisting.
+ */
+export const ROUTE_PLAN_ERROR = {
+  ROUTE_PLAN_NOT_FOUND: 'ROUTE_PLAN_NOT_FOUND',
+} as const
+
+export type RoutePlanErrorCode = (typeof ROUTE_PLAN_ERROR)[keyof typeof ROUTE_PLAN_ERROR]
+
+/** Presentation labels for plan errors, layered over the preview labels. */
+export const ROUTE_PLAN_ERROR_LABEL: Readonly<Record<string, string>> = {
+  ...ROUTE_PREVIEW_ERROR_LABEL,
+  ROUTE_PLAN_NOT_FOUND: 'No encontramos el plan de ruta guardado.',
+}
+
+/**
+ * Resolves a user-facing plan message from a stable error code. Unknown codes
+ * fall back to the backend message, then to a generic retry message, so a new
+ * backend error is never hidden.
+ */
+export const routePlanErrorMessage = (code: string | null | undefined, fallback?: string): string => {
+  if (code !== null && code !== undefined && ROUTE_PLAN_ERROR_LABEL[code] !== undefined) {
+    return ROUTE_PLAN_ERROR_LABEL[code]
+  }
+  return (
+    fallback !== undefined && fallback !== ''
+      ? fallback
+      : 'No se pudo completar la operación con el plan de ruta. Intentá nuevamente.'
+  )
+}

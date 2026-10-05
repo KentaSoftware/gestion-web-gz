@@ -1,15 +1,18 @@
 'use client'
 
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react'
+import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { routePlanService } from '@/services/routePlan.service'
 import type {
   CandidateEntry,
   CandidateResult,
   DeliveryZone,
+  RoutePlan,
   RoutePreview as RoutePreviewData,
   RoutePreviewErrorResponse,
 } from '@/interfaces/routePlan.interface'
+import { routePlanErrorMessage } from '@/interfaces/routePlan.interface'
 import { Permission } from '@/interfaces/auth.interface'
 import { usePermission } from '@/hooks/usePermission'
 import { Button } from '@/components/ui/button'
@@ -21,6 +24,7 @@ import { RoutePreview, type RoutePreviewStatus } from './RoutePreview'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 type ZoneStatus = 'loading' | 'ready' | 'error'
+type SaveStatus = 'idle' | 'saving' | 'error'
 
 const CIVIL_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const OBJECT_ID_PATTERN = /^[a-fA-F0-9]{24}$/
@@ -50,6 +54,20 @@ const extractPreviewError = (error: unknown): RoutePreviewErrorResponse | null =
 }
 
 /**
+ * Derives the saved-plan identifier from the backend response without assuming
+ * the serialized shape. Unknown or empty identifiers return an empty string so
+ * the caller can surface a visible error instead of navigating to `/route/`.
+ */
+const routePlanId = (plan: RoutePlan): string => {
+  const id: unknown = plan._id
+  if (typeof id === 'string') return id
+  if (id !== null && typeof id === 'object' && typeof (id as { toString?: unknown }).toString === 'function') {
+    return String(id)
+  }
+  return ''
+}
+
+/**
  * Route planner panel (T-F.3 candidate review, T-F.4 preview controls).
  *
  * Read the candidates for a civil date and active zone, select the eligible
@@ -64,6 +82,7 @@ export function RoutePlanner() {
 
   const { hasPermission } = usePermission()
   const canCreateRoutePlan = hasPermission(Permission.CREATE_ROUTE_PLAN)
+  const router = useRouter()
 
   const [zones, setZones] = useState<DeliveryZone[]>([])
   const [zoneStatus, setZoneStatus] = useState<ZoneStatus>('loading')
@@ -79,6 +98,9 @@ export function RoutePlanner() {
   const [previewData, setPreviewData] = useState<RoutePreviewData | null>(null)
   const [previewErrorCode, setPreviewErrorCode] = useState<string | null>(null)
   const [previewErrorMessage, setPreviewErrorMessage] = useState<string | null>(null)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [saveErrorCode, setSaveErrorCode] = useState<string | null>(null)
+  const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null)
 
   const loadZones = useCallback(async () => {
     setZoneStatus('loading')
@@ -103,6 +125,9 @@ export function RoutePlanner() {
     setPreviewData(null)
     setPreviewErrorCode(null)
     setPreviewErrorMessage(null)
+    setSaveStatus('idle')
+    setSaveErrorCode(null)
+    setSaveErrorMessage(null)
   }, [])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -153,6 +178,9 @@ export function RoutePlanner() {
 
   const handlePreview = async () => {
     setSelectionError(null)
+    setSaveStatus('idle')
+    setSaveErrorCode(null)
+    setSaveErrorMessage(null)
 
     if (selectedSaleIds.length === 0) {
       setSelectionError('Seleccioná al menos una parada para calcular el recorrido.')
@@ -175,6 +203,38 @@ export function RoutePlanner() {
     }
   }
 
+  const handleSave = async () => {
+    // Guard against duplicate submits: the button is disabled while saving and
+    // the handler stays a no-op if it is somehow re-entered.
+    if (saveStatus === 'saving') return
+
+    setSelectionError(null)
+    setSaveErrorCode(null)
+    setSaveErrorMessage(null)
+
+    if (previewData === null || selectedSaleIds.length === 0) {
+      setSelectionError('Calculá un recorrido válido antes de guardar el plan.')
+      return
+    }
+
+    setSaveStatus('saving')
+    try {
+      const saved = await routePlanService.save({ serviceDate, deliveryZoneId, saleIds: selectedSaleIds })
+      const savedId = routePlanId(saved)
+      if (savedId === '') {
+        setSaveErrorMessage('No se pudo obtener el identificador del plan guardado.')
+        setSaveStatus('error')
+        return
+      }
+      router.push(`/route/${savedId}`)
+    } catch (error) {
+      const parsed = extractPreviewError(error)
+      setSaveErrorCode(parsed?.code ?? null)
+      setSaveErrorMessage(parsed?.message ?? null)
+      setSaveStatus('error')
+    }
+  }
+
   const isLoading = loadStatus === 'loading'
   const isEmpty =
     candidates !== null && candidates.eligible.length === 0 && candidates.blocked.length === 0
@@ -183,6 +243,8 @@ export function RoutePlanner() {
     candidates.eligible.length > 0 &&
     selectedSaleIds.length === candidates.eligible.length
   const noneSelected = selectedSaleIds.length === 0
+  const hasValidPreview = previewStatus === 'ready' && previewData !== null && selectedSaleIds.length > 0
+  const isSaving = saveStatus === 'saving'
 
   const eligibleCheckbox = (candidate: CandidateEntry) => {
     const checked = selectedSaleIds.includes(candidate.saleId)
@@ -368,13 +430,35 @@ export function RoutePlanner() {
             {canCreateRoutePlan ? (
               <div className="flex flex-col gap-3">
                 <div className="flex flex-wrap items-center gap-3">
-                  <Button type="button" onClick={() => void handlePreview()} disabled={previewStatus === 'loading'}>
+                  <Button type="button" onClick={() => void handlePreview()} disabled={previewStatus === 'loading' || isSaving}>
                     Calcular recorrido
                   </Button>
+                  {hasValidPreview && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void handleSave()}
+                      disabled={isSaving}
+                      aria-busy={isSaving}
+                    >
+                      Guardar plan
+                    </Button>
+                  )}
                   <p className="text-xs text-text-secondary">
                     Se seleccionaron {selectedSaleIds.length} de {candidates.eligible.length} ventas elegibles.
                   </p>
                 </div>
+                {isSaving && (
+                  <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-text-secondary">
+                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                    Guardando plan de ruta…
+                  </p>
+                )}
+                {saveStatus === 'error' && (
+                  <p role="alert" className="text-sm font-medium text-state-error">
+                    {routePlanErrorMessage(saveErrorCode, saveErrorMessage ?? undefined)}
+                  </p>
+                )}
                 {selectionError && (
                   <p role="alert" className="text-sm font-medium text-state-error">
                     {selectionError}

@@ -80,4 +80,75 @@ describe('routePlanService', () => {
       routePlanService.preview({ serviceDate: '2026-10-04', deliveryZoneId: ZONE_ID, saleIds: [SALE_ID] })
     ).rejects.toThrow('provider down')
   })
+
+  it('maps the save request to POST /routePlan with the selected sales', async () => {
+    const saved = {
+      _id: 'f'.repeat(24),
+      snapshotVersion: 1,
+      planningDate: '2026-10-04T03:00:00.000Z',
+      zoneSnapshot: { code: 'NORTE', normalizedName: 'zona norte', name: 'Zona Norte' },
+      selectedSaleIds: [SALE_ID],
+      depot: { name: 'Depósito', latitude: -34.6, longitude: -58.4 },
+      stops: [],
+      segments: [],
+      metrics: { distanceMeters: 0, durationSeconds: 0, stopCount: 0, fuelLiters: 0 },
+      algorithm: { name: 'nearest-neighbor-2opt-v1', version: 'nearest-neighbor-2opt-v1', provider: 'google-routes' },
+      routingConfigRevision: 1,
+      ruleVersion: 'candidate-eligibility-v1',
+      encodedPolyline: 'abc',
+      warnings: [],
+      audit: { createdBy: 'user-1', createdAt: '2026-10-04T03:05:00.000Z' },
+    }
+    post.mockResolvedValue({ data: saved })
+
+    const params = { serviceDate: '2026-10-04', deliveryZoneId: ZONE_ID, saleIds: [SALE_ID] }
+
+    await expect(routePlanService.save(params)).resolves.toEqual(saved)
+    expect(post).toHaveBeenCalledTimes(1)
+    expect(post).toHaveBeenCalledWith('/routePlan', {
+      serviceDate: '2026-10-04',
+      deliveryZoneId: ZONE_ID,
+      saleIds: [SALE_ID],
+    })
+  })
+
+  it('propagates save failures to the caller instead of swallowing them', async () => {
+    post.mockRejectedValue(new Error('save down'))
+
+    await expect(
+      routePlanService.save({ serviceDate: '2026-10-04', deliveryZoneId: ZONE_ID, saleIds: [SALE_ID] })
+    ).rejects.toThrow('save down')
+  })
+
+  it('maps getById to GET /routePlan/:id', async () => {
+    const planId = 'f'.repeat(24)
+    const plan = {
+      _id: planId,
+      snapshotVersion: 1,
+      planningDate: '2026-10-04T03:00:00.000Z',
+      zoneSnapshot: { code: 'NORTE', normalizedName: 'zona norte', name: 'Zona Norte' },
+      selectedSaleIds: [SALE_ID],
+      depot: { name: 'Depósito', latitude: -34.6, longitude: -58.4 },
+      stops: [],
+      segments: [],
+      metrics: { distanceMeters: 0, durationSeconds: 0, stopCount: 0, fuelLiters: 0 },
+      algorithm: { name: 'nearest-neighbor-2opt-v1', version: 'nearest-neighbor-2opt-v1', provider: 'google-routes' },
+      routingConfigRevision: 1,
+      ruleVersion: 'candidate-eligibility-v1',
+      encodedPolyline: 'abc',
+      warnings: [],
+      audit: { createdBy: 'user-1', createdAt: '2026-10-04T03:05:00.000Z' },
+    }
+    get.mockResolvedValue({ data: plan })
+
+    await expect(routePlanService.getById(planId)).resolves.toEqual(plan)
+    expect(get).toHaveBeenCalledTimes(1)
+    expect(get).toHaveBeenCalledWith(`/routePlan/${planId}`)
+  })
+
+  it('propagates getById failures to the caller instead of swallowing them', async () => {
+    get.mockRejectedValue(new Error('not found'))
+
+    await expect(routePlanService.getById('f'.repeat(24))).rejects.toThrow('not found')
+  })
 })
