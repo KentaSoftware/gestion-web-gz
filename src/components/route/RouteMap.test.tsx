@@ -9,7 +9,7 @@ const { useApiLoadingStatus } = vi.hoisted(() => ({ useApiLoadingStatus: vi.fn()
  * Stable map-package mock. The real `@vis.gl/react-google-maps` injects the
  * Google script into the document, which can never load in jsdom. The mock
  * replaces the loader and exposes marker/polyline props as data attributes so
- * the ordering contract can be asserted without live Google calls.
+ * the ordering and geometry contracts can be asserted without live Google calls.
  */
 vi.mock('@vis.gl/react-google-maps', () => {
   const APILoadingStatus = {
@@ -50,10 +50,44 @@ vi.mock('@vis.gl/react-google-maps', () => {
   }
 })
 
-import { RouteMap } from './RouteMap'
+import { decodePolyline, RouteMap } from './RouteMap'
 
 const API_KEY_ENV = 'NEXT_PUBLIC_GOOGLE_MAPS_API_KEY'
 const ORIGINAL_API_KEY = process.env[API_KEY_ENV]
+
+/**
+ * Canonical Google encoded-polyline example from the Maps documentation. It is
+ * the external ground truth for the decoder: three points along the US west
+ * coast (38.5, -120.2), (40.7, -120.95), (43.252, -126.453).
+ */
+const KNOWN_ENCODED_POLYLINE = '_p~iF~ps|U_ulLnnqC_mqNvxq`@'
+const KNOWN_DECODED_POINTS = [
+  { lat: 38.5, lng: -120.2 },
+  { lat: 40.7, lng: -120.95 },
+  { lat: 43.252, lng: -126.453 },
+]
+
+/**
+ * Road geometry for the fixture route. It includes intermediate points that do
+ * not exist in the stop list, so a rendered connector can never be mistaken for
+ * the decoded road line.
+ */
+const ROUTE_ENCODED_POLYLINE = '~xdrE~fmcJf^f^f^f^f^f^f^f^'
+const ROUTE_DECODED_POINTS = [
+  { lat: -34.6, lng: -58.4 },
+  { lat: -34.605, lng: -58.405 },
+  { lat: -34.61, lng: -58.41 },
+  { lat: -34.615, lng: -58.415 },
+  { lat: -34.62, lng: -58.42 },
+]
+
+/** Straight connector built from known coordinates: the mandatory fallback. */
+const APPROXIMATE_CONNECTOR = [
+  { lat: -34.6, lng: -58.4 },
+  { lat: -34.61, lng: -58.41 },
+  { lat: -34.62, lng: -58.42 },
+  { lat: -34.6, lng: -58.4 },
+]
 
 const ROUTE: RoutePreviewData['route'] = {
   depot: { id: 'deposito_1', name: 'Depósito Central', latitude: -34.6, longitude: -58.4 },
@@ -65,13 +99,39 @@ const ROUTE: RoutePreviewData['route'] = {
     { fromId: 'deposito_1', toId: 'client-1', distanceMeters: 1200, durationSeconds: 300 },
     { fromId: 'client-1', toId: 'client-2', distanceMeters: 800, durationSeconds: 240 },
   ],
-  encodedPolyline: 'encoded-polyline',
+  encodedPolyline: ROUTE_ENCODED_POLYLINE,
+}
+
+const routeWithPolyline = (encodedPolyline: string): RoutePreviewData['route'] => ({
+  ...ROUTE,
+  encodedPolyline,
+})
+
+const renderedPolylinePath = (): Array<{ lat: number; lng: number }> => {
+  const polyline = screen.getByTestId('map-polyline')
+  return JSON.parse(polyline.getAttribute('data-path') ?? '[]')
 }
 
 afterEach(() => {
   if (ORIGINAL_API_KEY === undefined) delete process.env[API_KEY_ENV]
   else process.env[API_KEY_ENV] = ORIGINAL_API_KEY
   useApiLoadingStatus.mockReset()
+})
+
+describe('decodePolyline', () => {
+  it('decodes a known Google encoded polyline into ordered coordinates', () => {
+    expect(decodePolyline(KNOWN_ENCODED_POLYLINE)).toEqual(KNOWN_DECODED_POINTS)
+  })
+
+  it('returns no points for empty, malformed or truncated input', () => {
+    expect(decodePolyline('')).toEqual([])
+    expect(decodePolyline('encoded-polyline')).toEqual([])
+    expect(decodePolyline('?')).toEqual([])
+  })
+
+  it('returns a single point when the input encodes one location', () => {
+    expect(decodePolyline('??')).toEqual([{ lat: 0, lng: 0 }])
+  })
 })
 
 describe('RouteMap', () => {
@@ -112,7 +172,7 @@ describe('RouteMap', () => {
     expect(screen.queryByTestId('map')).not.toBeInTheDocument()
   })
 
-  it('renders depot and ordered stop markers plus a route polyline when loaded', () => {
+  it('renders depot and ordered stop markers with the decoded road geometry when loaded', () => {
     process.env[API_KEY_ENV] = 'test-key'
     useApiLoadingStatus.mockReturnValue('LOADED')
     render(<RouteMap route={ROUTE} />)
@@ -127,13 +187,38 @@ describe('RouteMap', () => {
     expect(markers[2]).toHaveAttribute('data-label', '2')
     expect(markers[2]).toHaveAttribute('data-lng', '-58.42')
 
-    const polyline = screen.getByTestId('map-polyline')
-    const path = JSON.parse(polyline.getAttribute('data-path') ?? '[]')
-    expect(path).toEqual([
-      { lat: -34.6, lng: -58.4 },
-      { lat: -34.61, lng: -58.41 },
-      { lat: -34.62, lng: -58.42 },
-      { lat: -34.6, lng: -58.4 },
-    ])
+    expect(renderedPolylinePath()).toEqual(ROUTE_DECODED_POINTS)
+    expect(renderedPolylinePath()).not.toEqual(APPROXIMATE_CONNECTOR)
+    expect(screen.getByText(/trazado vial/i)).toBeInTheDocument()
+    expect(screen.queryByText(/no representa la geometría vial/i)).not.toBeInTheDocument()
+  })
+
+  describe('geometry fallback', () => {
+    const expectApproximateFallback = () => {
+      expect(renderedPolylinePath()).toEqual(APPROXIMATE_CONNECTOR)
+      expect(screen.getByText(/no representa la geometría vial/i)).toBeInTheDocument()
+      expect(screen.queryByText(/trazado vial/i)).not.toBeInTheDocument()
+    }
+
+    const renderLoaded = (route: RoutePreviewData['route']) => {
+      process.env[API_KEY_ENV] = 'test-key'
+      useApiLoadingStatus.mockReturnValue('LOADED')
+      render(<RouteMap route={route} />)
+    }
+
+    it('falls back to the straight connector when the polyline is missing', () => {
+      renderLoaded(routeWithPolyline(''))
+      expectApproximateFallback()
+    })
+
+    it('falls back when the polyline is malformed', () => {
+      renderLoaded(routeWithPolyline('encoded-polyline'))
+      expectApproximateFallback()
+    })
+
+    it('falls back when the polyline decodes to a single point', () => {
+      renderLoaded(routeWithPolyline('??'))
+      expectApproximateFallback()
+    })
   })
 })

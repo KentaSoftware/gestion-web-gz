@@ -13,6 +13,12 @@ import type { RoutePreview } from '@/interfaces/routePlan.interface'
 
 type PreviewRoute = RoutePreview['route']
 
+/** One decoded geographic point. */
+export interface RouteMapPoint {
+  lat: number
+  lng: number
+}
+
 interface RouteMapProps {
   /** Ordered preview route as returned by the backend. Never reordered here. */
   route: PreviewRoute
@@ -23,11 +29,71 @@ const LOADING_MESSAGE = 'Cargando mapa…'
 const FAILURE_MESSAGE = 'No se pudo cargar el mapa. Las paradas se detallan en la lista del recorrido.'
 
 /**
+ * Copy for the approximate connector fallback. It must never claim road
+ * geometry: the line is built from the known depot/stop coordinates only.
+ */
+const APPROXIMATE_ROUTE_DESCRIPTION =
+  'Trazado aproximado entre el depósito y las paradas en orden. No representa la geometría vial.'
+
+/** Copy for the real road geometry decoded from the backend polyline. */
+const ROAD_ROUTE_DESCRIPTION = 'Trazado vial entre el depósito y las paradas, en el orden calculado.'
+
+/**
  * Polyline color mirrors the `--color-brand-primary` token. The Google Maps
  * runtime needs a concrete color string and cannot resolve CSS custom
  * properties, so the token value is repeated here deliberately.
  */
 const ROUTE_STROKE_COLOR = '#3e68a4'
+
+/** Bounds of the Google encoded-polyline alphabet (ASCII '?'..'~'). */
+const POLYLINE_MIN_CODE = 63
+const POLYLINE_MAX_CODE = 126
+
+/**
+ * Decodes a Google encoded polyline into ordered coordinates (precision 1e5).
+ *
+ * Pure and dependency-free. Returns an empty array when the input is not a
+ * non-empty string, contains characters outside the polyline alphabet, or is
+ * truncated mid-value. The caller treats a result with fewer than two points as
+ * unavailable geometry and falls back to the coordinate connector.
+ */
+export const decodePolyline = (encoded: unknown): RouteMapPoint[] => {
+  if (typeof encoded !== 'string' || encoded.length === 0) return []
+  const input: string = encoded
+
+  const points: RouteMapPoint[] = []
+  let index = 0
+  let lat = 0
+  let lng = 0
+
+  const readDelta = (): number | null => {
+    let result = 0
+    let shift = 0
+    let byte = 0
+    do {
+      if (index >= input.length) return null
+      const code = input.charCodeAt(index)
+      if (code < POLYLINE_MIN_CODE || code > POLYLINE_MAX_CODE) return null
+      byte = code - POLYLINE_MIN_CODE
+      result += (byte & 0x1f) << shift
+      shift += 5
+      index += 1
+    } while (byte >= 0x20)
+    return result & 1 ? ~(result >> 1) : result >> 1
+  }
+
+  while (index < input.length) {
+    const deltaLat = readDelta()
+    if (deltaLat === null) return []
+    const deltaLng = readDelta()
+    if (deltaLng === null) return []
+    lat += deltaLat
+    lng += deltaLng
+    points.push({ lat: lat / 1e5, lng: lng / 1e5 })
+  }
+
+  return points
+}
 
 const centerOf = (route: PreviewRoute): { lat: number; lng: number } => {
   const latitudes = [route.depot.latitude, ...route.stops.map((stop) => stop.latitude)]
@@ -47,7 +113,13 @@ const MapFallback = ({ message }: { message: string }) => (
   </p>
 )
 
-const RouteMapCanvas = ({ route }: RouteMapProps) => {
+interface RouteMapCanvasProps {
+  route: PreviewRoute
+  /** Decoded road geometry, or null when the backend polyline is unusable. */
+  roadGeometry: RouteMapPoint[] | null
+}
+
+const RouteMapCanvas = ({ route, roadGeometry }: RouteMapCanvasProps) => {
   const status = useApiLoadingStatus()
 
   if (status === APILoadingStatus.FAILED || status === APILoadingStatus.AUTH_FAILURE) {
@@ -62,13 +134,16 @@ const RouteMapCanvas = ({ route }: RouteMapProps) => {
     )
   }
 
-  // Built only from known depot/stop coordinates: this is an ordered connector,
-  // not road geometry, and the exact order is preserved from `route.stops`.
-  const path = [
-    { lat: route.depot.latitude, lng: route.depot.longitude },
-    ...route.stops.map((stop) => ({ lat: stop.latitude, lng: stop.longitude })),
-    { lat: route.depot.latitude, lng: route.depot.longitude },
-  ]
+  // Road geometry from the backend when available; otherwise an approximate
+  // connector built from the known depot/stop coordinates in backend order.
+  const path: RouteMapPoint[] =
+    roadGeometry !== null
+      ? roadGeometry
+      : [
+          { lat: route.depot.latitude, lng: route.depot.longitude },
+          ...route.stops.map((stop) => ({ lat: stop.latitude, lng: stop.longitude })),
+          { lat: route.depot.latitude, lng: route.depot.longitude },
+        ]
 
   return (
     <div className="h-64 w-full overflow-hidden rounded-md border border-border-subtle md:h-80">
@@ -97,13 +172,14 @@ const RouteMapCanvas = ({ route }: RouteMapProps) => {
 /**
  * Ordered route map boundary (T-F.5a).
  *
- * Renders depot/stop markers and an ordered connector polyline from the known
- * coordinates of an already calculated preview route. The map is a progressive
- * enhancement: a missing key, a failed API load or an authentication failure
- * all resolve to a non-terminal, accessible status message. The ordered stop
- * list in `RoutePreview` remains the authoritative fallback and is never
- * duplicated or hidden here. Stops are rendered in backend order and are never
- * reordered.
+ * Renders depot/stop markers plus the visible route line. When the backend
+ * supplies a usable `encodedPolyline`, the decoded road geometry is drawn; when
+ * it is missing, malformed or decodes to fewer than two points, the map falls
+ * back non-terminally to an approximate connector built from known coordinates
+ * and the description says so. Markers are always rendered in backend order and
+ * are never reordered. A missing key, a failed API load or an authentication
+ * failure all resolve to an accessible status message, and the ordered stop list
+ * in `RoutePreview` remains the authoritative fallback.
  */
 export function RouteMap({ route }: RouteMapProps) {
   const headingId = useId()
@@ -111,10 +187,13 @@ export function RouteMap({ route }: RouteMapProps) {
   // static member access in client components.
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
+  const decoded = decodePolyline(route.encodedPolyline)
+  const roadGeometry = decoded.length >= 2 ? decoded : null
+
   const content: ReactNode =
     typeof apiKey === 'string' && apiKey.trim() !== '' ? (
       <APIProvider apiKey={apiKey}>
-        <RouteMapCanvas route={route} />
+        <RouteMapCanvas route={route} roadGeometry={roadGeometry} />
       </APIProvider>
     ) : (
       <MapFallback message={MISSING_KEY_MESSAGE} />
@@ -126,7 +205,7 @@ export function RouteMap({ route }: RouteMapProps) {
         Mapa del recorrido
       </h4>
       <p className="mt-1 text-xs text-text-secondary">
-        Trazado aproximado entre el depósito y las paradas en orden. No representa la geometría vial.
+        {roadGeometry !== null ? ROAD_ROUTE_DESCRIPTION : APPROXIMATE_ROUTE_DESCRIPTION}
       </p>
       <div className="mt-3">{content}</div>
     </section>
