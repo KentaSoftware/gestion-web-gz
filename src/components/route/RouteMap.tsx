@@ -18,13 +18,6 @@ interface RouteMapProps {
   route: PreviewRoute
 }
 
-/**
- * Public, client-only map key. `NEXT_PUBLIC_` values are inlined by Next at
- * build time, so this is safe to reference from a client component and must
- * stay keyed to the documented variable name.
- */
-const API_KEY_ENV = 'NEXT_PUBLIC_GOOGLE_MAPS_API_KEY'
-
 const MISSING_KEY_MESSAGE = 'El mapa no está configurado. Las paradas se detallan en la lista del recorrido.'
 const LOADING_MESSAGE = 'Cargando mapa…'
 const FAILURE_MESSAGE = 'No se pudo cargar el mapa. Las paradas se detallan en la lista del recorrido.'
@@ -114,7 +107,9 @@ const RouteMapCanvas = ({ route }: RouteMapProps) => {
  */
 export function RouteMap({ route }: RouteMapProps) {
   const headingId = useId()
-  const apiKey = process.env[API_KEY_ENV]
+  // Public client key: Next.js inlines NEXT_PUBLIC_ variables only through
+  // static member access in client components.
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   const content: ReactNode =
     typeof apiKey === 'string' && apiKey.trim() !== '' ? (
