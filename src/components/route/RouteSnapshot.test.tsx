@@ -102,4 +102,18 @@ describe('RouteSnapshot', () => {
     expect(screen.getByText('not-a-date')).toBeInTheDocument()
     expect(screen.getByText('still-not-a-date')).toBeInTheDocument()
   })
+
+  it('marks stale snapshots as read-only without changing stored metrics', () => {
+    render(
+      <RouteSnapshot
+        snapshot={{
+          ...SNAPSHOT,
+          staleness: { stale: true },
+        } as RoutePlan & { staleness: { stale: boolean } }}
+      />
+    )
+
+    expect(screen.getByText(/desactualizado y es de solo lectura/i)).toBeInTheDocument()
+    expect(screen.getByText('0,3 L')).toBeInTheDocument()
+  })
 })

@@ -1,3 +1,6 @@
+ 'use client'
+
+import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import {
   ROUTE_FACTOR_LABEL,
@@ -7,6 +10,7 @@ import {
   type RoutePreview as RoutePreviewData,
 } from '@/interfaces/routePlan.interface'
 import { RouteMap } from './RouteMap'
+import { RouteStopTimeline, type RouteStopEstimateLike, type RouteStopTimelineStop } from './RouteStopTimeline'
 
 export type RoutePreviewStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -21,6 +25,67 @@ interface RoutePreviewProps {
   errorMessage?: string | null
 }
 
+interface PreviewDashboardFields {
+  stopEstimates?: readonly RouteStopEstimateLike[]
+}
+
+interface RouteTabsProps {
+  route: RoutePreviewData['route']
+  estimates?: readonly RouteStopEstimateLike[]
+  depotName?: string
+  stale?: boolean
+  readWarnings?: readonly string[]
+}
+
+const RouteTabs = ({ route, estimates, depotName, stale = false, readWarnings = [] }: RouteTabsProps) => {
+  const [activeTab, setActiveTab] = useState('map')
+  const tabs = [
+    { id: 'map', label: 'Mapa' },
+    { id: 'sequence', label: 'Secuencia de paradas' },
+    { id: 'sales', label: 'Pedidos vinculados' },
+  ]
+  const panelId = (id: string) => `route-tabpanel-${id}`
+
+  return (
+    <div className="mt-5">
+      <div role="tablist" aria-label="Vistas del recorrido" className="flex flex-wrap gap-2 border-b border-border-subtle">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            aria-controls={panelId(tab.id)}
+            id={`route-tab-${tab.id}`}
+            tabIndex={activeTab === tab.id ? 0 : -1}
+            className="border-b-2 border-transparent px-3 py-2 text-sm text-text-secondary aria-selected:border-brand-primary aria-selected:text-brand-primary"
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" id={panelId('map')} aria-labelledby="route-tab-map" hidden={activeTab !== 'map'} className="pt-4">
+        <RouteMap route={route} />
+        <div className="mt-5"><RouteStopTimeline stops={route.stops as readonly RouteStopTimelineStop[]} estimates={estimates} depotName={depotName} /></div>
+      </div>
+      <div role="tabpanel" id={panelId('sequence')} aria-labelledby="route-tab-sequence" hidden={activeTab !== 'sequence'} className="pt-4">
+        <RouteStopTimeline stops={route.stops as readonly RouteStopTimelineStop[]} estimates={estimates} depotName={depotName} />
+      </div>
+      <div role="tabpanel" id={panelId('sales')} aria-labelledby="route-tab-sales" hidden={activeTab !== 'sales'} className="pt-4">
+        <h4 className="text-sm font-semibold text-text-primary">Pedidos vinculados</h4>
+        <ul aria-label="Pedidos vinculados" className="mt-3 flex flex-col gap-2">
+          {route.stops.flatMap((stop) => stop.saleIds).map((saleId) => <li key={saleId} className="rounded-md border border-border-subtle bg-background-subtle p-3 text-xs text-text-secondary">{saleId}</li>)}
+        </ul>
+      </div>
+      {stale && <p role="status" className="mt-4 rounded-md border border-state-warning p-3 text-xs text-state-warning">Este snapshot está desactualizado y es de solo lectura. Para actualizarlo, generá una nueva ruta.</p>}
+      {readWarnings.map((warning) => <p key={warning} className="mt-2 text-xs text-state-warning">{warning}</p>)}
+    </div>
+  )
+}
+
+export { RouteTabs }
+
 const decimal = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
 
 const formatKilometers = (meters: number): string => `${decimal.format(meters / 1000)} km`
@@ -33,9 +98,7 @@ const formatDuration = (seconds: number): string => {
   return `${minutes} min`
 }
 
-const formatLiters = (liters: number): string => `${decimal.format(liters)} L`
-
-const formatSaleCount = (count: number): string => (count === 1 ? '1 venta' : `${count} ventas`)
+const formatLiters = (liters: number | null): string => liters === null ? 'No disponible' : `${decimal.format(liters)} L`
 
 const warningLabel = (warning: string): string => ROUTE_PREVIEW_WARNING_LABEL[warning] ?? warning
 
@@ -90,6 +153,7 @@ export function RoutePreview({ status, preview, errorCode, errorMessage }: Route
   }
 
   const mapUnavailable = preview.warnings.includes(ROUTE_PREVIEW_WARNING.MAP_UNAVAILABLE)
+  const dashboard = preview as RoutePreviewData & PreviewDashboardFields
 
   return (
     <section
@@ -128,31 +192,9 @@ export function RoutePreview({ status, preview, errorCode, errorMessage }: Route
         </div>
       </dl>
 
-      {!mapUnavailable && (
-        <div className="mt-5">
-          <RouteMap route={preview.route} />
-        </div>
-      )}
+      <RouteTabs route={preview.route} estimates={dashboard.stopEstimates} depotName={preview.route.depot.name} />
 
-      <div className="mt-5">
-        <h4 className="text-sm font-semibold text-text-primary">Paradas del recorrido</h4>
-        <p className="mt-1 text-xs text-text-secondary">Salida desde {preview.route.depot.name}</p>
-        <ol aria-label="Paradas del recorrido" className="mt-3 flex flex-col gap-2">
-          {preview.route.stops.map((stop, index) => (
-            <li
-              key={stop.clientId}
-              className="flex flex-wrap items-baseline justify-between gap-2 rounded-md border border-border-subtle bg-background-subtle p-3"
-            >
-              <span className="text-sm font-medium text-text-primary">Parada {index + 1}</span>
-              <span className="font-mono text-xs text-text-secondary">{stop.clientId}</span>
-              <span className="text-xs text-text-secondary">{formatSaleCount(stop.saleIds.length)}</span>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-2 text-xs text-text-secondary">Regreso a {preview.route.depot.name}</p>
-      </div>
-
-      {mapUnavailable && (
+       {mapUnavailable && (
         <p className="mt-4 text-xs text-text-secondary">
           Se muestra el recorrido como lista porque el mapa no está disponible.
         </p>

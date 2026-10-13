@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { RoutePreview as RoutePreviewData } from '@/interfaces/routePlan.interface'
 import { RoutePreview } from './RoutePreview'
@@ -162,5 +162,24 @@ describe('RoutePreview', () => {
 
     const factors = screen.getByRole('list', { name: 'Factores considerados' })
     expect(within(factors).getByText('FUTURE_FACTOR')).toBeInTheDocument()
+  })
+
+  it('exposes keyboard-friendly tabs for the map, ordered timeline and linked sales', () => {
+    render(<RoutePreview status="ready" preview={PREVIEW} />)
+
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Mapa', 'Secuencia de paradas', 'Pedidos vinculados'])
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
+
+    fireEvent.click(tabs[2])
+    expect(tabs[2]).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tabpanel', { name: 'Pedidos vinculados' })).toHaveTextContent('sale-3')
+  })
+
+  it('announces unavailable arrival estimates without fabricating timing data', () => {
+    render(<RoutePreview status="ready" preview={PREVIEW} />)
+
+    expect(screen.getAllByText('No disponible').length).toBeGreaterThanOrEqual(PREVIEW.route.stops.length)
+    expect(screen.queryByText(/ventana de servicio/i)).not.toBeInTheDocument()
   })
 })

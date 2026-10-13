@@ -4,11 +4,20 @@ import {
   type RoutePlan,
   type RoutePreview,
 } from '@/interfaces/routePlan.interface'
-import { RouteMap } from './RouteMap'
+import { RouteTabs } from './RoutePreview'
+import type { RouteStopEstimateLike } from './RouteStopTimeline'
 
 interface RouteSnapshotProps {
   /** Immutable snapshot as stored by the backend. Never recomputed here. */
   snapshot: RoutePlan
+}
+
+interface SnapshotDashboardFields {
+  assignments?: { driverId?: string; vehicleId?: string }
+  stopEstimates?: readonly RouteStopEstimateLike[]
+  staleness?: { stale: boolean }
+  readWarnings?: readonly string[]
+  fuelAssumptions?: { availability?: string; vehicleCode?: string | null }
 }
 
 const decimal = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
@@ -45,9 +54,7 @@ const formatDuration = (seconds: number): string => {
   return `${minutes} min`
 }
 
-const formatLiters = (liters: number): string => `${decimal.format(liters)} L`
-
-const formatSaleCount = (count: number): string => (count === 1 ? '1 venta' : `${count} ventas`)
+const formatLiters = (liters: number | null): string => liters === null ? 'No disponible' : `${decimal.format(liters)} L`
 
 const warningLabel = (warning: string): string => ROUTE_PREVIEW_WARNING_LABEL[warning] ?? warning
 
@@ -94,6 +101,7 @@ const toPreviewRoute = (snapshot: RoutePlan): RoutePreview['route'] => {
  * fallback. The client never reorders `stops` and never recomputes the route.
  */
 export function RouteSnapshot({ snapshot }: RouteSnapshotProps) {
+  const dashboard = snapshot as RoutePlan & SnapshotDashboardFields
   const mapUnavailable = snapshot.warnings.includes(ROUTE_PREVIEW_WARNING.MAP_UNAVAILABLE)
   const visibleWarnings = snapshot.warnings.filter(
     (warning) => warning !== ROUTE_PREVIEW_WARNING.MAP_UNAVAILABLE
@@ -181,29 +189,13 @@ export function RouteSnapshot({ snapshot }: RouteSnapshotProps) {
         </div>
       </dl>
 
-      {!mapUnavailable && (
-        <div className="mt-5">
-          <RouteMap route={toPreviewRoute(snapshot)} />
-        </div>
-      )}
-
-      <div className="mt-5">
-        <h3 className="text-sm font-semibold text-text-primary">Paradas del recorrido</h3>
-        <p className="mt-1 text-xs text-text-secondary">Salida desde {snapshot.depot.name}</p>
-        <ol aria-label="Paradas del recorrido" className="mt-3 flex flex-col gap-2">
-          {snapshot.stops.map((stop) => (
-            <li
-              key={stop.clientId}
-              className="flex flex-wrap items-baseline justify-between gap-2 rounded-md border border-border-subtle bg-background-subtle p-3"
-            >
-              <span className="text-sm font-medium text-text-primary">Parada {stop.sequence}</span>
-              <span className="font-mono text-xs text-text-secondary">{stop.clientId}</span>
-              <span className="text-xs text-text-secondary">{formatSaleCount(stop.saleIds.length)}</span>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-2 text-xs text-text-secondary">Regreso a {snapshot.depot.name}</p>
-      </div>
+       <RouteTabs
+         route={toPreviewRoute(snapshot)}
+         estimates={dashboard.stopEstimates}
+         depotName={snapshot.depot.name}
+         stale={dashboard.staleness?.stale === true}
+         readWarnings={dashboard.readWarnings}
+       />
 
       {mapUnavailable && (
         <p className="mt-4 text-xs text-text-secondary">
