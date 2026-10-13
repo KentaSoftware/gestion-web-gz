@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { get, post } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
+const { get, post, patch } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn() }))
 
-vi.mock('@/utils/client', () => ({ default: { get, post } }))
+vi.mock('@/utils/client', () => ({ default: { get, post, patch } }))
 
 import { routePlanService } from './routePlan.service'
 
@@ -13,6 +13,7 @@ describe('routePlanService', () => {
   beforeEach(() => {
     get.mockReset()
     post.mockReset()
+    patch.mockReset()
   })
 
   it('requests active delivery zones with an explicit active filter', async () => {
@@ -50,6 +51,15 @@ describe('routePlanService', () => {
     expect(get).toHaveBeenCalledWith('/routePlan/dashboard', {
       params: { serviceDate: '2026-10-04', zoneCode: 'NORTE' },
     })
+  })
+
+  it('reads and updates route configuration without touching snapshots', async () => {
+    const config = { key: 'deposito_1', enabled: true, revision: 2, depot: { name: 'Depósito', latitude: -34, longitude: -58 }, provider: 'google-routes', algorithm: 'v1' }
+    get.mockResolvedValue({ data: config }); patch.mockResolvedValue({ data: { ...config, revision: 3 } })
+    await expect(routePlanService.getConfig()).resolves.toEqual(config)
+    await expect(routePlanService.updateConfig({ depot: config.depot, routeMode: 'google-routes' })).resolves.toMatchObject({ revision: 3 })
+    expect(get).toHaveBeenCalledWith('/routePlan/config')
+    expect(patch).toHaveBeenCalledWith('/routePlan/config', { depot: config.depot, routeMode: 'google-routes' })
   })
 
   it('keeps assignment fields optional for legacy preview callers', async () => {

@@ -114,6 +114,33 @@ export interface RouteDashboard {
   warnings: string[]
 }
 
+export interface RoutingDepot {
+  name: string
+  latitude: number
+  longitude: number
+}
+
+export interface RoutingConfig {
+  key: string
+  enabled: boolean
+  revision: number
+  depot: RoutingDepot
+  fuelConsumptionLitersPer100Km?: number
+  maxStops?: number
+  provider: string
+  algorithm: string
+  updatedBy?: string
+}
+
+export interface RoutingConfigUpdateInput {
+  depot: RoutingDepot
+  fuelConsumptionLitersPer100Km?: number
+  routeMode: string
+  algorithm?: string
+  maxStops?: number
+  enabled?: boolean
+}
+
 export interface SelectableDriver {
   id: string
   nickname: string

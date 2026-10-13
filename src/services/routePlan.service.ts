@@ -10,6 +10,8 @@ import type {
   RoutePlanSaveRequest,
   RoutePreview,
   RoutePreviewRequest,
+  RoutingConfig,
+  RoutingConfigUpdateInput,
 } from '@/interfaces/routePlan.interface'
 
 const DELIVERY_ZONE_URL = '/deliveryZone'
@@ -18,6 +20,7 @@ const DASHBOARD_URL = '/routePlan/dashboard'
 const ASSIGNMENT_OPTIONS_URL = '/routePlan/assignment-options'
 const PREVIEW_URL = '/routePlan/preview'
 const ROUTE_PLAN_URL = '/routePlan'
+const ROUTE_CONFIG_URL = '/routePlan/config'
 
 /**
  * HTTP client for route planning (T-F.2 candidate review, T-F.4 preview,
@@ -48,6 +51,16 @@ export const routePlanService = {
    */
   getDashboard: async (query: RouteDashboardQuery): Promise<RouteDashboard> => {
     const response = await apiClient.get<RouteDashboard>(DASHBOARD_URL, { params: query })
+    return response.data
+  },
+
+  getConfig: async (): Promise<RoutingConfig> => {
+    const response = await apiClient.get<RoutingConfig>(ROUTE_CONFIG_URL)
+    return response.data
+  },
+
+  updateConfig: async (input: RoutingConfigUpdateInput): Promise<RoutingConfig> => {
+    const response = await apiClient.patch<RoutingConfig>(ROUTE_CONFIG_URL, input)
     return response.data
   },
 
