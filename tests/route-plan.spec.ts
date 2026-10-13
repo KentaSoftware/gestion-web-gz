@@ -111,7 +111,7 @@ const SNAPSHOT = {
   createdAt: '2026-10-04T03:05:00.000Z',
 }
 
-const DASHBOARD = {
+export const DASHBOARD = {
   filters: { serviceDate: SERVICE_DATE, zoneCode: 'NORTE' },
   kpis: { activeRoutes: 2, pendingOrders: 1, totalDistanceMeters: 5000, estimatedFuelLiters: 1.2 },
   routes: [
@@ -128,7 +128,7 @@ const DASHBOARD = {
     {
       id: 'route-2', status: 'COMPLETED', zoneCode: 'NORTE', selectedSaleIds: ['legacy-sale'], clientCount: 1,
       metrics: { distanceMeters: 1500, durationSeconds: 600, fuelLiters: null },
-      assignments: { driverId: 'driver-2', vehicleId: 'vehicle-2' }, warnings: [], stale: false,
+       assignments: { driverId: 'driver-2', vehicleId: 'vehicle-2' }, warnings: [], stale: true,
     },
   ],
   candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' },
@@ -145,7 +145,7 @@ const json = (body: unknown) => ({
  * Intercepts every route-planning API call regardless of the configured API
  * host, so the spec never depends on `NEXT_PUBLIC_DB_HOST`.
  */
-const mockRouteApi = async (page: Page): Promise<void> => {
+export const mockRouteApi = async (page: Page): Promise<void> => {
   await page.route(/\/(deliveryZone|routePlan)([/?]|$)/, async (route) => {
     const request = route.request()
     const { pathname } = new URL(request.url())
@@ -175,7 +175,7 @@ const mockRouteApi = async (page: Page): Promise<void> => {
   })
 }
 
-const seedSession = async (page: Page): Promise<void> => {
+export const seedSession = async (page: Page): Promise<void> => {
   await page.addInitScript((session) => {
     window.localStorage.setItem('user', JSON.stringify(session))
   }, SESSION)
@@ -183,9 +183,10 @@ const seedSession = async (page: Page): Promise<void> => {
 
 test.describe('Route plan acceptance', () => {
   test(
-    'operator reviews candidates, previews with map fallback and opens the saved plan',
-    { tag: ['@e2e', '@route'] },
-    async ({ page }) => {
+    'T-F.7/T-F.8: operator reviews candidates, previews with map fallback and opens the saved plan',
+    { tag: ['@e2e', '@route', '@T-F.7', '@T-F.8'] },
+    async ({ page }, testInfo) => {
+      testInfo.skip(testInfo.project.name === 'mobile-chromium', 'Desktop acceptance flow is intentionally not duplicated on mobile.')
       await seedSession(page)
       await mockRouteApi(page)
 
