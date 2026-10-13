@@ -32,6 +32,19 @@ const SESSION = {
 
 const ZONE = { _id: ZONE_ID, code: 'NORTE', name: 'Zona Norte', active: true }
 
+const ASSIGNMENT_OPTIONS = {
+  drivers: [{ id: 'driver-1', nickname: 'Repartidor Uno', isActive: true }],
+  vehicles: [
+    {
+      id: 'vehicle-1',
+      code: 'CAM-01',
+      fuelConsumptionLitersPer100Km: 12,
+      attributes: {},
+      availability: true,
+    },
+  ],
+}
+
 const CANDIDATES = {
   eligible: [
     {
@@ -116,6 +129,9 @@ const mockRouteApi = async (page: Page): Promise<void> => {
     if (pathname.endsWith('/deliveryZone')) {
       return route.fulfill(json([ZONE]))
     }
+    if (pathname.endsWith('/routePlan/assignment-options')) {
+      return route.fulfill(json(ASSIGNMENT_OPTIONS))
+    }
     if (pathname.endsWith('/routePlan/candidates')) {
       return route.fulfill(json(CANDIDATES))
     }
@@ -155,9 +171,10 @@ test.describe('Route plan acceptance', () => {
         timeout: 15_000,
       })
 
+      const planner = page.getByRole('region', { name: 'Planificación de rutas' })
       await page.getByLabel('Fecha de reparto').fill(SERVICE_DATE)
-      await expect(page.getByRole('option', { name: 'Zona Norte' })).toBeAttached()
-      await page.getByLabel('Zona de entrega').selectOption(ZONE_ID)
+      await expect(planner.getByRole('option', { name: 'Zona Norte' })).toBeAttached()
+      await planner.getByLabel('Zona de entrega').selectOption(ZONE_ID)
       await page.getByRole('button', { name: 'Cargar candidatos' }).click()
 
       // Candidate review: eligible destination plus blocked destinations.
@@ -169,6 +186,8 @@ test.describe('Route plan acceptance', () => {
       await expect(page.getByText('FUTURE_BLOCK_REASON')).toBeVisible()
 
       await page.getByRole('checkbox', { name: 'Almacén Sur' }).check()
+      await page.getByLabel('Repartidor').selectOption('driver-1')
+      await page.getByLabel('Vehículo').selectOption('vehicle-1')
       await page.getByRole('button', { name: 'Calcular recorrido' }).click()
 
       // Preview: metrics stay visible, MAP_UNAVAILABLE falls back to the list.
@@ -177,7 +196,7 @@ test.describe('Route plan acceptance', () => {
       await expect(
         page.getByText('Se muestra el recorrido como lista porque el mapa no está disponible.')
       ).toBeVisible()
-      await expect(page.getByRole('heading', { name: 'Mapa del recorrido' })).toHaveCount(0)
+      await expect(page.getByRole('heading', { name: 'Mapa del recorrido' })).toBeVisible()
 
       // Unknown warning and factor codes fall back to their raw value.
       await expect(page.getByText('FUTURE_WARNING')).toBeVisible()

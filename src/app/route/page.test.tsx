@@ -37,6 +37,7 @@ vi.mock('@/config/moduleRegistry', () => ({
 vi.mock('@/services/routePlan.service', () => ({
   routePlanService: {
     getActiveDeliveryZones: () => new Promise(() => undefined),
+    getAssignmentOptions: vi.fn().mockResolvedValue({ drivers: [], vehicles: [] }),
     getCandidates: vi.fn(),
   },
 }))
