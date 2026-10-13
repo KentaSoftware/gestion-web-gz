@@ -4,9 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Permission } from '@/interfaces/auth.interface'
 import type { RoutePreview as RoutePreviewData } from '@/interfaces/routePlan.interface'
 
-const { getActiveDeliveryZones, getCandidates, preview, save, hasPermission, push } = vi.hoisted(() => ({
+const { getActiveDeliveryZones, getCandidates, getAssignmentOptions, preview, save, hasPermission, push } = vi.hoisted(() => ({
   getActiveDeliveryZones: vi.fn(),
   getCandidates: vi.fn(),
+  getAssignmentOptions: vi.fn(),
   preview: vi.fn(),
   save: vi.fn(),
   hasPermission: vi.fn(),
@@ -14,7 +15,7 @@ const { getActiveDeliveryZones, getCandidates, preview, save, hasPermission, pus
 }))
 
 vi.mock('@/services/routePlan.service', () => ({
-  routePlanService: { getActiveDeliveryZones, getCandidates, preview, save },
+  routePlanService: { getActiveDeliveryZones, getCandidates, getAssignmentOptions, preview, save },
 }))
 
 vi.mock('@/hooks/usePermission', () => ({
@@ -81,17 +82,28 @@ const loadCandidates = async (
   render(<RoutePlanner />)
   await selectDateAndZone()
   await userEvent.click(screen.getByRole('button', { name: 'Cargar candidatos' }))
+  const driverSelect = screen.queryByLabelText('Repartidor')
+  const vehicleSelect = screen.queryByLabelText('Vehículo')
+  if (driverSelect !== null && vehicleSelect !== null) {
+    await userEvent.selectOptions(driverSelect, 'driver-1')
+    await userEvent.selectOptions(vehicleSelect, 'vehicle-1')
+  }
 }
 
 describe('RoutePlanner', () => {
   beforeEach(() => {
     getActiveDeliveryZones.mockReset()
     getCandidates.mockReset()
+    getAssignmentOptions.mockReset()
     preview.mockReset()
     save.mockReset()
     hasPermission.mockReset()
     push.mockReset()
     getActiveDeliveryZones.mockResolvedValue([zoneA, zoneB])
+    getAssignmentOptions.mockResolvedValue({
+      drivers: [{ id: 'driver-1', nickname: 'Ana Pérez', isActive: true }],
+      vehicles: [{ id: 'vehicle-1', code: 'AA123BB', fuelConsumptionLitersPer100Km: 10.5, attributes: {}, availability: true }],
+    })
     hasPermission.mockReturnValue(true)
   })
 
@@ -258,6 +270,19 @@ describe('RoutePlanner', () => {
     expect(preview).not.toHaveBeenCalled()
   })
 
+  it('requires driver and vehicle assignments before preview', async () => {
+    await loadCandidates()
+    await userEvent.selectOptions(screen.getByLabelText('Repartidor'), '')
+    await userEvent.selectOptions(screen.getByLabelText('Vehículo'), '')
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Almacén Sur' }))
+
+    const previewButton = screen.getByRole('button', { name: 'Calcular recorrido' })
+    expect(previewButton).toBeDisabled()
+    expect(screen.getByLabelText('Repartidor')).toBeInTheDocument()
+    expect(screen.getByLabelText('Vehículo')).toHaveTextContent('AA123BB')
+    expect(preview).not.toHaveBeenCalled()
+  })
+
   it('announces the preview loading state', async () => {
     preview.mockReturnValue(new Promise(() => undefined))
     await loadCandidates()
@@ -281,6 +306,8 @@ describe('RoutePlanner', () => {
       serviceDate: '2026-10-04',
       deliveryZoneId: ZONE_A,
       saleIds: [SALE_ID],
+      driverId: 'driver-1',
+      vehicleId: 'vehicle-1',
     })
   })
 
@@ -367,6 +394,8 @@ describe('RoutePlanner', () => {
       serviceDate: '2026-10-04',
       deliveryZoneId: ZONE_A,
       saleIds: [SALE_ID],
+      driverId: 'driver-1',
+      vehicleId: 'vehicle-1',
     })
     await waitFor(() => expect(push).toHaveBeenCalledWith(`/route/${SAVED_ID}`))
   })

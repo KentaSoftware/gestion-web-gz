@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { routePlanService } from '@/services/routePlan.service'
 import type { DeliveryZone, RouteDashboard as RouteDashboardData } from '@/interfaces/routePlan.interface'
 import { RouteKpiCards } from './RouteKpiCards'
+import { PlannedRouteCard } from './PlannedRouteCard'
 
 type LoadStatus = 'loading' | 'ready' | 'error'
 
@@ -134,11 +135,19 @@ export function RouteDashboard() {
               No hay rutas ni clientes pendientes para la fecha y zona seleccionadas.
             </p>
           ) : (
-            <div className="rounded-lg border border-border-subtle bg-surface-base p-5">
-              <h3 className="text-base font-semibold text-text-primary">Resumen de rutas</h3>
-              <p className="mt-1 text-sm text-text-secondary">
-                {dashboard.routes.length} ruta{dashboard.routes.length === 1 ? '' : 's'} planificada{dashboard.routes.length === 1 ? '' : 's'}.
-              </p>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <section aria-labelledby="planned-routes-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
+                <h3 id="planned-routes-title" className="text-base font-semibold text-text-primary">Rutas planificadas</h3>
+                <div className="mt-4 flex flex-col gap-3">{dashboard.routes.map((route) => <PlannedRouteCard key={route.id} route={route} />)}</div>
+              </section>
+              <section aria-labelledby="dashboard-clients-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
+                <h3 id="dashboard-clients-title" className="text-base font-semibold text-text-primary">Clientes con pedidos</h3>
+                <p className="mt-1 text-sm text-text-secondary">{dashboard.candidates.eligible.length} elegibles · {dashboard.candidates.blocked.length} bloqueados</p>
+                <ul className="mt-4 flex flex-col gap-2" aria-label="Clientes y pedidos">
+                  {dashboard.candidates.eligible.map((candidate) => <li key={candidate.saleId} className="rounded-md border border-border-subtle p-3"><p className="font-medium text-text-primary">{candidate.displayName ?? candidate.saleId}</p><p className="text-xs text-text-secondary">{candidate.addressSummary ?? 'Dirección no disponible'} · Pedido elegible</p></li>)}
+                  {dashboard.candidates.blocked.map((candidate) => <li key={candidate.saleId} className="rounded-md border border-state-warning p-3"><p className="font-medium text-text-primary">{candidate.displayName ?? candidate.saleId}</p><p className="text-xs text-state-warning">{candidate.reasons.map((reason) => reason === 'CLIENT_LOCATION_MISSING' ? 'La ubicación del cliente no está disponible' : reason).join(' · ')}</p></li>)}
+                </ul>
+              </section>
             </div>
           )}
         </>

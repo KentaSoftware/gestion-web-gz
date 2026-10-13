@@ -8,6 +8,7 @@ import type {
   CandidateEntry,
   CandidateResult,
   DeliveryZone,
+  RouteAssignmentOptions,
   RoutePlan,
   RoutePreview as RoutePreviewData,
   RoutePreviewErrorResponse,
@@ -85,6 +86,9 @@ export function RoutePlanner() {
   const router = useRouter()
 
   const [zones, setZones] = useState<DeliveryZone[]>([])
+  const [assignmentOptions, setAssignmentOptions] = useState<RouteAssignmentOptions>({ drivers: [], vehicles: [] })
+  const [driverId, setDriverId] = useState('')
+  const [vehicleId, setVehicleId] = useState('')
   const [zoneStatus, setZoneStatus] = useState<ZoneStatus>('loading')
   const [serviceDate, setServiceDate] = useState('')
   const [deliveryZoneId, setDeliveryZoneId] = useState('')
@@ -112,6 +116,10 @@ export function RoutePlanner() {
       setZones([])
       setZoneStatus('error')
     }
+  }, [])
+
+  useEffect(() => {
+    void routePlanService.getAssignmentOptions().then(setAssignmentOptions).catch(() => setAssignmentOptions({ drivers: [], vehicles: [] }))
   }, [])
 
   useEffect(() => {
@@ -192,7 +200,7 @@ export function RoutePlanner() {
     setPreviewErrorMessage(null)
     setPreviewStatus('loading')
     try {
-      const result = await routePlanService.preview({ serviceDate, deliveryZoneId, saleIds: selectedSaleIds })
+       const result = await routePlanService.preview({ serviceDate, deliveryZoneId, saleIds: selectedSaleIds, driverId, vehicleId })
       setPreviewData(result)
       setPreviewStatus('ready')
     } catch (error) {
@@ -219,7 +227,7 @@ export function RoutePlanner() {
 
     setSaveStatus('saving')
     try {
-      const saved = await routePlanService.save({ serviceDate, deliveryZoneId, saleIds: selectedSaleIds })
+       const saved = await routePlanService.save({ serviceDate, deliveryZoneId, saleIds: selectedSaleIds, driverId, vehicleId })
       const savedId = routePlanId(saved)
       if (savedId === '') {
         setSaveErrorMessage('No se pudo obtener el identificador del plan guardado.')
@@ -245,6 +253,7 @@ export function RoutePlanner() {
   const noneSelected = selectedSaleIds.length === 0
   const hasValidPreview = previewStatus === 'ready' && previewData !== null && selectedSaleIds.length > 0
   const isSaving = saveStatus === 'saving'
+  const hasAssignments = driverId !== '' && vehicleId !== ''
 
   const eligibleCheckbox = (candidate: CandidateEntry) => {
     const checked = selectedSaleIds.includes(candidate.saleId)
@@ -429,8 +438,13 @@ export function RoutePlanner() {
           <div className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md">
             {canCreateRoutePlan ? (
               <div className="flex flex-col gap-3">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="flex flex-col gap-2"><Label htmlFor="route-driver">Repartidor</Label><select id="route-driver" value={driverId} onChange={(event) => setDriverId(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un repartidor</option>{assignmentOptions.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.nickname}</option>)}</select></div>
+                  <div className="flex flex-col gap-2"><Label htmlFor="route-vehicle">Vehículo</Label><select id="route-vehicle" value={vehicleId} onChange={(event) => setVehicleId(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un vehículo</option>{assignmentOptions.vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.code} · {vehicle.fuelConsumptionLitersPer100Km} L/100 km</option>)}</select></div>
+                </div>
+                {!hasAssignments && <p role="status" className="text-sm text-text-secondary">Seleccioná un repartidor y un vehículo para habilitar la planificación.</p>}
                 <div className="flex flex-wrap items-center gap-3">
-                  <Button type="button" onClick={() => void handlePreview()} disabled={previewStatus === 'loading' || isSaving}>
+                  <Button type="button" onClick={() => void handlePreview()} disabled={previewStatus === 'loading' || isSaving || !hasAssignments}>
                     Calcular recorrido
                   </Button>
                   {hasValidPreview && (
@@ -438,7 +452,7 @@ export function RoutePlanner() {
                       type="button"
                       variant="secondary"
                       onClick={() => void handleSave()}
-                      disabled={isSaving}
+                       disabled={isSaving || !hasAssignments}
                       aria-busy={isSaving}
                     >
                       Guardar plan
