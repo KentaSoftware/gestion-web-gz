@@ -51,7 +51,16 @@ export const routePlanService = {
    */
   getDashboard: async (query: RouteDashboardQuery): Promise<RouteDashboard> => {
     const response = await apiClient.get<RouteDashboard>(DASHBOARD_URL, { params: query })
-    return response.data
+    return {
+      ...response.data,
+      routes: response.data.routes.map((route) => ({
+        ...route,
+        metrics: {
+          ...route.metrics,
+          fuelLiters: route.metrics.fuelLiters ?? null,
+        },
+      })),
+    }
   },
 
   getConfig: async (): Promise<RoutingConfig> => {

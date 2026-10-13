@@ -53,6 +53,18 @@ describe('routePlanService', () => {
     })
   })
 
+  it('preserves legacy dashboard routes while normalizing unavailable fuel metrics', async () => {
+    const legacyRoute = {
+      id: 'legacy-route', status: 'PENDING', zoneCode: 'NORTE', selectedSaleIds: ['legacy-sale'], clientCount: 1,
+      metrics: { distanceMeters: 100, durationSeconds: 10 }, assignments: {}, warnings: [], stale: false,
+    }
+    get.mockResolvedValue({ data: { filters: {}, kpis: {}, routes: [legacyRoute], candidates: {}, warnings: [] } })
+
+    await expect(routePlanService.getDashboard({ serviceDate: '2026-10-04', zoneCode: 'NORTE' })).resolves.toMatchObject({
+      routes: [{ id: 'legacy-route', metrics: { fuelLiters: null } }],
+    })
+  })
+
   it('reads and updates route configuration without touching snapshots', async () => {
     const config = { key: 'deposito_1', enabled: true, revision: 2, depot: { name: 'Depósito', latitude: -34, longitude: -58 }, provider: 'google-routes', algorithm: 'v1' }
     get.mockResolvedValue({ data: config }); patch.mockResolvedValue({ data: { ...config, revision: 3 } })

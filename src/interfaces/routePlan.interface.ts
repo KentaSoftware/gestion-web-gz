@@ -90,6 +90,61 @@ export interface RouteOperationalAssignment {
   vehicleId?: string
 }
 
+export const ROUTE_METRIC_AVAILABILITY = {
+  CALCULATED: 'CALCULATED',
+  ESTIMATED: 'ESTIMATED',
+  OPERATIONAL: 'OPERATIONAL',
+  UNAVAILABLE: 'UNAVAILABLE',
+} as const
+
+export type RouteMetricAvailability = (typeof ROUTE_METRIC_AVAILABILITY)[keyof typeof ROUTE_METRIC_AVAILABILITY]
+
+export interface RouteDashboardStop {
+  clientId: string
+  saleIds: string[]
+  sequence: number
+  latitude: number
+  longitude: number
+}
+
+export interface RouteDashboardSegment {
+  fromStopSequence: number
+  toStopSequence: number
+  distanceMeters: number
+  durationSeconds: number
+}
+
+export interface RouteFuelAssumptions {
+  availability: RouteMetricAvailability
+  consumptionLitersPer100Km: number | null
+  distanceKm: number
+  vehicleCode: string | null
+  source: string
+  calculatedAt: string
+}
+
+export interface RouteScheduleAssumptions {
+  calculatedAt: string
+  timezone: string
+  source: string
+}
+
+export interface RouteStopEstimate {
+  sequence: number
+  arrival: string | null
+  cumulativeDurationSeconds: number | null
+  calculatedAt?: string
+  timezone?: string
+  availability?: RouteMetricAvailability
+}
+
+export interface RouteSaleReference {
+  saleId: string
+  versionAtSave: number | null
+  currentVersion: number | null
+  currentStatus: string | null
+}
+
 export interface RouteDashboardCard {
   id: string
   status: RouteOperationalStatus
@@ -104,6 +159,16 @@ export interface RouteDashboardCard {
   assignments: RouteOperationalAssignment
   warnings: string[]
   stale: boolean
+  depot?: RoutingDepot
+  encodedPolyline?: string
+  stops?: RouteDashboardStop[]
+  segments?: RouteDashboardSegment[]
+  metricAvailability?: RouteMetricAvailability
+  fuelAssumptions?: RouteFuelAssumptions
+  scheduleAssumptions?: RouteScheduleAssumptions
+  stopEstimates?: RouteStopEstimate[]
+  saleReferences?: RouteSaleReference[]
+  staleCauses?: string[]
 }
 
 export interface RouteDashboard {

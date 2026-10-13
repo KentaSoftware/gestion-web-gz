@@ -111,6 +111,30 @@ const SNAPSHOT = {
   createdAt: '2026-10-04T03:05:00.000Z',
 }
 
+const DASHBOARD = {
+  filters: { serviceDate: SERVICE_DATE, zoneCode: 'NORTE' },
+  kpis: { activeRoutes: 2, pendingOrders: 1, totalDistanceMeters: 5000, estimatedFuelLiters: 1.2 },
+  routes: [
+    {
+      id: 'route-1', status: 'PENDING', zoneCode: 'NORTE', selectedSaleIds: [SALE_ID], clientCount: 1,
+      metrics: { distanceMeters: 3500, durationSeconds: 900, fuelLiters: 0.3 },
+      assignments: { driverId: 'driver-1', vehicleId: 'vehicle-1' }, warnings: [], stale: false,
+      depot: { name: 'Depósito Central', latitude: -34.6, longitude: -58.4 }, encodedPolyline: '',
+      stops: [{ clientId: CLIENT_ID, saleIds: [SALE_ID], sequence: 1, latitude: -34.61, longitude: -58.41 }],
+      segments: [{ fromStopSequence: 0, toStopSequence: 1, distanceMeters: 3500, durationSeconds: 900 }],
+      stopEstimates: [{ sequence: 1, arrival: '2026-10-04T03:15:00.000Z', cumulativeDurationSeconds: 900, availability: 'ESTIMATED' }],
+      saleReferences: [{ saleId: SALE_ID, versionAtSave: 1, currentVersion: 1, currentStatus: 'PENDING' }],
+    },
+    {
+      id: 'route-2', status: 'COMPLETED', zoneCode: 'NORTE', selectedSaleIds: ['legacy-sale'], clientCount: 1,
+      metrics: { distanceMeters: 1500, durationSeconds: 600, fuelLiters: null },
+      assignments: { driverId: 'driver-2', vehicleId: 'vehicle-2' }, warnings: [], stale: false,
+    },
+  ],
+  candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' },
+  warnings: [],
+}
+
 const json = (body: unknown) => ({
   status: 200,
   contentType: 'application/json',
@@ -131,6 +155,9 @@ const mockRouteApi = async (page: Page): Promise<void> => {
     }
     if (pathname.endsWith('/routePlan/assignment-options')) {
       return route.fulfill(json(ASSIGNMENT_OPTIONS))
+    }
+    if (pathname.endsWith('/routePlan/dashboard')) {
+      return route.fulfill(json(DASHBOARD))
     }
     if (pathname.endsWith('/routePlan/candidates')) {
       return route.fulfill(json(CANDIDATES))
@@ -171,6 +198,16 @@ test.describe('Route plan acceptance', () => {
         timeout: 15_000,
       })
 
+      // Dashboard detail uses the first selected route and preserves a textual
+      // sequence plus linked sale references when the map provider is absent.
+      await expect(page.getByRole('button', { name: 'Seleccionar ruta route-1' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Mapa de ruta seleccionada' })).toBeVisible()
+      await expect(page.getByText('Parada 1')).toBeVisible()
+      await expect(page.getByRole('paragraph').filter({ hasText: 'Pedidos vinculados:' })).toBeVisible()
+      await expect(page.getByText(/El mapa no está configurado/)).toBeVisible()
+      await page.getByRole('button', { name: 'Seleccionar ruta route-2' }).click()
+      await expect(page.getByText('No hay detalle geográfico disponible para esta ruta.')).toBeVisible()
+
       const planner = page.getByRole('region', { name: 'Planificación de rutas' })
       await page.getByLabel('Fecha de reparto').fill(SERVICE_DATE)
       await expect(planner.getByRole('option', { name: 'Zona Norte' })).toBeAttached()
@@ -192,7 +229,7 @@ test.describe('Route plan acceptance', () => {
 
       // Preview: metrics stay visible, MAP_UNAVAILABLE falls back to the list.
       await expect(page.getByRole('heading', { name: 'Recorrido propuesto' })).toBeVisible()
-      await expect(page.getByText('3,5 km')).toBeVisible()
+      await expect(planner.getByText('3,5 km')).toBeVisible()
       await expect(
         page.getByText('Se muestra el recorrido como lista porque el mapa no está disponible.')
       ).toBeVisible()
