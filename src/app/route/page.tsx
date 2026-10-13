@@ -6,6 +6,7 @@ import { Permission } from '@/interfaces/auth.interface'
 import { PageContainer, PageHeader } from '@/components/layout/PageLayout'
 import { Spinner } from '@/components/ui/spinner'
 import { RoutePlanner } from '@/components/route/RoutePlanner'
+import { RouteDashboard } from '@/components/route/RouteDashboard'
 
 /**
  * Route planning page shell (T-F.1 / T-F.C1) with candidate review (T-F.3).
@@ -17,11 +18,9 @@ import { RoutePlanner } from '@/components/route/RoutePlanner'
 function RoutePlanningContent() {
   return (
     <PageContainer>
-      <PageHeader
-        title="Rutas"
-        description="Planificación de rutas de reparto. Seleccioná una fecha y una zona para revisar los candidatos."
-      />
+      <PageHeader title="Rutas" description="Panel operativo de optimización y planificación de rutas de reparto." />
 
+      <RouteDashboard />
       <RoutePlanner />
     </PageContainer>
   )

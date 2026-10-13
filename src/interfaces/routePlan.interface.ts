@@ -64,6 +64,75 @@ export interface CandidateQueryParams {
   deliveryZoneId: string
 }
 
+export const ROUTE_OPERATIONAL_STATUS = {
+  PENDING: 'PENDING',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+} as const
+
+export type RouteOperationalStatus = (typeof ROUTE_OPERATIONAL_STATUS)[keyof typeof ROUTE_OPERATIONAL_STATUS]
+
+export interface RouteDashboardQuery {
+  serviceDate: string
+  zoneCode: string
+  status?: RouteOperationalStatus
+}
+
+export interface RouteDashboardKpis {
+  activeRoutes: number
+  pendingOrders: number
+  totalDistanceMeters: number | null
+  estimatedFuelLiters: number | null
+}
+
+export interface RouteOperationalAssignment {
+  driverId?: string
+  vehicleId?: string
+}
+
+export interface RouteDashboardCard {
+  id: string
+  status: RouteOperationalStatus
+  zoneCode: string
+  selectedSaleIds: string[]
+  clientCount: number
+  metrics: {
+    distanceMeters: number
+    durationSeconds: number
+    fuelLiters: number | null
+  }
+  assignments: RouteOperationalAssignment
+  warnings: string[]
+  stale: boolean
+}
+
+export interface RouteDashboard {
+  filters: RouteDashboardQuery
+  kpis: RouteDashboardKpis
+  routes: RouteDashboardCard[]
+  candidates: CandidateResult
+  warnings: string[]
+}
+
+export interface SelectableDriver {
+  id: string
+  nickname: string
+  isActive: boolean
+}
+
+export interface SelectableVehicle {
+  id: string
+  code: string
+  fuelConsumptionLitersPer100Km: number
+  attributes: Record<string, string>
+  availability: boolean
+}
+
+export interface RouteAssignmentOptions {
+  drivers: SelectableDriver[]
+  vehicles: SelectableVehicle[]
+}
+
 /**
  * Stable warning codes returned with a route preview. A warning never fails the
  * preview: the calculated data is still returned and must stay visible.
@@ -193,6 +262,8 @@ export interface RoutePreviewRequest {
   serviceDate: string
   deliveryZoneId: string
   saleIds: string[]
+  driverId?: string
+  vehicleId?: string
 }
 
 /**

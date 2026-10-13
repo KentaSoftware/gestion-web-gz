@@ -36,6 +36,34 @@ describe('routePlanService', () => {
     })
   })
 
+  it('maps dashboard filters to the Phase 2 dashboard endpoint', async () => {
+    const dashboard = {
+      filters: { serviceDate: '2026-10-04', zoneCode: 'NORTE' },
+      kpis: { activeRoutes: 1, pendingOrders: 2, totalDistanceMeters: 3500, estimatedFuelLiters: 0.3 },
+      routes: [],
+      candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' },
+      warnings: [],
+    }
+    get.mockResolvedValue({ data: dashboard })
+
+    await expect(routePlanService.getDashboard({ serviceDate: '2026-10-04', zoneCode: 'NORTE' })).resolves.toEqual(dashboard)
+    expect(get).toHaveBeenCalledWith('/routePlan/dashboard', {
+      params: { serviceDate: '2026-10-04', zoneCode: 'NORTE' },
+    })
+  })
+
+  it('keeps assignment fields optional for legacy preview callers', async () => {
+    const preview = { route: {}, metrics: {}, warnings: [], factorsConsidered: [], algorithmVersion: 'v1', algorithmProvider: 'test', routingConfigRevision: 1, ruleVersion: 'v1' }
+    post.mockResolvedValue({ data: preview })
+
+    await routePlanService.preview({ serviceDate: '2026-10-04', deliveryZoneId: ZONE_ID, saleIds: [SALE_ID] })
+    expect(post).toHaveBeenCalledWith('/routePlan/preview', {
+      serviceDate: '2026-10-04',
+      deliveryZoneId: ZONE_ID,
+      saleIds: [SALE_ID],
+    })
+  })
+
   it('propagates request failures to the caller instead of swallowing them', async () => {
     get.mockRejectedValue(new Error('network down'))
 

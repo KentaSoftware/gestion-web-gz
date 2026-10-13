@@ -3,6 +3,9 @@ import type {
   CandidateQueryParams,
   CandidateResult,
   DeliveryZone,
+  RouteAssignmentOptions,
+  RouteDashboard,
+  RouteDashboardQuery,
   RoutePlan,
   RoutePlanSaveRequest,
   RoutePreview,
@@ -11,6 +14,8 @@ import type {
 
 const DELIVERY_ZONE_URL = '/deliveryZone'
 const CANDIDATES_URL = '/routePlan/candidates'
+const DASHBOARD_URL = '/routePlan/dashboard'
+const ASSIGNMENT_OPTIONS_URL = '/routePlan/assignment-options'
 const PREVIEW_URL = '/routePlan/preview'
 const ROUTE_PLAN_URL = '/routePlan'
 
@@ -37,6 +42,22 @@ export const routePlanService = {
   },
 
   /**
+   * Reads the dashboard aggregate. The backend owns KPI aggregation and keeps
+   * unavailable fuel metrics explicitly null; the client does not infer or
+   * replace those values.
+   */
+  getDashboard: async (query: RouteDashboardQuery): Promise<RouteDashboard> => {
+    const response = await apiClient.get<RouteDashboard>(DASHBOARD_URL, { params: query })
+    return response.data
+  },
+
+  /** Assignment options for the Phase 2 preview/save contract. */
+  getAssignmentOptions: async (): Promise<RouteAssignmentOptions> => {
+    const response = await apiClient.get<RouteAssignmentOptions>(ASSIGNMENT_OPTIONS_URL)
+    return response.data
+  },
+
+  /**
    * Eligible and blocked candidates for a civil service date and zone.
    * Requires: read_route_plan permission.
    */
@@ -59,11 +80,15 @@ export const routePlanService = {
     serviceDate,
     deliveryZoneId,
     saleIds,
+    driverId,
+    vehicleId,
   }: RoutePreviewRequest): Promise<RoutePreview> => {
     const response = await apiClient.post<RoutePreview>(PREVIEW_URL, {
       serviceDate,
       deliveryZoneId,
       saleIds,
+      ...(driverId !== undefined ? { driverId } : {}),
+      ...(vehicleId !== undefined ? { vehicleId } : {}),
     })
     return response.data
   },
@@ -77,11 +102,15 @@ export const routePlanService = {
     serviceDate,
     deliveryZoneId,
     saleIds,
+    driverId,
+    vehicleId,
   }: RoutePlanSaveRequest): Promise<RoutePlan> => {
     const response = await apiClient.post<RoutePlan>(ROUTE_PLAN_URL, {
       serviceDate,
       deliveryZoneId,
       saleIds,
+      ...(driverId !== undefined ? { driverId } : {}),
+      ...(vehicleId !== undefined ? { vehicleId } : {}),
     })
     return response.data
   },
