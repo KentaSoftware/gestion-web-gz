@@ -109,7 +109,9 @@ describe('RoutePreview', () => {
     render(<RoutePreview status="ready" preview={PREVIEW} />)
 
     expect(screen.getByText('3,5 km')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Mapa del recorrido' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Mapa del recorrido' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Vista del mapa' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Leyenda del mapa')).not.toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent(/no está configurado/i)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })

@@ -65,7 +65,7 @@ const RouteTabs = ({ route, estimates, saleReferences, depotName, stale = false,
         ))}
       </div>
       <div role="tabpanel" id={panelId('map')} aria-labelledby="route-tab-map" hidden={activeTab !== 'map'} className="pt-4">
-        <RouteMap route={route} />
+        <RouteMap route={route} minimal />
       </div>
       <div role="tabpanel" id={panelId('sequence')} aria-labelledby="route-tab-sequence" hidden={activeTab !== 'sequence'} className="pt-4">
         <RouteStopTimeline stops={route.stops as readonly RouteStopTimelineStop[]} estimates={estimates} depotName={depotName} />

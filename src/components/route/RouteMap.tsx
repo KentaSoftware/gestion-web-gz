@@ -26,6 +26,7 @@ interface RouteMapProps {
   /** Ordered preview route as returned by the backend. Never reordered here. */
   route: PreviewRoute
   mapLocations?: RouteMapLocation[]
+  minimal?: boolean
 }
 
 const MISSING_KEY_MESSAGE = 'El mapa no está configurado. Las paradas se detallan en la lista del recorrido.'
@@ -127,6 +128,7 @@ interface RouteMapCanvasProps {
   /** Decoded road geometry, or null when the backend polyline is unusable. */
   roadGeometry: RouteMapPoint[] | null
   mapLocations: RouteMapLocation[]
+  minimal: boolean
 }
 
 type MapView = 'full' | 'route'
@@ -142,7 +144,7 @@ const MapControls = ({ onFit, onZoomIn, onZoomOut, onCenter }: { onFit: () => vo
   </div>
 )
 
-const RouteMapCanvas = ({ route, roadGeometry, mapLocations }: RouteMapCanvasProps) => {
+const RouteMapCanvas = ({ route, roadGeometry, mapLocations, minimal }: RouteMapCanvasProps) => {
   const status = useApiLoadingStatus()
   const map = useMap()
   const [view, setView] = useState<MapView>('full')
@@ -206,21 +208,23 @@ const RouteMapCanvas = ({ route, roadGeometry, mapLocations }: RouteMapCanvasPro
 
   return (
     <div>
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div role="group" aria-label="Vista del mapa" className="flex gap-1">
-          <button type="button" className="rounded border border-border-subtle px-2 py-1 text-xs text-text-primary" aria-pressed={view === 'full'} onClick={() => setView('full')}>Vista completa</button>
-          <button type="button" className="rounded border border-border-subtle px-2 py-1 text-xs text-text-primary" aria-pressed={view === 'route'} onClick={() => setView('route')}>Vista de ruta</button>
+      {!minimal && <>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div role="group" aria-label="Vista del mapa" className="flex gap-1">
+            <button type="button" className="rounded border border-border-subtle px-2 py-1 text-xs text-text-primary" aria-pressed={view === 'full'} onClick={() => setView('full')}>Vista completa</button>
+            <button type="button" className="rounded border border-border-subtle px-2 py-1 text-xs text-text-primary" aria-pressed={view === 'route'} onClick={() => setView('route')}>Vista de ruta</button>
+          </div>
         </div>
-      </div>
-      <div className="mb-2 flex flex-wrap gap-3 text-xs text-text-secondary" aria-label="Leyenda del mapa">
-        <span><span className="mr-1 inline-block size-2 rounded-full bg-brand-primary" aria-hidden="true" />Depósito</span>
-        <span><span className="mr-1 inline-block size-2 rounded-full bg-state-success" aria-hidden="true" />Clientes con pedido</span>
-        <span><span className="mr-1 inline-block size-2 rounded-full bg-state-info" aria-hidden="true" />Clientes sin pedido</span>
-        <span><span className="mr-1 inline-block size-2 rounded-full bg-state-warning" aria-hidden="true" />Excluidos</span>
-      </div>
+        <div className="mb-2 flex flex-wrap gap-3 text-xs text-text-secondary" aria-label="Leyenda del mapa">
+          <span><span className="mr-1 inline-block size-2 rounded-full bg-brand-primary" aria-hidden="true" />Depósito</span>
+          <span><span className="mr-1 inline-block size-2 rounded-full bg-state-success" aria-hidden="true" />Clientes con pedido</span>
+          <span><span className="mr-1 inline-block size-2 rounded-full bg-state-info" aria-hidden="true" />Clientes sin pedido</span>
+          <span><span className="mr-1 inline-block size-2 rounded-full bg-state-warning" aria-hidden="true" />Excluidos</span>
+        </div>
+      </>}
       <div className="h-64 w-full overflow-hidden rounded-md border border-border-subtle md:h-80">
       <Map defaultCenter={centerOf(route)} defaultZoom={12} gestureHandling="cooperative">
-        <MapControl position={ControlPosition.TOP_RIGHT}><MapControls onFit={fitVisiblePoints} onCenter={centerVisiblePoints} onZoomIn={() => changeZoom(1)} onZoomOut={() => changeZoom(-1)} /></MapControl>
+        {!minimal && <MapControl position={ControlPosition.TOP_RIGHT}><MapControls onFit={fitVisiblePoints} onCenter={centerVisiblePoints} onZoomIn={() => changeZoom(1)} onZoomOut={() => changeZoom(-1)} /></MapControl>}
         <Marker
           position={{ lat: route.depot.latitude, lng: route.depot.longitude }}
           title={route.depot.name}
@@ -264,7 +268,7 @@ const RouteMapCanvas = ({ route, roadGeometry, mapLocations }: RouteMapCanvasPro
  * failure all resolve to an accessible status message, and the ordered stop list
  * in `RoutePreview` remains the authoritative fallback.
  */
-export function RouteMap({ route, mapLocations = [] }: RouteMapProps) {
+export function RouteMap({ route, mapLocations = [], minimal = false }: RouteMapProps) {
   const headingId = useId()
   // Public client key: Next.js inlines NEXT_PUBLIC_ variables only through
   // static member access in client components.
@@ -276,11 +280,13 @@ export function RouteMap({ route, mapLocations = [] }: RouteMapProps) {
   const content: ReactNode =
     typeof apiKey === 'string' && apiKey.trim() !== '' ? (
       <APIProvider apiKey={apiKey}>
-        <RouteMapCanvas route={route} roadGeometry={roadGeometry} mapLocations={mapLocations} />
+        <RouteMapCanvas route={route} roadGeometry={roadGeometry} mapLocations={mapLocations} minimal={minimal} />
       </APIProvider>
     ) : (
       <MapFallback message={MISSING_KEY_MESSAGE} />
     )
+
+  if (minimal) return <div aria-label="Mapa de la ruta">{content}</div>
 
   return (
     <section aria-labelledby={headingId}>
