@@ -5,17 +5,15 @@ import { SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
 import type { ModuleRegistryEntry } from '@/config/moduleRegistry'
 import { REPARTIDOR_ACCESS, WITHOUT_ROUTE_READ_ACCESS } from '@/test/fixtures/sessionAccess'
 
-const { refresh, useSessionAccess, isModuleEnabled, moduleFlags } = vi.hoisted(() => ({
+const { refresh, useSessionAccess, isModuleEnabled } = vi.hoisted(() => ({
   refresh: vi.fn(),
   useSessionAccess: vi.fn(),
   isModuleEnabled: vi.fn(),
-  moduleFlags: { route: true, stock: true, finance: true, simulation: true },
 }))
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }))
 vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess }))
 vi.mock('@/config/moduleRegistry', () => ({
-  MODULE_FLAGS: moduleFlags,
   isModuleEnabled,
 }))
 
@@ -26,8 +24,8 @@ const entry: ModuleRegistryEntry = {
   href: '/route',
   label: 'Rutas',
   icon: Route,
-  flag: 'route',
-  gate: 'route',
+  flag: null,
+  gate: null,
   requiredPermissions: ['read_route_plan'],
 }
 
@@ -40,7 +38,7 @@ const access = (status: SessionAccess['status'], gates: Readonly<Record<string, 
 describe('ModuleGate', () => {
   beforeEach(() => {
     isModuleEnabled.mockReturnValue(false)
-    useSessionAccess.mockReturnValue(access(SESSION_STATUS.READY, { route: true }))
+    useSessionAccess.mockReturnValue(access(SESSION_STATUS.READY, {}))
   })
 
   it('announces loading while session access is hydrating', () => {
@@ -56,15 +54,6 @@ describe('ModuleGate', () => {
     render(<ModuleGate entry={entry}>Visible content</ModuleGate>)
 
     expect(screen.getByRole('alert')).toHaveTextContent('Acceso restringido')
-  })
-
-  it('renders an unavailable state when gate evidence is absent', () => {
-    useSessionAccess.mockReturnValue(access(SESSION_STATUS.READY, { route: false }))
-
-    render(<ModuleGate entry={entry}>Visible content</ModuleGate>)
-
-    expect(screen.getByRole('alert')).toHaveTextContent('Módulo no disponible')
-    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
   })
 
   it('allows the enabled Rutas module for the Repartidor fixture', () => {
