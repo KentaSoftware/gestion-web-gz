@@ -3,9 +3,6 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import {
-  ROUTE_FACTOR_LABEL,
-  ROUTE_PREVIEW_WARNING,
-  ROUTE_PREVIEW_WARNING_LABEL,
   type RouteSaleReference,
   type RoutePreview as RoutePreviewData,
 } from '@/interfaces/routePlan.interface'
@@ -110,10 +107,6 @@ const formatDuration = (seconds: number): string => {
 
 const formatLiters = (liters: number | null): string => liters === null ? 'No disponible' : `${decimal.format(liters)} L`
 
-const warningLabel = (warning: string): string => ROUTE_PREVIEW_WARNING_LABEL[warning] ?? warning
-
-const factorLabel = (factor: string): string => ROUTE_FACTOR_LABEL[factor] ?? factor
-
 /**
  * Focused route preview output (T-F.4) with the map boundary (T-F.5a).
  *
@@ -162,7 +155,6 @@ export function RoutePreview({ status, preview }: RoutePreviewProps) {
     )
   }
 
-  const mapUnavailable = preview.warnings.includes(ROUTE_PREVIEW_WARNING.MAP_UNAVAILABLE)
   const dashboard = preview as RoutePreviewData & PreviewDashboardFields
 
   return (
@@ -208,39 +200,6 @@ export function RoutePreview({ status, preview }: RoutePreviewProps) {
         saleReferences={dashboard.saleReferences ?? preview.saleReferences}
         depotName={preview.route.depot.name}
       />
-
-       {mapUnavailable && (
-        <p className="mt-4 text-xs text-text-secondary">
-          Se muestra el recorrido como lista porque el mapa no está disponible.
-        </p>
-      )}
-
-      <div className="mt-5">
-        <h4 className="text-sm font-semibold text-text-primary">Factores considerados</h4>
-        <ul aria-label="Factores considerados" className="mt-2 flex flex-wrap gap-2">
-          {preview.factorsConsidered.map((factor) => (
-            <li
-              key={factor}
-              className="rounded-md border border-border-subtle bg-background-subtle px-2 py-1 text-xs text-text-secondary"
-            >
-              {factorLabel(factor)}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {preview.warnings.length > 0 && (
-        <div className="mt-5">
-          <h4 className="text-sm font-semibold text-state-warning">Advertencias</h4>
-          <ul aria-label="Advertencias" className="mt-2 flex list-disc flex-col gap-1 pl-5">
-            {preview.warnings.map((warning) => (
-              <li key={warning} data-warning={warning} className="text-xs text-state-warning">
-                {warningLabel(warning)}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </section>
   )
 }
