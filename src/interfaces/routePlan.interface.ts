@@ -75,11 +75,17 @@ export const ROUTE_OPERATIONAL_STATUS = {
 
 export type RouteOperationalStatus = (typeof ROUTE_OPERATIONAL_STATUS)[keyof typeof ROUTE_OPERATIONAL_STATUS]
 
-export interface RouteDashboardQuery {
+export interface RouteDashboardGlobalQuery {
+  status?: RouteOperationalStatus
+}
+
+export interface RouteDashboardScopedQuery {
   serviceDate: string
   zoneCode: string
   status?: RouteOperationalStatus
 }
+
+export type RouteDashboardQuery = RouteDashboardGlobalQuery | RouteDashboardScopedQuery
 
 export interface RouteDashboardKpis {
   activeRoutes: number

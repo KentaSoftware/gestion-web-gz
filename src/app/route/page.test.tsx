@@ -61,7 +61,7 @@ describe('RouteScreen', () => {
     usePermission.mockReturnValue({ hasPermission: () => true, hasAnyPermission: () => true })
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'a'.repeat(24), code: 'NORTE', name: 'Zona Norte', active: true }])
     getDashboard.mockResolvedValue({
-      filters: { serviceDate: '2026-10-14', zoneCode: 'NORTE' },
+       filters: {},
       kpis: { activeRoutes: 0, pendingOrders: 0, totalDistanceMeters: 0, estimatedFuelLiters: 0 },
       routes: [],
       candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' },
@@ -78,7 +78,7 @@ describe('RouteScreen', () => {
     expect(screen.queryByRole('button', { name: 'Actualizar' })).not.toBeInTheDocument()
   })
 
-  it('opens the planner dialog with the dashboard filter defaults and closes it', async () => {
+  it('opens the planner dialog with empty planner scope and closes it', async () => {
     render(<RouteScreen />)
 
     const generateButton = await screen.findByRole('button', { name: 'Generar rutas' })
@@ -88,8 +88,8 @@ describe('RouteScreen', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).getByText('Seleccioná los pedidos y revisá el recorrido antes de guardar el plan.')).toBeInTheDocument()
-    expect(within(dialog).getByLabelText('Fecha de reparto')).toHaveValue('2026-10-14')
-    expect(within(dialog).getByLabelText('Zona de entrega')).toHaveValue('a'.repeat(24))
+    expect(within(dialog).getByLabelText('Fecha de reparto')).toHaveValue('')
+    expect(within(dialog).getByLabelText('Zona de entrega')).toHaveValue('')
 
     screen.getByRole('button', { name: 'Close' }).click()
     await waitFor(() => {

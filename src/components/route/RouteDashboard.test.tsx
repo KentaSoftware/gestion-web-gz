@@ -10,7 +10,7 @@ const { getActiveDeliveryZones, getDashboard } = vi.hoisted(() => ({
 vi.mock('@/services/routePlan.service', () => ({ routePlanService: { getActiveDeliveryZones, getDashboard } }))
 
 const dashboard = {
-  filters: { serviceDate: '2026-10-12', zoneCode: 'NORTE' },
+  filters: {},
   kpis: { activeRoutes: 2, pendingOrders: 2, totalDistanceMeters: 3000, estimatedFuelLiters: 1.2 },
   routes: [
     {
@@ -35,29 +35,20 @@ const dashboard = {
 }
 
 describe('RouteDashboard selected-route detail', () => {
-  it('renders the approved header and filter controls', async () => {
+  it('renders the global dashboard actions without date or zone filters', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     getDashboard.mockResolvedValue(dashboard)
     render(<RouteDashboard />)
 
+    await waitFor(() => expect(getDashboard).toHaveBeenCalledWith({}))
     expect(screen.getByRole('heading', { name: 'Optimización de Rutas' })).toBeInTheDocument()
     expect(screen.getByText('Planificá y asigná rutas de entrega de forma eficiente')).toBeInTheDocument()
 
-    const toggle = screen.getByRole('button', { name: 'Ocultar filtros' })
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    const toolbar = document.getElementById('route-dashboard-filters')
-    expect(toolbar).not.toBeNull()
-    expect(toolbar).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Mostrar filtros' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Fecha de servicio')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Zona de entrega')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Generar rutas' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Actualizar' })).not.toBeInTheDocument()
-
-    fireEvent.click(toggle)
-    expect(screen.getByRole('button', { name: 'Mostrar filtros' })).toHaveAttribute('aria-expanded', 'false')
-    expect(toolbar).not.toBeVisible()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Mostrar filtros' }))
-    expect(screen.getByRole('button', { name: 'Ocultar filtros' })).toHaveAttribute('aria-expanded', 'true')
-    expect(toolbar).toBeVisible()
   })
 
   it('keeps map and detail hidden until a route action is used', async () => {
@@ -112,7 +103,7 @@ describe('RouteDashboard selected-route detail', () => {
     expect(screen.queryByRole('heading', { name: 'Detalle de ruta' })).not.toBeInTheDocument()
   })
 
-  it('passes the current dashboard date and selected zone id to route generation', async () => {
+  it('delegates route generation without dashboard filter arguments', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     getDashboard.mockResolvedValue(dashboard)
     const onGenerateRoutes = vi.fn()
@@ -121,7 +112,7 @@ describe('RouteDashboard selected-route detail', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Generar rutas' })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: 'Generar rutas' }))
 
-    expect(onGenerateRoutes).toHaveBeenCalledWith('2026-10-14', 'zone-1')
+    expect(onGenerateRoutes).toHaveBeenCalledWith()
   })
 
   it('renders planned-route parity controls and selects from route actions', async () => {
