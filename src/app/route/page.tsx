@@ -42,7 +42,13 @@ function RoutePlanningContent() {
              Seleccioná clientes aptos, asigná los recursos y revisá el recorrido antes de guardar el plan.
             </DialogDescription>
           </DialogHeader>
-          {plannerOpen && <RoutePlanner initialServiceDate={plannerDefaults.serviceDate} initialDeliveryZoneId={plannerDefaults.deliveryZoneId} />}
+          {plannerOpen && (
+            <RoutePlanner
+              initialServiceDate={plannerDefaults.serviceDate}
+              initialDeliveryZoneId={plannerDefaults.deliveryZoneId}
+              onClose={() => setPlannerOpen(false)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </PageContainer>

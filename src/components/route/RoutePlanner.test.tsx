@@ -170,7 +170,7 @@ describe('RoutePlanner', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'Almacén Sur' }))
     await userEvent.click(screen.getByRole('checkbox', { name: 'Kiosco Norte' }))
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Guardar plan' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirmar y guardar' }))
     await waitFor(() => expect(push).toHaveBeenCalledWith(`/route/${'7'.repeat(24)}`))
   })
 
@@ -288,7 +288,11 @@ describe('RoutePlanner', () => {
     await renderLoaded()
     await selectAssignmentsAndClients()
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
-    expect(screen.getByRole('status')).toHaveTextContent('Calculando recorrido…')
+    expect(screen.getByRole('status')).toHaveTextContent('Calculando ruta')
+    expect(screen.queryByRole('heading', { name: 'Pedidos pendientes' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Configuración de la ruta' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Confirmar y guardar' })).not.toBeInTheDocument()
     resolvePreview(previewData)
     expect(await screen.findByRole('heading', { name: 'Recorrido propuesto' })).toBeInTheDocument()
   })
@@ -298,7 +302,7 @@ describe('RoutePlanner', () => {
     await renderLoaded()
     await selectAssignmentsAndClients()
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('El proveedor de rutas no está disponible. Intentá nuevamente más tarde.')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Tuvimos inconvenientes a generar la ruta, por favor cerrar la ventana e intentar nuevamente')
   })
 
   it('preserves an unknown preview error message', async () => {
@@ -306,7 +310,7 @@ describe('RoutePlanner', () => {
     await renderLoaded()
     await selectAssignmentsAndClients()
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Servicio temporalmente pausado')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Tuvimos inconvenientes a generar la ruta, por favor cerrar la ventana e intentar nuevamente')
   })
 
   it('uses a generic message for an unstructured preview failure', async () => {
@@ -314,7 +318,20 @@ describe('RoutePlanner', () => {
     await renderLoaded()
     await selectAssignmentsAndClients()
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo calcular el recorrido. Intentá nuevamente.')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Tuvimos inconvenientes a generar la ruta, por favor cerrar la ventana e intentar nuevamente')
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Confirmar y guardar' })).not.toBeInTheDocument()
+  })
+
+  it('closes through the modal footer cancel action', async () => {
+    const onClose = vi.fn()
+    getCandidates.mockResolvedValue(candidates)
+    render(<RoutePlanner initialServiceDate="2026-10-04" initialDeliveryZoneId={ZONE_ID} onClose={onClose} />)
+    await screen.findByRole('heading', { name: 'Pedidos pendientes' })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   it('shows the save loading state and prevents a second submit', async () => {
@@ -324,8 +341,8 @@ describe('RoutePlanner', () => {
     await renderLoaded()
     await selectAssignmentsAndClients()
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Guardar plan' }))
-    const saveButton = screen.getByRole('button', { name: 'Guardar plan' })
+    const saveButton = await screen.findByRole('button', { name: 'Confirmar y guardar' })
+    await userEvent.click(saveButton)
     expect(saveButton).toBeDisabled()
     expect(screen.getByText('Guardando plan de ruta…')).toBeInTheDocument()
     await userEvent.click(saveButton)
@@ -340,7 +357,7 @@ describe('RoutePlanner', () => {
     await renderLoaded()
     await selectAssignmentsAndClients()
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Guardar plan' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirmar y guardar' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('No encontramos el plan de ruta guardado.')
     expect(push).not.toHaveBeenCalled()
   })
@@ -351,7 +368,7 @@ describe('RoutePlanner', () => {
     await renderLoaded()
     await selectAssignmentsAndClients()
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Guardar plan' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirmar y guardar' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo persistir')
   })
 
@@ -361,7 +378,7 @@ describe('RoutePlanner', () => {
     await renderLoaded()
     await selectAssignmentsAndClients()
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Guardar plan' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirmar y guardar' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo obtener el identificador del plan guardado.')
     expect(push).not.toHaveBeenCalled()
   })
@@ -372,7 +389,7 @@ describe('RoutePlanner', () => {
     await renderLoaded()
     await selectAssignmentsAndClients()
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Guardar plan' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirmar y guardar' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo obtener el identificador del plan guardado.')
   })
 
@@ -382,11 +399,11 @@ describe('RoutePlanner', () => {
     await renderLoaded()
     await selectAssignmentsAndClients()
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Guardar plan' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirmar y guardar' }))
     await waitFor(() => expect(push).toHaveBeenCalledWith(`/route/${'9'.repeat(24)}`))
   })
 
-  it('resets selection and preview when candidates are reloaded', async () => {
+  it('hides candidate inputs after a successful preview', async () => {
     getCandidates.mockResolvedValue(candidates)
     render(<RoutePlanner />)
     await screen.findByRole('option', { name: 'Zona Norte' })
@@ -396,11 +413,7 @@ describe('RoutePlanner', () => {
     preview.mockResolvedValue(previewData)
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
     expect(await screen.findByRole('heading', { name: 'Recorrido propuesto' })).toBeInTheDocument()
-    await userEvent.clear(screen.getByLabelText('Fecha de reparto'))
-    await userEvent.type(screen.getByLabelText('Fecha de reparto'), '2026-10-05')
-    await userEvent.click(screen.getByRole('button', { name: 'Cargar candidatos' }))
-    await waitFor(() => expect(getCandidates).toHaveBeenLastCalledWith({ serviceDate: '2026-10-05', deliveryZoneId: ZONE_ID }))
-    expect(screen.queryByRole('heading', { name: 'Recorrido propuesto' })).not.toBeInTheDocument()
-    expect(screen.getByRole('checkbox', { name: 'Almacén Sur' })).not.toBeChecked()
+    expect(screen.queryByRole('heading', { name: 'Pedidos pendientes' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Configuración de la ruta' })).not.toBeInTheDocument()
   })
 })

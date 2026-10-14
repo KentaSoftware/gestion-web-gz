@@ -40,7 +40,7 @@ describe('RoutePreview', () => {
   it('announces the loading state', () => {
     render(<RoutePreview status="loading" preview={null} />)
 
-    expect(screen.getByRole('status')).toHaveTextContent('Calculando recorrido')
+    expect(screen.getByRole('status')).toHaveTextContent('Calculando ruta')
   })
 
   it('renders a terminal, visible error for provider failures', () => {
@@ -53,7 +53,7 @@ describe('RoutePreview', () => {
       />
     )
 
-    expect(screen.getByRole('alert')).toHaveTextContent('El proveedor de rutas no está disponible')
+    expect(screen.getByRole('alert')).toHaveTextContent('Tuvimos inconvenientes a generar la ruta, por favor cerrar la ventana e intentar nuevamente')
   })
 
   it('falls back to the backend message for an unknown error code', () => {
@@ -66,7 +66,7 @@ describe('RoutePreview', () => {
       />
     )
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Mensaje del backend')
+    expect(screen.getByRole('alert')).toHaveTextContent('Tuvimos inconvenientes a generar la ruta, por favor cerrar la ventana e intentar nuevamente')
   })
 
   it('renders ordered stops, metrics, warnings and factors', () => {
@@ -79,6 +79,7 @@ describe('RoutePreview', () => {
     expect(screen.getByText('0,3 L')).toBeInTheDocument()
     expect(screen.getByText('2')).toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Secuencia de paradas' }))
     const stops = screen.getByRole('list', { name: 'Paradas del recorrido' })
     const orderedStops = within(stops).getAllByRole('listitem')
     expect(orderedStops).toHaveLength(2)
@@ -102,6 +103,7 @@ describe('RoutePreview', () => {
       />
     )
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Secuencia de paradas' }))
     expect(screen.getByRole('list', { name: 'Paradas del recorrido' })).toBeInTheDocument()
     expect(screen.getByText('3,5 km')).toBeInTheDocument()
     expect(
@@ -110,11 +112,10 @@ describe('RoutePreview', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('keeps metrics and the ordered list when the map is unavailable', () => {
+  it('keeps metrics and the map fallback available on the map tab', () => {
     render(<RoutePreview status="ready" preview={PREVIEW} />)
 
     expect(screen.getByText('3,5 km')).toBeInTheDocument()
-    expect(screen.getByRole('list', { name: 'Paradas del recorrido' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Mapa del recorrido' })).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent(/no está configurado/i)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -140,6 +141,7 @@ describe('RoutePreview', () => {
     )
 
     expect(screen.getByText('3,5 km')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Secuencia de paradas' }))
     expect(screen.getByRole('list', { name: 'Paradas del recorrido' })).toBeInTheDocument()
     expect(
       screen.getByText('Se muestra el recorrido como lista porque el mapa no está disponible.')
@@ -168,7 +170,7 @@ describe('RoutePreview', () => {
     render(<RoutePreview status="ready" preview={PREVIEW} />)
 
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['Mapa', 'Secuencia de paradas', 'Pedidos vinculados'])
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Mapa de la ruta', 'Secuencia de paradas', 'Pedidos vinculados'])
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
 
     fireEvent.click(tabs[2])
@@ -179,6 +181,7 @@ describe('RoutePreview', () => {
   it('announces unavailable arrival estimates without fabricating timing data', () => {
     render(<RoutePreview status="ready" preview={PREVIEW} />)
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Secuencia de paradas' }))
     expect(screen.getAllByText('No disponible').length).toBeGreaterThanOrEqual(PREVIEW.route.stops.length)
     expect(screen.queryByText(/ventana de servicio/i)).not.toBeInTheDocument()
   })

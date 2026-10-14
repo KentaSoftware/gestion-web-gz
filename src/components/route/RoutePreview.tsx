@@ -6,7 +6,7 @@ import {
   ROUTE_FACTOR_LABEL,
   ROUTE_PREVIEW_WARNING,
   ROUTE_PREVIEW_WARNING_LABEL,
-  routePreviewErrorMessage,
+  type RouteSaleReference,
   type RoutePreview as RoutePreviewData,
 } from '@/interfaces/routePlan.interface'
 import { RouteMap } from './RouteMap'
@@ -27,20 +27,22 @@ interface RoutePreviewProps {
 
 interface PreviewDashboardFields {
   stopEstimates?: readonly RouteStopEstimateLike[]
+  saleReferences?: readonly RouteSaleReference[]
 }
 
 interface RouteTabsProps {
   route: RoutePreviewData['route']
   estimates?: readonly RouteStopEstimateLike[]
+  saleReferences?: readonly RouteSaleReference[]
   depotName?: string
   stale?: boolean
   readWarnings?: readonly string[]
 }
 
-const RouteTabs = ({ route, estimates, depotName, stale = false, readWarnings = [] }: RouteTabsProps) => {
+const RouteTabs = ({ route, estimates, saleReferences, depotName, stale = false, readWarnings = [] }: RouteTabsProps) => {
   const [activeTab, setActiveTab] = useState('map')
   const tabs = [
-    { id: 'map', label: 'Mapa' },
+    { id: 'map', label: 'Mapa de la ruta' },
     { id: 'sequence', label: 'Secuencia de paradas' },
     { id: 'sales', label: 'Pedidos vinculados' },
   ]
@@ -67,7 +69,6 @@ const RouteTabs = ({ route, estimates, depotName, stale = false, readWarnings = 
       </div>
       <div role="tabpanel" id={panelId('map')} aria-labelledby="route-tab-map" hidden={activeTab !== 'map'} className="pt-4">
         <RouteMap route={route} />
-        <div className="mt-5"><RouteStopTimeline stops={route.stops as readonly RouteStopTimelineStop[]} estimates={estimates} depotName={depotName} /></div>
       </div>
       <div role="tabpanel" id={panelId('sequence')} aria-labelledby="route-tab-sequence" hidden={activeTab !== 'sequence'} className="pt-4">
         <RouteStopTimeline stops={route.stops as readonly RouteStopTimelineStop[]} estimates={estimates} depotName={depotName} />
@@ -75,7 +76,16 @@ const RouteTabs = ({ route, estimates, depotName, stale = false, readWarnings = 
       <div role="tabpanel" id={panelId('sales')} aria-labelledby="route-tab-sales" hidden={activeTab !== 'sales'} className="pt-4">
         <h4 className="text-sm font-semibold text-text-primary">Pedidos vinculados</h4>
         <ul aria-label="Pedidos vinculados" className="mt-3 flex flex-col gap-2">
-          {route.stops.flatMap((stop) => stop.saleIds).map((saleId) => <li key={saleId} className="rounded-md border border-border-subtle bg-background-subtle p-3 text-xs text-text-secondary">{saleId}</li>)}
+          {(saleReferences?.length
+            ? saleReferences.map((reference) => (
+                <li key={reference.saleId} className="rounded-md border border-border-subtle bg-background-subtle p-3 text-xs text-text-secondary">
+                  <span className="font-medium text-text-primary">{reference.saleId}</span>
+                  {reference.currentStatus && <span className="ml-2">Estado: {reference.currentStatus}</span>}
+                </li>
+              ))
+            : route.stops.flatMap((stop) => stop.saleIds).map((saleId) => (
+                <li key={saleId} className="rounded-md border border-border-subtle bg-background-subtle p-3 text-xs text-text-secondary">{saleId}</li>
+              )))}
         </ul>
       </div>
       {stale && <p role="status" className="mt-4 rounded-md border border-state-warning p-3 text-xs text-state-warning">Este snapshot está desactualizado y es de solo lectura. Para actualizarlo, generá una nueva ruta.</p>}
@@ -116,14 +126,14 @@ const factorLabel = (factor: string): string => ROUTE_FACTOR_LABEL[factor] ?? fa
  * hidden. The client must never reorder `route.stops`; the backend already
  * returns them in route order.
  */
-export function RoutePreview({ status, preview, errorCode, errorMessage }: RoutePreviewProps) {
+export function RoutePreview({ status, preview }: RoutePreviewProps) {
   if (status === 'idle') return null
 
   if (status === 'loading') {
     return (
-      <div role="status" aria-live="polite" className="flex items-center gap-3 text-text-secondary">
+        <div role="status" aria-live="polite" className="flex min-h-[38rem] items-center justify-center gap-3 text-text-secondary">
         <Loader2 className="size-5 animate-spin" aria-hidden="true" />
-        <span>Calculando recorrido…</span>
+        <span>Calculando ruta</span>
       </div>
     )
   }
@@ -132,9 +142,9 @@ export function RoutePreview({ status, preview, errorCode, errorMessage }: Route
     return (
       <div
         role="alert"
-        className="rounded-lg border border-state-error bg-surface-base p-4 text-sm text-state-error shadow-md"
+        className="flex min-h-[38rem] items-center justify-center rounded-lg border border-state-error bg-surface-base p-4 text-center text-sm text-state-error shadow-md"
       >
-        {routePreviewErrorMessage(errorCode, errorMessage ?? undefined)}
+        Tuvimos inconvenientes a generar la ruta, por favor cerrar la ventana e intentar nuevamente
       </div>
     )
   }
@@ -169,30 +179,35 @@ export function RoutePreview({ status, preview, errorCode, errorMessage }: Route
 
       <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-md border border-border-subtle bg-background-subtle p-3">
-          <dt className="text-xs text-text-secondary">Distancia</dt>
+          <dt className="text-xs text-text-secondary">Paradas / Clientes</dt>
+          <dd className="mt-0.5 text-sm font-medium text-text-primary">{preview.metrics.stopCount}</dd>
+        </div>
+        <div className="rounded-md border border-border-subtle bg-background-subtle p-3">
+          <dt className="text-xs text-text-secondary">Distancia total</dt>
           <dd className="mt-0.5 text-sm font-medium text-text-primary">
             {formatKilometers(preview.metrics.distanceMeters)}
           </dd>
         </div>
         <div className="rounded-md border border-border-subtle bg-background-subtle p-3">
-          <dt className="text-xs text-text-secondary">Duración</dt>
+          <dt className="text-xs text-text-secondary">Tiempo estimado</dt>
           <dd className="mt-0.5 text-sm font-medium text-text-primary">
             {formatDuration(preview.metrics.durationSeconds)}
           </dd>
         </div>
         <div className="rounded-md border border-border-subtle bg-background-subtle p-3">
-          <dt className="text-xs text-text-secondary">Paradas</dt>
-          <dd className="mt-0.5 text-sm font-medium text-text-primary">{preview.metrics.stopCount}</dd>
-        </div>
-        <div className="rounded-md border border-border-subtle bg-background-subtle p-3">
-          <dt className="text-xs text-text-secondary">Combustible</dt>
+          <dt className="text-xs text-text-secondary">Combustible estimado</dt>
           <dd className="mt-0.5 text-sm font-medium text-text-primary">
             {formatLiters(preview.metrics.fuelLiters)}
           </dd>
         </div>
       </dl>
 
-      <RouteTabs route={preview.route} estimates={dashboard.stopEstimates} depotName={preview.route.depot.name} />
+      <RouteTabs
+        route={preview.route}
+        estimates={dashboard.stopEstimates ?? preview.stopEstimates}
+        saleReferences={dashboard.saleReferences ?? preview.saleReferences}
+        depotName={preview.route.depot.name}
+      />
 
        {mapUnavailable && (
         <p className="mt-4 text-xs text-text-secondary">

@@ -90,9 +90,10 @@ const routePlanId = (plan: RoutePlan): string => {
 interface RoutePlannerProps {
   initialServiceDate?: string
   initialDeliveryZoneId?: string
+  onClose?: () => void
 }
 
-export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = '' }: RoutePlannerProps = {}) {
+export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = '', onClose }: RoutePlannerProps = {}) {
   const dateFieldId = useId()
   const zoneFieldId = useId()
   const selectionFieldId = useId()
@@ -376,7 +377,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
         </p>
       </div>}
 
-      {(!initialScopeIsValid || loadStatus === 'error') && <form
+      {previewStatus === 'idle' && (!initialScopeIsValid || loadStatus === 'error') && <form
         onSubmit={handleSubmit}
         noValidate
         className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md md:p-6"
@@ -477,7 +478,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
         </p>
       )}
 
-      {loadStatus === 'ready' && candidates !== null && !isEmpty && (
+      {previewStatus === 'idle' && loadStatus === 'ready' && candidates !== null && !isEmpty && (
         <div className="flex flex-col gap-4">
           <div className="grid gap-4 lg:grid-cols-[1.08fr_1fr]">
             <section aria-labelledby="pending-orders-title" className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md">
@@ -541,35 +542,13 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
               </div>
               {(!hasAssignments || selectedClientCount < 2) && <p role="status" className="text-sm text-text-secondary">Seleccioná un repartidor, un vehículo y al menos dos clientes aptos.</p>}
               <div className="flex flex-wrap items-center gap-3">
-                <Button type="button" onClick={() => void handlePreview()} disabled={previewStatus === 'loading' || isSaving || !canPreview}>
+                <Button type="button" onClick={() => void handlePreview()} disabled={isSaving || !canPreview}>
                   Generar ruta
                 </Button>
-                {hasValidPreview && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => void handleSave()}
-                    disabled={isSaving || !hasAssignments}
-                    aria-busy={isSaving}
-                  >
-                    Guardar plan
-                  </Button>
-                )}
                 <p className="text-xs text-text-secondary">
                    Se seleccionaron {selectedClientCount} clientes y {selectedSaleIds.length} pedidos aptos.
                 </p>
               </div>
-              {isSaving && (
-                <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-text-secondary">
-                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                  Guardando plan de ruta…
-                </p>
-              )}
-              {saveStatus === 'error' && (
-                <p role="alert" className="text-sm font-medium text-state-error">
-                  {routePlanErrorMessage(saveErrorCode, saveErrorMessage ?? undefined)}
-                </p>
-              )}
               {selectionError && (
                 <p role="alert" className="text-sm font-medium text-state-error">
                   {selectionError}
@@ -587,6 +566,33 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
         errorCode={previewErrorCode}
         errorMessage={previewErrorMessage}
       />
+
+      <footer className="flex flex-col-reverse items-stretch gap-3 border-t border-border-subtle pt-4 sm:flex-row sm:items-center sm:justify-end">
+        {saveStatus === 'error' && (
+          <p role="alert" className="mr-auto text-sm font-medium text-state-error">
+            {routePlanErrorMessage(saveErrorCode, saveErrorMessage ?? undefined)}
+          </p>
+        )}
+        <Button type="button" variant="secondary" onClick={onClose}>
+          Cancelar
+        </Button>
+        {hasValidPreview && (
+          <Button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={isSaving || !hasAssignments}
+            aria-busy={isSaving}
+          >
+            {isSaving ? 'Guardando plan…' : 'Confirmar y guardar'}
+          </Button>
+        )}
+        {isSaving && (
+          <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-text-secondary">
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            Guardando plan de ruta…
+          </p>
+        )}
+      </footer>
     </section>
   )
 }

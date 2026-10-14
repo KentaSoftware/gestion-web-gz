@@ -351,7 +351,7 @@ export interface RoutePreviewMetrics {
   distanceMeters: number
   durationSeconds: number
   stopCount: number
-  fuelLiters: number
+  fuelLiters: number | null
 }
 
 /**
@@ -368,6 +368,9 @@ export interface RoutePreview {
     encodedPolyline: string
   }
   metrics: RoutePreviewMetrics
+  /** Optional enrichment returned by newer preview responses. */
+  stopEstimates?: RouteStopEstimate[]
+  saleReferences?: RouteSaleReference[]
   warnings: string[]
   factorsConsidered: string[]
   algorithmVersion: string
