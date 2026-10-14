@@ -71,7 +71,7 @@ const SNAPSHOT: RoutePlan = {
   planningDate: '2026-10-04T03:00:00.000Z',
   zoneSnapshot: { code: 'NORTE', normalizedName: 'zona norte', name: 'Zona Norte' },
   selectedSaleIds: ['sale-1'],
-  depot: { name: 'Depósito Central', latitude: -34.6, longitude: -58.4 },
+  depot: { name: 'Depósito Central', address: 'Av. Central 123', latitude: -34.6, longitude: -58.4 },
   stops: [{ clientId: 'client-1', saleIds: ['sale-1'], sequence: 1, latitude: -34.61, longitude: -58.41 }],
   segments: [
     { fromStopSequence: 0, toStopSequence: 1, distanceMeters: 3500, durationSeconds: 900 },

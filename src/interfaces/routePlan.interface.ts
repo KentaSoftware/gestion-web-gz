@@ -208,6 +208,7 @@ export interface RouteDashboard {
 
 export interface RoutingDepot {
   name: string
+  address?: string
   latitude: number
   longitude: number
 }
@@ -327,6 +328,7 @@ export interface RoutePreviewErrorResponse {
 export interface RoutePreviewDepot {
   id: string
   name: string
+  address?: string
   latitude: number
   longitude: number
 }
@@ -408,6 +410,7 @@ export interface RoutePlanZoneSnapshot {
 /** Depot endpoint stored with a saved plan (always `deposito_1`). */
 export interface RoutePlanDepot {
   readonly name: string
+  readonly address?: string
   readonly latitude: number
   readonly longitude: number
 }

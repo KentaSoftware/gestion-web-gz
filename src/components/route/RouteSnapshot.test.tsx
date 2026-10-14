@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { RoutePlan } from '@/interfaces/routePlan.interface'
 import { RouteSnapshot } from './RouteSnapshot'
@@ -13,7 +13,7 @@ const SNAPSHOT: RoutePlan = {
   planningDate: '2026-10-04T03:00:00.000Z',
   zoneSnapshot: { code: 'NORTE', normalizedName: 'zona norte', name: 'Zona Norte' },
   selectedSaleIds: ['sale-1', 'sale-2', 'sale-3'],
-  depot: { name: 'Depósito Central', latitude: -34.6, longitude: -58.4 },
+    depot: { name: 'Depósito Central', address: 'Av. Central 123', latitude: -34.6, longitude: -58.4 },
   stops: [
     { clientId: 'client-1', saleIds: ['sale-1', 'sale-2'], sequence: 1, latitude: -34.61, longitude: -58.41 },
     { clientId: 'client-2', saleIds: ['sale-3'], sequence: 2, latitude: -34.62, longitude: -58.42 },
@@ -54,14 +54,17 @@ describe('RouteSnapshot', () => {
   it('preserves the server stop order and sale grouping', () => {
     render(<RouteSnapshot snapshot={SNAPSHOT} />)
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Secuencia de paradas' }))
     const stops = screen.getByRole('list', { name: 'Paradas del recorrido' })
     const orderedStops = within(stops).getAllByRole('listitem')
-    expect(orderedStops).toHaveLength(2)
-    expect(orderedStops[0]).toHaveTextContent('Parada 1')
-    expect(orderedStops[0]).toHaveTextContent('2 ventas')
-    expect(orderedStops[0]).toHaveTextContent('client-1')
-    expect(orderedStops[1]).toHaveTextContent('Parada 2')
-    expect(orderedStops[1]).toHaveTextContent('1 venta')
+    expect(orderedStops).toHaveLength(3)
+    expect(orderedStops[0]).toHaveTextContent('Depósito Central')
+    expect(orderedStops[0]).toHaveTextContent('Av. Central 123')
+    expect(orderedStops[1]).toHaveTextContent('Parada 1')
+    expect(orderedStops[1]).toHaveTextContent('2 pedidos')
+    expect(orderedStops[1]).toHaveTextContent('client-1')
+    expect(orderedStops[2]).toHaveTextContent('Parada 2')
+    expect(orderedStops[2]).toHaveTextContent('1 pedido')
   })
 
   it('renders the stored warnings', () => {
@@ -73,6 +76,7 @@ describe('RouteSnapshot', () => {
   it('keeps MAP_UNAVAILABLE non-terminal and still renders the ordered fallback list', () => {
     render(<RouteSnapshot snapshot={{ ...SNAPSHOT, warnings: ['MAP_UNAVAILABLE'] }} />)
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Secuencia de paradas' }))
     expect(screen.getByRole('list', { name: 'Paradas del recorrido' })).toBeInTheDocument()
     expect(
       screen.getByText('La visualización en mapa no está disponible. Se muestra el recorrido como lista.')
@@ -83,9 +87,15 @@ describe('RouteSnapshot', () => {
   it('renders the map fallback without a configured API key and keeps the stop list', () => {
     render(<RouteSnapshot snapshot={SNAPSHOT} />)
 
-    expect(screen.getByRole('heading', { name: 'Mapa del recorrido' })).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent(/no está configurado/i)
+    fireEvent.click(screen.getByRole('tab', { name: 'Secuencia de paradas' }))
     expect(screen.getByRole('list', { name: 'Paradas del recorrido' })).toBeInTheDocument()
+  })
+
+  it('uses the unavailable address fallback for legacy snapshots', () => {
+    render(<RouteSnapshot snapshot={{ ...SNAPSHOT, depot: { ...SNAPSHOT.depot, address: undefined } }} />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Secuencia de paradas' }))
+    expect(screen.getAllByText(/Dirección no disponible/).length).toBeGreaterThan(0)
   })
 
   it('falls back to the raw value when a stored date is invalid', () => {

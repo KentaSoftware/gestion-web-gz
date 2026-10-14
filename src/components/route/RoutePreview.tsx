@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import {
+  type CandidateEntry,
   type RouteSaleReference,
   type RoutePreview as RoutePreviewData,
 } from '@/interfaces/routePlan.interface'
@@ -20,6 +21,8 @@ interface RoutePreviewProps {
   errorCode?: string | null
   /** Backend message, used as a fallback for unknown error codes. */
   errorMessage?: string | null
+  /** Candidate data already loaded by the planner, used for stop labels. */
+  candidateEntries?: readonly CandidateEntry[]
 }
 
 interface PreviewDashboardFields {
@@ -32,11 +35,13 @@ interface RouteTabsProps {
   estimates?: readonly RouteStopEstimateLike[]
   saleReferences?: readonly RouteSaleReference[]
   depotName?: string
+  depotAddress?: string
+  candidateEntries?: readonly CandidateEntry[]
   stale?: boolean
   readWarnings?: readonly string[]
 }
 
-const RouteTabs = ({ route, estimates, saleReferences, depotName, stale = false, readWarnings = [] }: RouteTabsProps) => {
+const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, candidateEntries = [], stale = false, readWarnings = [] }: RouteTabsProps) => {
   const [activeTab, setActiveTab] = useState('map')
   const tabs = [
     { id: 'map', label: 'Mapa de la ruta' },
@@ -68,7 +73,15 @@ const RouteTabs = ({ route, estimates, saleReferences, depotName, stale = false,
         <RouteMap route={route} minimal />
       </div>
       <div role="tabpanel" id={panelId('sequence')} aria-labelledby="route-tab-sequence" hidden={activeTab !== 'sequence'} className="pt-4">
-        <RouteStopTimeline stops={route.stops as readonly RouteStopTimelineStop[]} estimates={estimates} depotName={depotName} />
+        <RouteStopTimeline
+          stops={route.stops.map((stop) => {
+            const candidate = candidateEntries.find((entry) => entry.clientId === stop.clientId || stop.saleIds.includes(entry.saleId))
+            return { ...stop, displayName: candidate?.displayName, addressSummary: candidate?.addressSummary }
+          }) as readonly RouteStopTimelineStop[]}
+          segments={route.segments}
+          estimates={estimates}
+          depot={{ name: depotName ?? route.depot.name, address: depotAddress ?? route.depot.address }}
+        />
       </div>
       <div role="tabpanel" id={panelId('sales')} aria-labelledby="route-tab-sales" hidden={activeTab !== 'sales'} className="pt-4">
         <h4 className="text-sm font-semibold text-text-primary">Pedidos vinculados</h4>
@@ -119,7 +132,7 @@ const formatLiters = (liters: number | null): string => liters === null ? 'No di
  * hidden. The client must never reorder `route.stops`; the backend already
  * returns them in route order.
  */
-export function RoutePreview({ status, preview }: RoutePreviewProps) {
+export function RoutePreview({ status, preview, candidateEntries = [] }: RoutePreviewProps) {
   if (status === 'idle') return null
 
   if (status === 'loading') {
@@ -199,6 +212,8 @@ export function RoutePreview({ status, preview }: RoutePreviewProps) {
         estimates={dashboard.stopEstimates ?? preview.stopEstimates}
         saleReferences={dashboard.saleReferences ?? preview.saleReferences}
         depotName={preview.route.depot.name}
+        depotAddress={preview.route.depot.address}
+        candidateEntries={candidateEntries}
       />
     </section>
   )

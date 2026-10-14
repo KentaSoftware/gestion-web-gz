@@ -73,6 +73,7 @@ const toPreviewRoute = (snapshot: RoutePlan): RoutePreview['route'] => {
     depot: {
       id: 'deposito_1',
       name: snapshot.depot.name,
+        address: snapshot.depot.address,
       latitude: snapshot.depot.latitude,
       longitude: snapshot.depot.longitude,
     },
@@ -192,7 +193,8 @@ export function RouteSnapshot({ snapshot }: RouteSnapshotProps) {
        <RouteTabs
          route={toPreviewRoute(snapshot)}
          estimates={dashboard.stopEstimates}
-         depotName={snapshot.depot.name}
+          depotName={snapshot.depot.name}
+          depotAddress={snapshot.depot.address}
          stale={dashboard.staleness?.stale === true}
          readWarnings={dashboard.readWarnings}
        />

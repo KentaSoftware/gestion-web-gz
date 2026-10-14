@@ -565,6 +565,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
         preview={previewData}
         errorCode={previewErrorCode}
         errorMessage={previewErrorMessage}
+        candidateEntries={candidates?.eligible}
       />
 
       <footer className="flex flex-col-reverse items-stretch gap-3 border-t border-border-subtle pt-4 sm:flex-row sm:items-center sm:justify-end">

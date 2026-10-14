@@ -118,13 +118,13 @@ export function RouteDashboard({ onGenerateRoutes }: RouteDashboardProps = {}) {
   }
   const selectedRoutePreview: RoutePreview['route'] | null = selectedRoute?.depot && selectedRoute.stops
     ? {
-        depot: { id: 'deposito_1', ...selectedRoute.depot },
-        stops: selectedRoute.stops.map((stop) => ({
-          clientId: stop.clientId,
-          saleIds: [...stop.saleIds],
-          latitude: stop.latitude,
-          longitude: stop.longitude,
-        })),
+         depot: { id: 'deposito_1', ...selectedRoute.depot },
+         stops: selectedRoute.stops.map((stop) => ({
+           clientId: stop.clientId,
+           saleIds: [...stop.saleIds],
+           latitude: stop.latitude,
+           longitude: stop.longitude,
+         })),
         segments: (selectedRoute.segments ?? []).map((segment) => ({
           fromId: segment.fromStopSequence === 0 ? 'deposito_1' : selectedRoute.stops?.find((stop) => stop.sequence === segment.fromStopSequence)?.clientId ?? 'deposito_1',
           toId: segment.toStopSequence === 0 ? 'deposito_1' : selectedRoute.stops?.find((stop) => stop.sequence === segment.toStopSequence)?.clientId ?? 'deposito_1',
@@ -326,7 +326,7 @@ export function RouteDashboard({ onGenerateRoutes }: RouteDashboardProps = {}) {
                     <div><dt className="text-text-secondary">Combustible</dt><dd>{selectedRoute.metrics.fuelLiters === null ? 'No disponible' : `${selectedRoute.metrics.fuelLiters.toLocaleString('es-AR')} L`}</dd></div>
                     <div><dt className="text-text-secondary">Paradas/clientes</dt><dd>{selectedRoute.clientCount}</dd></div>
                   </dl>
-                  {selectedRoutePreview !== null ? <div className="mt-5"><RouteStopTimeline stops={selectedRoutePreview.stops as readonly RouteStopTimelineStop[]} estimates={selectedRoute.stopEstimates} depotName={selectedRoute.depot?.name} /></div> : <ul className="mt-3 flex flex-col gap-2">{selectedRoute.selectedSaleIds.map((saleId, index) => <li key={saleId} className="rounded-md border border-border-subtle p-3 text-sm text-text-secondary">Parada {index + 1}: {saleId}</li>)}</ul>}
+                   {selectedRoutePreview !== null ? <div className="mt-5"><RouteStopTimeline stops={selectedRoutePreview.stops.map((stop) => { const candidate = dashboard.candidates.eligible.find((entry) => entry.clientId === stop.clientId || stop.saleIds.includes(entry.saleId)); return { ...stop, displayName: candidate?.displayName, addressSummary: candidate?.addressSummary } }) as readonly RouteStopTimelineStop[]} segments={selectedRoutePreview.segments} estimates={selectedRoute.stopEstimates} depot={{ name: selectedRoute.depot?.name ?? 'el depósito', address: selectedRoute.depot?.address }} /></div> : <ul className="mt-3 flex flex-col gap-2">{selectedRoute.selectedSaleIds.map((saleId, index) => <li key={saleId} className="rounded-md border border-border-subtle p-3 text-sm text-text-secondary">Parada {index + 1}: {saleId}</li>)}</ul>}
                   {selectedRoute.saleReferences && selectedRoute.saleReferences.length > 0 && <p className="mt-3 text-xs text-text-secondary">Pedidos vinculados: {selectedRoute.saleReferences.map((reference) => reference.saleId).join(', ')}</p>}
                   {selectedRoute.metrics.fuelLiters === null && <p role="status" className="mt-3 text-sm text-state-warning">Litros de combustible no disponibles: falta el consumo del vehículo asignado.</p>}
                   {selectedRoute.stopEstimates === undefined && <p role="status" className="mt-3 text-sm text-state-warning">Horarios estimados no disponibles para esta ruta.</p>}
