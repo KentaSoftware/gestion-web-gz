@@ -359,7 +359,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
             return <div title={reasonText} className="line-clamp-1 text-state-error">{reasonText}</div>
           })()}
         </td>
-        <td className="px-3 py-1 align-middle text-sm text-text-secondary">{orderCount} {orderCount === 1 ? 'pedido' : 'pedidos'}</td>
+        <td className="whitespace-nowrap px-3 py-1 align-middle text-sm text-text-secondary">{orderCount} {orderCount === 1 ? 'pedido' : 'pedidos'}</td>
         <td className={isBlocked ? 'px-3 py-1 align-middle text-xs font-medium text-state-error' : 'px-3 py-1 align-middle text-xs font-medium text-state-success'}>{isBlocked ? 'Bloqueado' : 'Apto'}</td>
       </tr>
     )
@@ -491,8 +491,8 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
                     <col className="w-10" />
                     <col className="w-[30%]" />
                     <col className="w-[42%]" />
-                    <col className="w-[13%]" />
                     <col className="w-[15%]" />
+                    <col className="w-[13%]" />
                   </colgroup>
                   <thead className="border-b border-border-subtle text-xs text-text-secondary">
                     <tr className="h-10">
