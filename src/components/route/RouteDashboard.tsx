@@ -201,7 +201,7 @@ export function RouteDashboard({ onGenerateRoutes }: RouteDashboardProps = {}) {
                     {zones.map((zone) => <option key={zone._id} value={zone._id}>{zone.name}</option>)}
                   </select>
                 </div>
-                <Button type="button" onClick={() => onGenerateRoutes?.(serviceDate, deliveryZoneId)}>Generar rutas</Button>
+                 <Button type="button" disabled={serviceDate === '' || deliveryZoneId === ''} onClick={() => onGenerateRoutes?.(serviceDate, deliveryZoneId)}>Generar rutas</Button>
               </div>
               {zoneStatus === 'loading' && <p role="status" className="mt-3 text-sm text-text-secondary">Cargando zonas…</p>}
               {zoneStatus === 'error' && (

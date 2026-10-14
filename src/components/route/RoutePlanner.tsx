@@ -7,18 +7,19 @@ import { routePlanService } from '@/services/routePlan.service'
 import type {
   CandidateEntry,
   CandidateResult,
+  BlockedCandidateEntry,
+  CandidateBlockReason,
   DeliveryZone,
   RouteAssignmentOptions,
   RoutePlan,
   RoutePreview as RoutePreviewData,
   RoutePreviewErrorResponse,
 } from '@/interfaces/routePlan.interface'
-import { routePlanErrorMessage } from '@/interfaces/routePlan.interface'
+import { CANDIDATE_BLOCK_REASON_LABEL, routePlanErrorMessage } from '@/interfaces/routePlan.interface'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { BlockedDestinations } from './BlockedDestinations'
 import { RoutePreview, type RoutePreviewStatus } from './RoutePreview'
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -27,6 +28,17 @@ type SaveStatus = 'idle' | 'saving' | 'error'
 
 const CIVIL_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const OBJECT_ID_PATTERN = /^[a-fA-F0-9]{24}$/
+
+interface CandidateGroup {
+  key: string
+  clientId?: string
+  displayName: string
+  addressSummary?: string
+  eligible: CandidateEntry[]
+  blocked: CandidateEntry[]
+  reasons: CandidateBlockReason[]
+  zoneMismatch: boolean
+}
 
 /** True only for a real `YYYY-MM-DD` civil date, mirroring the backend schema. */
 const isValidCivilDate = (value: string): boolean => {
@@ -107,6 +119,8 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
   const [saveErrorCode, setSaveErrorCode] = useState<string | null>(null)
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null)
 
+  const initialScopeIsValid = isValidCivilDate(initialServiceDate) && OBJECT_ID_PATTERN.test(initialDeliveryZoneId)
+
   const loadZones = useCallback(async () => {
     setZoneStatus('loading')
     try {
@@ -141,16 +155,20 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    await loadCandidates()
+  }
+
+  const loadCandidates = useCallback(async () => {
     setValidationError(null)
 
     if (!isValidCivilDate(serviceDate)) {
       setValidationError('Seleccioná una fecha de reparto válida.')
-      return
+      return false
     }
 
     if (!OBJECT_ID_PATTERN.test(deliveryZoneId)) {
       setValidationError('Seleccioná una zona de entrega.')
-      return
+      return false
     }
 
     resetPreview()
@@ -159,19 +177,57 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
     setLoadStatus('loading')
     try {
       const result = await routePlanService.getCandidates({ serviceDate, deliveryZoneId })
+      if (result === undefined) throw new Error('Candidates response was empty')
       setCandidates(result)
       setLoadStatus('ready')
+      return true
     } catch {
       setLoadError('No se pudieron cargar los candidatos. Intentá nuevamente.')
       setLoadStatus('error')
+      return false
     }
+  }, [deliveryZoneId, resetPreview, serviceDate])
+
+  useEffect(() => {
+    if (!initialScopeIsValid) return
+    void loadCandidates()
+  }, [initialScopeIsValid, loadCandidates])
+
+  const candidateGroups = (result: CandidateResult | null): CandidateGroup[] => {
+    if (result === null) return []
+    const groups = new Map<string, CandidateGroup>()
+    const add = (candidate: CandidateEntry | BlockedCandidateEntry, blocked: boolean) => {
+      const fallback = `missing:${candidate.displayName ?? 'cliente'}:${candidate.addressSummary ?? candidate.saleId}`
+      const key = candidate.clientId !== undefined && candidate.clientId !== '' ? candidate.clientId : fallback
+      const current = groups.get(key) ?? {
+        key,
+        clientId: candidate.clientId,
+        displayName: candidate.displayName ?? 'Cliente sin identificar',
+        addressSummary: candidate.addressSummary,
+        eligible: [],
+        blocked: [],
+        reasons: [],
+        zoneMismatch: false,
+      }
+      if (blocked) {
+        current.blocked.push(candidate)
+        const reasons = 'reasons' in candidate ? candidate.reasons : []
+        current.reasons = Array.from(new Set<CandidateBlockReason>([...current.reasons, ...reasons]))
+        current.zoneMismatch = current.zoneMismatch || reasons.includes('CLIENT_ZONE_MISMATCH')
+      } else current.eligible.push(candidate)
+      groups.set(key, current)
+    }
+    result.eligible.forEach((candidate) => add(candidate, false))
+    result.blocked.forEach((candidate) => add(candidate, true))
+    return Array.from(groups.values())
   }
 
-  const toggleSale = (saleId: string, checked: boolean) => {
+  const toggleClient = (group: CandidateGroup, checked: boolean) => {
     setSelectionError(null)
     setSelectedSaleIds((previous) => {
-      if (checked) return previous.includes(saleId) ? previous : [...previous, saleId]
-      return previous.filter((id) => id !== saleId)
+      const saleIds = group.eligible.map((candidate) => candidate.saleId)
+      if (checked) return Array.from(new Set<string>([...previous, ...saleIds]))
+      return previous.filter((id) => !saleIds.includes(id))
     })
   }
 
@@ -191,8 +247,11 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
     setSaveErrorCode(null)
     setSaveErrorMessage(null)
 
-    if (selectedSaleIds.length === 0) {
-      setSelectionError('Seleccioná al menos una parada para calcular el recorrido.')
+    const selectedClientCount = candidateGroups(candidates).filter((group) =>
+      group.eligible.some((candidate) => selectedSaleIds.includes(candidate.saleId))
+    ).length
+    if (selectedClientCount < 2) {
+      setSelectionError('Seleccioná al menos dos clientes elegibles para calcular el recorrido.')
       return
     }
 
@@ -247,6 +306,9 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
   const isLoading = loadStatus === 'loading'
   const isEmpty =
     candidates !== null && candidates.eligible.length === 0 && candidates.blocked.length === 0
+  const groups = candidateGroups(candidates)
+  const eligibleGroups = groups.filter((group) => group.eligible.length > 0)
+  const selectedClientCount = eligibleGroups.filter((group) => group.eligible.some((candidate) => selectedSaleIds.includes(candidate.saleId))).length
   const allEligibleSelected =
     candidates !== null &&
     candidates.eligible.length > 0 &&
@@ -255,29 +317,28 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
   const hasValidPreview = previewStatus === 'ready' && previewData !== null && selectedSaleIds.length > 0
   const isSaving = saveStatus === 'saving'
   const hasAssignments = driverId !== '' && vehicleId !== ''
+  const canPreview = hasAssignments && selectedClientCount >= 2
+  const selectedZoneName = zones.find((zone) => zone._id === deliveryZoneId)?.name ?? 'Otra zona'
 
-  const eligibleCheckbox = (candidate: CandidateEntry) => {
-    const checked = selectedSaleIds.includes(candidate.saleId)
-    const name = candidate.displayName ?? candidate.saleId
-    const id = `${selectionFieldId}-${candidate.saleId}`
+  const renderCandidateGroup = (group: CandidateGroup) => {
+    const checked = group.eligible.length > 0 && group.eligible.every((candidate) => selectedSaleIds.includes(candidate.saleId))
+    const id = `${selectionFieldId}-${group.key.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+    const isBlocked = group.eligible.length === 0
     return (
       <li
-        key={candidate.saleId}
-        className="flex items-start gap-3 rounded-md border border-border-subtle bg-background-subtle p-3"
+        key={group.key}
+        className="rounded-md border border-border-subtle bg-background-subtle p-3"
       >
-        <Checkbox
-          id={id}
-          className="mt-0.5"
-          checked={checked}
-          aria-label={name}
-          onCheckedChange={(value) => toggleSale(candidate.saleId, value === true)}
-        />
-        <Label htmlFor={id} className="flex flex-1 cursor-pointer flex-col items-start gap-0.5">
-          <span className="text-sm font-medium text-text-primary">{name}</span>
-          {candidate.addressSummary && (
-            <span className="text-xs font-normal text-text-secondary">{candidate.addressSummary}</span>
-          )}
-        </Label>
+        <div className="flex items-start gap-3">
+          <Checkbox id={id} className="mt-0.5" checked={checked} disabled={isBlocked} aria-label={group.displayName} onCheckedChange={(value) => toggleClient(group, value === true)} />
+          <Label htmlFor={id} className="flex flex-1 cursor-pointer flex-col items-start gap-0.5">
+            <span className="text-sm font-medium text-text-primary">{group.displayName}</span>
+            <span className="text-xs font-normal text-text-secondary">{group.addressSummary ?? 'Dirección no disponible'}</span>
+            <span className="text-xs text-text-secondary">{group.zoneMismatch ? 'Otra zona' : selectedZoneName} · {group.eligible.length + group.blocked.length} {group.eligible.length + group.blocked.length === 1 ? 'pedido pendiente' : 'pedidos pendientes'}</span>
+          </Label>
+          <span className={isBlocked ? 'text-xs font-medium text-state-error' : 'text-xs font-medium text-state-success'}>{isBlocked ? 'Bloqueado' : 'Apto'}</span>
+        </div>
+        {group.reasons.length > 0 && <ul className="mt-2 list-disc pl-8 text-xs text-state-error">{group.reasons.map((reason) => <li key={reason}>{CANDIDATE_BLOCK_REASON_LABEL[reason] ?? reason}</li>)}</ul>}
       </li>
     )
   }
@@ -289,11 +350,11 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
           Planificación de rutas
         </h2>
         <p className="mt-1 text-label text-text-secondary">
-          Seleccioná una fecha y una zona para revisar los candidatos.
+           Seleccioná pedidos aptos y asigná los recursos de la ruta.
         </p>
       </div>
 
-      <form
+      {(!initialScopeIsValid || loadStatus === 'error') && <form
         onSubmit={handleSubmit}
         noValidate
         className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md md:p-6"
@@ -357,7 +418,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
         )}
 
         <div className="mt-4">
-          <Button type="submit" disabled={isLoading || zoneStatus !== 'ready'}>
+           <Button type="submit" disabled={isLoading || zoneStatus !== 'ready'}>
             {isLoading ? 'Cargando…' : 'Cargar candidatos'}
           </Button>
         </div>
@@ -367,7 +428,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
             {validationError}
           </p>
         )}
-      </form>
+      </form>}
 
       {isLoading && (
         <div role="status" aria-live="polite" className="flex items-center gap-3 text-text-secondary">
@@ -397,19 +458,13 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
       {loadStatus === 'ready' && candidates !== null && !isEmpty && (
         <div className="flex flex-col gap-4">
           <div className="grid gap-4 lg:grid-cols-2">
-            <section
-              aria-labelledby="eligible-destinations-title"
-              className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md"
-            >
-              <h3 id="eligible-destinations-title" className="text-sm font-semibold text-brand-primary">
-                Destinos elegibles ({candidates.eligible.length})
-              </h3>
+            <section aria-labelledby="pending-orders-title" className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md">
+              <h3 id="pending-orders-title" className="text-sm font-semibold text-brand-primary">Pedidos pendientes</h3>
               <p className="mt-1 text-xs text-text-secondary">
-                Seleccioná las ventas a incluir en el recorrido. Las ventas del mismo cliente se agrupan en
-                una sola parada.
+                Seleccioná clientes. Todos sus pedidos aptos se incluirán en una sola parada.
               </p>
-              <ul className="mt-3 flex flex-col gap-2" aria-label="Destinos elegibles">
-                {candidates.eligible.map(eligibleCheckbox)}
+              <ul className="mt-3 flex flex-col gap-2" aria-label="Pedidos pendientes">
+                {groups.map(renderCandidateGroup)}
               </ul>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
@@ -432,20 +487,17 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
                 </Button>
               </div>
             </section>
-
-            <BlockedDestinations candidates={candidates.blocked} />
-          </div>
-
-          <div className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md">
+          <section aria-labelledby="route-configuration-title" className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md">
+            <h3 id="route-configuration-title" className="text-sm font-semibold text-brand-primary">Configuración de la ruta</h3>
             <div className="flex flex-col gap-3">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="flex flex-col gap-2"><Label htmlFor="route-driver">Repartidor</Label><select id="route-driver" value={driverId} onChange={(event) => setDriverId(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un repartidor</option>{assignmentOptions.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.nickname}</option>)}</select></div>
                 <div className="flex flex-col gap-2"><Label htmlFor="route-vehicle">Vehículo</Label><select id="route-vehicle" value={vehicleId} onChange={(event) => setVehicleId(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un vehículo</option>{assignmentOptions.vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.code} · {vehicle.fuelConsumptionLitersPer100Km} L/100 km</option>)}</select></div>
               </div>
-              {!hasAssignments && <p role="status" className="text-sm text-text-secondary">Seleccioná un repartidor y un vehículo para habilitar la planificación.</p>}
+              {(!hasAssignments || selectedClientCount < 2) && <p role="status" className="text-sm text-text-secondary">Seleccioná un repartidor, un vehículo y al menos dos clientes aptos.</p>}
               <div className="flex flex-wrap items-center gap-3">
-                <Button type="button" onClick={() => void handlePreview()} disabled={previewStatus === 'loading' || isSaving || !hasAssignments}>
-                  Calcular recorrido
+                <Button type="button" onClick={() => void handlePreview()} disabled={previewStatus === 'loading' || isSaving || !canPreview}>
+                  Generar ruta
                 </Button>
                 {hasValidPreview && (
                   <Button
@@ -459,7 +511,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
                   </Button>
                 )}
                 <p className="text-xs text-text-secondary">
-                  Se seleccionaron {selectedSaleIds.length} de {candidates.eligible.length} ventas elegibles.
+                   Se seleccionaron {selectedClientCount} clientes y {selectedSaleIds.length} pedidos aptos.
                 </p>
               </div>
               {isSaving && (
@@ -479,6 +531,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
                 </p>
               )}
             </div>
+          </section>
           </div>
         </div>
       )}

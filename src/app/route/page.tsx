@@ -37,9 +37,9 @@ function RoutePlanningContent() {
       <Dialog open={plannerOpen} onOpenChange={setPlannerOpen}>
         <DialogContent className="max-h-[calc(100vh-2rem)] max-w-5xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Planificación de rutas</DialogTitle>
-            <DialogDescription>
-              Seleccioná los pedidos y revisá el recorrido antes de guardar el plan.
+           <DialogTitle>Generador de ruta optimizada</DialogTitle>
+           <DialogDescription>
+             Seleccioná clientes aptos, asigná los recursos y revisá el recorrido antes de guardar el plan.
             </DialogDescription>
           </DialogHeader>
           {plannerOpen && <RoutePlanner initialServiceDate={plannerDefaults.serviceDate} initialDeliveryZoneId={plannerDefaults.deliveryZoneId} />}

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route } from 'lucide-react'
 import { SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
 
-const { useSessionAccess, usePermission, push, isModuleEnabled, moduleFlags, getActiveDeliveryZones, getDashboard } = vi.hoisted(() => ({
+const { useSessionAccess, usePermission, push, isModuleEnabled, moduleFlags, getActiveDeliveryZones, getDashboard, getCandidates } = vi.hoisted(() => ({
   useSessionAccess: vi.fn(),
   usePermission: vi.fn(),
   push: vi.fn(),
@@ -11,6 +11,7 @@ const { useSessionAccess, usePermission, push, isModuleEnabled, moduleFlags, get
   moduleFlags: { route: true, stock: false, finance: false, simulation: false } as Record<string, boolean>,
   getActiveDeliveryZones: vi.fn(),
   getDashboard: vi.fn(),
+  getCandidates: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({
@@ -41,7 +42,7 @@ vi.mock('@/services/routePlan.service', () => ({
     getActiveDeliveryZones,
     getDashboard,
     getAssignmentOptions: vi.fn().mockResolvedValue({ drivers: [], vehicles: [] }),
-    getCandidates: vi.fn(),
+     getCandidates,
   },
 }))
 
@@ -67,6 +68,7 @@ describe('RouteScreen', () => {
       candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' },
       warnings: [],
     })
+    getCandidates.mockResolvedValue({ eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' })
   })
 
   it('renders the route dashboard without a standalone page header or planner section', async () => {
@@ -78,23 +80,25 @@ describe('RouteScreen', () => {
     expect(screen.queryByRole('button', { name: 'Actualizar' })).not.toBeInTheDocument()
   })
 
-  it('opens the planner dialog with empty planner scope and closes it', async () => {
+  it('opens the planner dialog only after the dashboard scope is complete', async () => {
     render(<RouteScreen />)
 
     const generateButton = await screen.findByRole('button', { name: 'Generar rutas' })
+    expect(generateButton).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Fecha de servicio'), { target: { value: '2026-10-15' } })
+    fireEvent.change(screen.getByLabelText('Zona de entrega'), { target: { value: 'a'.repeat(24) } })
     await waitFor(() => expect(generateButton).toBeEnabled())
     generateButton.click()
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     const dialog = screen.getByRole('dialog')
-    expect(within(dialog).getByText('Seleccioná los pedidos y revisá el recorrido antes de guardar el plan.')).toBeInTheDocument()
-    expect(within(dialog).getByLabelText('Fecha de reparto')).toHaveValue('')
-    expect(within(dialog).getByLabelText('Zona de entrega')).toHaveValue('')
+    expect(within(dialog).getByText('Seleccioná clientes aptos, asigná los recursos y revisá el recorrido antes de guardar el plan.')).toBeInTheDocument()
+    expect(await within(dialog).findByRole('status')).toHaveTextContent('No hay candidatos')
 
     screen.getByRole('button', { name: 'Close' }).click()
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-      expect(screen.queryByLabelText('Fecha de reparto')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
   })
 
@@ -109,8 +113,8 @@ describe('RouteScreen', () => {
     screen.getByRole('button', { name: 'Generar rutas' }).click()
 
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByLabelText('Fecha de reparto')).toHaveValue('2026-10-15')
-    expect(within(dialog).getByLabelText('Zona de entrega')).toHaveValue('a'.repeat(24))
+    expect(await within(dialog).findByRole('status')).toHaveTextContent('No hay candidatos')
+    expect(getCandidates).toHaveBeenCalledWith({ serviceDate: '2026-10-15', deliveryZoneId: 'a'.repeat(24) })
   })
 
   it('announces loading while the session is hydrating', () => {

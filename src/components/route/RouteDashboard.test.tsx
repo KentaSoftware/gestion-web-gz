@@ -138,9 +138,10 @@ describe('RouteDashboard selected-route detail', () => {
     const onGenerateRoutes = vi.fn()
     render(<RouteDashboard onGenerateRoutes={onGenerateRoutes} />)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Generar rutas' })).toBeEnabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Generar rutas' })).toBeDisabled())
     fireEvent.change(screen.getByLabelText('Fecha de servicio'), { target: { value: '2026-10-15' } })
     fireEvent.change(screen.getByLabelText('Zona de entrega'), { target: { value: 'zone-1' } })
+    expect(screen.getByRole('button', { name: 'Generar rutas' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: 'Generar rutas' }))
 
     expect(onGenerateRoutes).toHaveBeenCalledWith('2026-10-15', 'zone-1')

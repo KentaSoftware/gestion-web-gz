@@ -1,458 +1,334 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RoutePreview as RoutePreviewData } from '@/interfaces/routePlan.interface'
 
 const { getActiveDeliveryZones, getCandidates, getAssignmentOptions, preview, save, push } = vi.hoisted(() => ({
-  getActiveDeliveryZones: vi.fn(),
-  getCandidates: vi.fn(),
-  getAssignmentOptions: vi.fn(),
-  preview: vi.fn(),
-  save: vi.fn(),
-  push: vi.fn(),
+  getActiveDeliveryZones: vi.fn(), getCandidates: vi.fn(), getAssignmentOptions: vi.fn(), preview: vi.fn(), save: vi.fn(), push: vi.fn(),
 }))
 
-vi.mock('@/services/routePlan.service', () => ({
-  routePlanService: { getActiveDeliveryZones, getCandidates, getAssignmentOptions, preview, save },
-}))
-
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push }),
-}))
+vi.mock('@/services/routePlan.service', () => ({ routePlanService: { getActiveDeliveryZones, getCandidates, getAssignmentOptions, preview, save } }))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }))
 
 import { RoutePlanner } from './RoutePlanner'
 
-const ZONE_A = 'a'.repeat(24)
-const ZONE_B = 'b'.repeat(24)
-const SALE_ID = 'c'.repeat(24)
-const CLIENT_ID = 'd'.repeat(24)
+const ZONE_ID = 'a'.repeat(24)
+const CLIENT_A = 'b'.repeat(24)
+const CLIENT_B = 'c'.repeat(24)
+const SALE_A1 = 'd'.repeat(24)
+const SALE_A2 = 'e'.repeat(24)
+const SALE_B1 = 'f'.repeat(24)
 
-const zoneA = { _id: ZONE_A, code: 'NORTE', name: 'Zona Norte', active: true }
-const zoneB = { _id: ZONE_B, code: 'SUR', name: 'Zona Sur', active: true }
-
-const ELIGIBLE_A = {
-  saleId: SALE_ID,
-  clientId: CLIENT_ID,
-  displayName: 'Almacén Sur',
-  addressSummary: 'Av. Siempre Viva 742',
-}
-const ELIGIBLE_B = {
-  saleId: 'e'.repeat(24),
-  clientId: 'f'.repeat(24),
-  displayName: 'Kiosco Norte',
-  addressSummary: 'Calle Falsa 123',
-}
-
-const PREVIEW: RoutePreviewData = {
-  route: {
-    depot: { id: 'deposito_1', name: 'Depósito Central', latitude: -34.6, longitude: -58.4 },
-    stops: [{ clientId: CLIENT_ID, saleIds: [SALE_ID], latitude: -34.61, longitude: -58.41 }],
-    segments: [{ fromId: 'deposito_1', toId: CLIENT_ID, distanceMeters: 3500, durationSeconds: 900 }],
-    encodedPolyline: 'encoded-polyline',
-  },
-  metrics: { distanceMeters: 3500, durationSeconds: 900, stopCount: 1, fuelLiters: 0.3 },
-  warnings: ['TIME_WINDOWS_NOT_CONSIDERED'],
-  factorsConsidered: ['DISTANCE', 'DURATION', 'FUEL_CONSUMPTION'],
-  algorithmVersion: 'nearest-neighbor-2opt-v1',
-  algorithmProvider: 'google-routes',
-  routingConfigRevision: 3,
+const candidates = {
+  eligible: [
+    { saleId: SALE_A1, clientId: CLIENT_A, displayName: 'Almacén Sur', addressSummary: 'Av. Siempre Viva 742' },
+    { saleId: SALE_A2, clientId: CLIENT_A, displayName: 'Almacén Sur', addressSummary: 'Av. Siempre Viva 742' },
+    { saleId: SALE_B1, clientId: CLIENT_B, displayName: 'Kiosco Norte', addressSummary: 'Calle Falsa 123' },
+  ],
+  blocked: [{ saleId: '1'.repeat(24), clientId: '9'.repeat(24), displayName: 'Cliente bloqueado', addressSummary: 'Otra calle', reasons: ['CLIENT_ZONE_MISMATCH'] }],
   ruleVersion: 'candidate-eligibility-v1',
 }
 
-const selectDateAndZone = async (): Promise<void> => {
-  fireEvent.change(screen.getByLabelText('Fecha de reparto'), { target: { value: '2026-10-04' } })
-  await screen.findByRole('option', { name: 'Zona Norte' })
-  await userEvent.selectOptions(screen.getByLabelText('Zona de entrega'), ZONE_A)
+const previewData: RoutePreviewData = {
+  route: { depot: { id: 'deposito_1', name: 'Depósito Central', latitude: -34.6, longitude: -58.4 }, stops: [{ clientId: CLIENT_A, saleIds: [SALE_A1, SALE_A2], latitude: -34.61, longitude: -58.41 }, { clientId: CLIENT_B, saleIds: [SALE_B1], latitude: -34.62, longitude: -58.42 }], segments: [], encodedPolyline: '' },
+  metrics: { distanceMeters: 3500, durationSeconds: 900, stopCount: 2, fuelLiters: 0.3 },
+  warnings: ['TIME_WINDOWS_NOT_CONSIDERED'], factorsConsidered: ['DISTANCE'], algorithmVersion: 'nearest-neighbor-2opt-v1', algorithmProvider: 'google-routes', routingConfigRevision: 3, ruleVersion: 'candidate-eligibility-v1',
 }
 
-const loadCandidates = async (
-  result: {
-    eligible: typeof ELIGIBLE_A[]
-    blocked: unknown[]
-    ruleVersion: string
-  } = { eligible: [ELIGIBLE_A], blocked: [], ruleVersion: 'candidate-eligibility-v1' }
-): Promise<void> => {
-  getCandidates.mockResolvedValue(result)
-  render(<RoutePlanner />)
-  await selectDateAndZone()
+const renderLoaded = async (): Promise<void> => {
+  getCandidates.mockResolvedValue(candidates)
+  render(<RoutePlanner initialServiceDate="2026-10-04" initialDeliveryZoneId={ZONE_ID} />)
+  await screen.findByRole('heading', { name: 'Pedidos pendientes' })
+  await waitFor(() => expect(getCandidates).toHaveBeenCalledWith({ serviceDate: '2026-10-04', deliveryZoneId: ZONE_ID }))
+}
+
+const submitFallbackForm = async (date = '2026-10-04'): Promise<void> => {
+  const dateInput = screen.getByLabelText('Fecha de reparto')
+  await userEvent.clear(dateInput)
+  await userEvent.type(dateInput, date)
+  await userEvent.selectOptions(screen.getByLabelText('Zona de entrega'), ZONE_ID)
   await userEvent.click(screen.getByRole('button', { name: 'Cargar candidatos' }))
-  const driverSelect = screen.queryByLabelText('Repartidor')
-  const vehicleSelect = screen.queryByLabelText('Vehículo')
-  if (driverSelect !== null && vehicleSelect !== null) {
-    await userEvent.selectOptions(driverSelect, 'driver-1')
-    await userEvent.selectOptions(vehicleSelect, 'vehicle-1')
-  }
+}
+
+const selectAssignmentsAndClients = async (): Promise<void> => {
+  await userEvent.selectOptions(screen.getByLabelText('Repartidor'), 'driver-1')
+  await userEvent.selectOptions(screen.getByLabelText('Vehículo'), 'vehicle-1')
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Almacén Sur' }))
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Kiosco Norte' }))
 }
 
 describe('RoutePlanner', () => {
   beforeEach(() => {
-    getActiveDeliveryZones.mockReset()
+    getActiveDeliveryZones.mockReset().mockResolvedValue([{ _id: ZONE_ID, code: 'NORTE', name: 'Zona Norte', active: true }])
     getCandidates.mockReset()
-    getAssignmentOptions.mockReset()
-    preview.mockReset()
-    save.mockReset()
-    push.mockReset()
-    getActiveDeliveryZones.mockResolvedValue([zoneA, zoneB])
-    getAssignmentOptions.mockResolvedValue({
-      drivers: [{ id: 'driver-1', nickname: 'Ana Pérez', isActive: true }],
-      vehicles: [{ id: 'vehicle-1', code: 'AA123BB', fuelConsumptionLitersPer100Km: 10.5, attributes: {}, availability: true }],
-    })
+    getAssignmentOptions.mockReset().mockResolvedValue({ drivers: [{ id: 'driver-1', nickname: 'Ana Pérez', isActive: true }], vehicles: [{ id: 'vehicle-1', code: 'AA123BB', fuelConsumptionLitersPer100Km: 10.5, attributes: {}, availability: true }] })
+    preview.mockReset(); save.mockReset(); push.mockReset()
   })
 
-  it('renders the review controls and loads active zones', async () => {
-    render(<RoutePlanner />)
+  it('automatically loads candidates from valid initial date and zone', async () => {
+    await renderLoaded()
+    expect(screen.queryByRole('button', { name: 'Cargar candidatos' })).not.toBeInTheDocument()
+    expect(screen.getByText('Zona Norte · 2 pedidos pendientes')).toBeInTheDocument()
+  })
 
-    expect(screen.getByRole('heading', { level: 2, name: 'Planificación de rutas' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Fecha de reparto')).toBeInTheDocument()
-    expect(screen.getByLabelText('Zona de entrega')).toBeInTheDocument()
+  it('keeps the date and zone form as a fallback without initial scope', async () => {
+    render(<RoutePlanner />)
     expect(screen.getByRole('button', { name: 'Cargar candidatos' })).toBeInTheDocument()
-
     expect(await screen.findByRole('option', { name: 'Zona Norte' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Zona Sur' })).toBeInTheDocument()
-    expect(getActiveDeliveryZones).toHaveBeenCalledTimes(1)
   })
 
-  it('initializes date and zone fields from optional props', async () => {
-    render(<RoutePlanner initialServiceDate="2026-10-10" initialDeliveryZoneId={ZONE_B} />)
-
-    expect(screen.getByLabelText('Fecha de reparto')).toHaveValue('2026-10-10')
-    await screen.findByRole('option', { name: 'Zona Sur' })
-    expect(screen.getByLabelText('Zona de entrega')).toHaveValue(ZONE_B)
+  it('groups sales by client and selects every sale for that client', async () => {
+    await renderLoaded()
+    const client = screen.getByRole('checkbox', { name: 'Almacén Sur' })
+    expect(screen.getAllByText('Almacén Sur')).toHaveLength(1)
+    expect(screen.getByText(/2 pedidos pendientes/)).toBeInTheDocument()
+    expect(screen.getAllByText('Apto')).toHaveLength(2)
+    expect(screen.getByText('Zona Norte · 1 pedido pendiente')).toBeInTheDocument()
+    expect(screen.getByText('Bloqueado')).toBeInTheDocument()
+    await userEvent.click(client)
+    expect(client).toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Limpiar selección' }))
+    expect(client).not.toBeChecked()
   })
 
-  it('rejects a missing date without calling the candidates endpoint', async () => {
+  it('requires two clients, driver, and vehicle before generating', async () => {
+    await renderLoaded()
+    const generate = screen.getByRole('button', { name: 'Generar ruta' })
+    expect(generate).toBeDisabled()
+    await userEvent.selectOptions(screen.getByLabelText('Repartidor'), 'driver-1')
+    await userEvent.selectOptions(screen.getByLabelText('Vehículo'), 'vehicle-1')
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Almacén Sur' }))
+    expect(generate).toBeDisabled()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Kiosco Norte' }))
+    expect(generate).toBeEnabled()
+  })
+
+  it('previews with underlying sale ids and preserves errors', async () => {
+    preview.mockResolvedValue(previewData)
+    await renderLoaded()
+    await userEvent.selectOptions(screen.getByLabelText('Repartidor'), 'driver-1')
+    await userEvent.selectOptions(screen.getByLabelText('Vehículo'), 'vehicle-1')
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Almacén Sur' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Kiosco Norte' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    expect(await screen.findByRole('heading', { name: 'Recorrido propuesto' })).toBeInTheDocument()
+    expect(preview).toHaveBeenCalledWith({ serviceDate: '2026-10-04', deliveryZoneId: ZONE_ID, saleIds: [SALE_A1, SALE_A2, SALE_B1], driverId: 'driver-1', vehicleId: 'vehicle-1' })
+  })
+
+  it('keeps save behavior after a successful preview', async () => {
+    preview.mockResolvedValue(previewData)
+    save.mockResolvedValue({ _id: '7'.repeat(24) })
+    await renderLoaded()
+    await userEvent.selectOptions(screen.getByLabelText('Repartidor'), 'driver-1')
+    await userEvent.selectOptions(screen.getByLabelText('Vehículo'), 'vehicle-1')
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Almacén Sur' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Kiosco Norte' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Guardar plan' }))
+    await waitFor(() => expect(push).toHaveBeenCalledWith(`/route/${'7'.repeat(24)}`))
+  })
+
+  it('loads candidates after submitting a valid fallback scope', async () => {
+    getCandidates.mockResolvedValue(candidates)
     render(<RoutePlanner />)
-
     await screen.findByRole('option', { name: 'Zona Norte' })
-    await userEvent.selectOptions(screen.getByLabelText('Zona de entrega'), ZONE_A)
-    await userEvent.click(screen.getByRole('button', { name: 'Cargar candidatos' }))
+    await submitFallbackForm()
+    await screen.findByRole('heading', { name: 'Pedidos pendientes' })
+    expect(getCandidates).toHaveBeenCalledWith({ serviceDate: '2026-10-04', deliveryZoneId: ZONE_ID })
+  })
 
-    expect(screen.getByRole('alert')).toHaveTextContent('fecha de reparto válida')
+  it('rejects an invalid fallback date before requesting candidates', async () => {
+    render(<RoutePlanner />)
+    await screen.findByRole('option', { name: 'Zona Norte' })
+    await submitFallbackForm('2026-02-30')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Seleccioná una fecha de reparto válida.')
     expect(getCandidates).not.toHaveBeenCalled()
   })
 
-  it('rejects a missing zone without calling the candidates endpoint', async () => {
+  it('rejects a missing fallback zone before requesting candidates', async () => {
     render(<RoutePlanner />)
-
     await screen.findByRole('option', { name: 'Zona Norte' })
-    fireEvent.change(screen.getByLabelText('Fecha de reparto'), { target: { value: '2026-10-04' } })
+    const dateInput = screen.getByLabelText('Fecha de reparto')
+    await userEvent.type(dateInput, '2026-10-04')
     await userEvent.click(screen.getByRole('button', { name: 'Cargar candidatos' }))
-
-    expect(screen.getByRole('alert')).toHaveTextContent('zona de entrega')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Seleccioná una zona de entrega.')
     expect(getCandidates).not.toHaveBeenCalled()
   })
 
-  it('announces the loading state while candidates are requested', async () => {
-    getCandidates.mockReturnValue(new Promise(() => undefined))
-    render(<RoutePlanner />)
-
-    await selectDateAndZone()
-    await userEvent.click(screen.getByRole('button', { name: 'Cargar candidatos' }))
-
-    expect(await screen.findByRole('status')).toHaveTextContent('Cargando candidatos')
+  it('shows a retryable error when candidates cannot be loaded', async () => {
+    getCandidates.mockRejectedValue(new Error('network'))
+    render(<RoutePlanner initialServiceDate="2026-10-04" initialDeliveryZoneId={ZONE_ID} />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron cargar los candidatos. Intentá nuevamente.')
   })
 
-  it('renders eligible and blocked candidates with stable reasons', async () => {
-    getCandidates.mockResolvedValue({
-      eligible: [ELIGIBLE_A],
-      blocked: [
-        {
-          saleId: 'g'.repeat(24),
-          displayName: 'Kiosco Norte',
-          reasons: ['CLIENT_LOCATION_UNCONFIRMED', 'CLIENT_INACTIVE'],
-        },
-      ],
-      ruleVersion: 'candidate-eligibility-v1',
-    })
+  it('shows the candidate loading state and disables the scope form', async () => {
+    let resolveCandidates!: (value: typeof candidates) => void
+    getCandidates.mockReturnValue(new Promise<typeof candidates>((resolve) => { resolveCandidates = resolve }))
     render(<RoutePlanner />)
-
-    await selectDateAndZone()
-    await userEvent.click(screen.getByRole('button', { name: 'Cargar candidatos' }))
-
-    expect(await screen.findByRole('heading', { name: 'Destinos elegibles (1)' })).toBeInTheDocument()
-    expect(screen.getByText('Av. Siempre Viva 742')).toBeInTheDocument()
-
-    expect(screen.getByRole('heading', { name: 'Destinos bloqueados (1)' })).toBeInTheDocument()
-    expect(screen.getByText('La ubicación del cliente no está confirmada')).toBeInTheDocument()
-    expect(screen.getByText('El cliente está inactivo')).toBeInTheDocument()
-    expect(screen.getAllByRole('listitem').map((item) => item.getAttribute('data-reason'))).toContain(
-      'CLIENT_LOCATION_UNCONFIRMED'
-    )
+    await screen.findByRole('option', { name: 'Zona Norte' })
+    await submitFallbackForm()
+    expect(screen.getByRole('status', { name: '' })).toHaveTextContent('Cargando candidatos…')
+    expect(screen.getByLabelText('Fecha de reparto')).toBeDisabled()
+    resolveCandidates(candidates)
+    await screen.findByRole('heading', { name: 'Pedidos pendientes' })
   })
 
-  it('renders the explicit empty state when there are no candidates', async () => {
-    getCandidates.mockResolvedValue({ eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' })
+  it('allows retrying delivery-zone loading after an initial error', async () => {
+    getActiveDeliveryZones.mockReset().mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce([{ _id: ZONE_ID, code: 'NORTE', name: 'Zona Norte', active: true }])
     render(<RoutePlanner />)
-
-    await selectDateAndZone()
-    await userEvent.click(screen.getByRole('button', { name: 'Cargar candidatos' }))
-
-    expect(await screen.findByRole('status')).toHaveTextContent('No hay candidatos para la fecha y zona seleccionadas')
-  })
-
-  it('renders an error state when the candidates request fails', async () => {
-    getCandidates.mockRejectedValue(new Error('boom'))
-    render(<RoutePlanner />)
-
-    await selectDateAndZone()
-    await userEvent.click(screen.getByRole('button', { name: 'Cargar candidatos' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron cargar los candidatos')
-  })
-
-  it('renders a retryable error when zones cannot be loaded', async () => {
-    getActiveDeliveryZones.mockRejectedValueOnce(new Error('zones down'))
-    getActiveDeliveryZones.mockResolvedValueOnce([zoneA])
-    render(<RoutePlanner />)
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron cargar las zonas de entrega')
-
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron cargar las zonas de entrega.')
     await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
-
-    await waitFor(() => expect(getActiveDeliveryZones).toHaveBeenCalledTimes(2))
     expect(await screen.findByRole('option', { name: 'Zona Norte' })).toBeInTheDocument()
+    expect(getActiveDeliveryZones).toHaveBeenCalledTimes(2)
   })
 
-  it('selects every eligible sale and clears the selection', async () => {
-    await loadCandidates({ eligible: [ELIGIBLE_A, ELIGIBLE_B], blocked: [], ruleVersion: 'candidate-eligibility-v1' })
+  it('renders the empty-candidate state', async () => {
+    getCandidates.mockResolvedValue({ eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' })
+    render(<RoutePlanner initialServiceDate="2026-10-04" initialDeliveryZoneId={ZONE_ID} />)
+    expect(await screen.findByText('No hay candidatos para la fecha y zona seleccionadas.')).toBeInTheDocument()
+  })
 
-    const first = await screen.findByRole('checkbox', { name: 'Almacén Sur' })
-    const second = screen.getByRole('checkbox', { name: 'Kiosco Norte' })
-    expect(first).not.toBeChecked()
-    expect(second).not.toBeChecked()
-
+  it('selects and clears every eligible sale with the bulk controls', async () => {
+    await renderLoaded()
     await userEvent.click(screen.getByRole('button', { name: 'Seleccionar todo' }))
-    expect(first).toBeChecked()
-    expect(second).toBeChecked()
-
+    expect(screen.getByRole('checkbox', { name: 'Almacén Sur' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Kiosco Norte' })).toBeChecked()
     await userEvent.click(screen.getByRole('button', { name: 'Limpiar selección' }))
-    expect(first).not.toBeChecked()
-    expect(second).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Almacén Sur' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Kiosco Norte' })).not.toBeChecked()
   })
 
-  it('toggles an individual eligible sale', async () => {
-    await loadCandidates()
-
-    const checkbox = await screen.findByRole('checkbox', { name: 'Almacén Sur' })
-
-    await userEvent.click(checkbox)
-    expect(checkbox).toBeChecked()
-
-    await userEvent.click(checkbox)
-    expect(checkbox).not.toBeChecked()
+  it('shows the translated reason for a blocked candidate', async () => {
+    await renderLoaded()
+    expect(screen.getByText('El cliente no pertenece a la zona seleccionada')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Cliente bloqueado' })).toBeDisabled()
   })
 
-  it('explains that sales from the same client are grouped into one stop', async () => {
-    await loadCandidates()
-
-    expect(
-      await screen.findByText(/Las ventas del mismo cliente se agrupan en una sola parada\./)
-    ).toBeInTheDocument()
-  })
-
-  it('renders the preview action for every authenticated route user', async () => {
-    await loadCandidates()
-
-    expect(screen.getByRole('button', { name: 'Calcular recorrido' })).toBeInTheDocument()
-  })
-
-  it('rejects a preview without a selection and does not call the service', async () => {
-    await loadCandidates()
-
-    await userEvent.click(await screen.findByRole('button', { name: 'Calcular recorrido' }))
-
-    expect(screen.getByRole('alert')).toHaveTextContent('al menos una parada')
+  it('does not preview when no clients are selected', async () => {
+    await renderLoaded()
+    expect(screen.getByRole('button', { name: 'Generar ruta' })).toBeDisabled()
     expect(preview).not.toHaveBeenCalled()
   })
 
-  it('requires driver and vehicle assignments before preview', async () => {
-    await loadCandidates()
-    await userEvent.selectOptions(screen.getByLabelText('Repartidor'), '')
-    await userEvent.selectOptions(screen.getByLabelText('Vehículo'), '')
-    await userEvent.click(await screen.findByRole('checkbox', { name: 'Almacén Sur' }))
-
-    const previewButton = screen.getByRole('button', { name: 'Calcular recorrido' })
-    expect(previewButton).toBeDisabled()
-    expect(screen.getByLabelText('Repartidor')).toBeInTheDocument()
-    expect(screen.getByLabelText('Vehículo')).toHaveTextContent('AA123BB')
-    expect(preview).not.toHaveBeenCalled()
-  })
-
-  it('announces the preview loading state', async () => {
-    preview.mockReturnValue(new Promise(() => undefined))
-    await loadCandidates()
-
-    await userEvent.click(await screen.findByRole('checkbox', { name: 'Almacén Sur' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Calcular recorrido' }))
-
-    expect(await screen.findByText(/Calculando recorrido/)).toBeInTheDocument()
-  })
-
-  it('requests a preview with the selected sale ids and renders the result', async () => {
-    preview.mockResolvedValue(PREVIEW)
-    await loadCandidates()
-
-    await userEvent.click(await screen.findByRole('checkbox', { name: 'Almacén Sur' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Calcular recorrido' }))
-
+  it('shows the preview loading state while the request is pending', async () => {
+    let resolvePreview!: (value: RoutePreviewData) => void
+    preview.mockReturnValue(new Promise<RoutePreviewData>((resolve) => { resolvePreview = resolve }))
+    await renderLoaded()
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Calculando recorrido…')
+    resolvePreview(previewData)
     expect(await screen.findByRole('heading', { name: 'Recorrido propuesto' })).toBeInTheDocument()
-    expect(screen.getByText('3,5 km')).toBeInTheDocument()
-    expect(preview).toHaveBeenCalledWith({
-      serviceDate: '2026-10-04',
-      deliveryZoneId: ZONE_A,
-      saleIds: [SALE_ID],
-      driverId: 'driver-1',
-      vehicleId: 'vehicle-1',
-    })
   })
 
-  it('renders a terminal error when the preview fails', async () => {
-    preview.mockRejectedValue({
-      response: { data: { code: 'ROUTING_PROVIDER_UNAVAILABLE', message: 'provider down' } },
-    })
-    await loadCandidates()
-
-    await userEvent.click(await screen.findByRole('checkbox', { name: 'Almacén Sur' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Calcular recorrido' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('El proveedor de rutas no está disponible')
+  it('renders a known preview error from the backend envelope', async () => {
+    preview.mockRejectedValue({ response: { data: { code: 'ROUTING_PROVIDER_UNAVAILABLE', message: 'ignored' } } })
+    await renderLoaded()
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('El proveedor de rutas no está disponible. Intentá nuevamente más tarde.')
   })
 
-  it('clears the selection and preview when candidates are reloaded', async () => {
-    preview.mockResolvedValue(PREVIEW)
-    await loadCandidates()
-
-    await userEvent.click(await screen.findByRole('checkbox', { name: 'Almacén Sur' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Calcular recorrido' }))
-    expect(await screen.findByRole('heading', { name: 'Recorrido propuesto' })).toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole('button', { name: 'Cargar candidatos' }))
-
-    expect(await screen.findByRole('checkbox', { name: 'Almacén Sur' })).not.toBeChecked()
-    expect(screen.queryByRole('heading', { name: 'Recorrido propuesto' })).not.toBeInTheDocument()
+  it('preserves an unknown preview error message', async () => {
+    preview.mockRejectedValue({ response: { data: { code: 'NEW_PREVIEW_ERROR', message: 'Servicio temporalmente pausado' } } })
+    await renderLoaded()
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Servicio temporalmente pausado')
   })
 
-  const SAVED_ID = 'f'.repeat(24)
-  const SAVED_PLAN = {
-    _id: SAVED_ID,
-    snapshotVersion: 1,
-    planningDate: '2026-10-04T03:00:00.000Z',
-    zoneSnapshot: { code: 'NORTE', normalizedName: 'zona norte', name: 'Zona Norte' },
-    selectedSaleIds: [SALE_ID],
-    depot: { name: 'Depósito Central', latitude: -34.6, longitude: -58.4 },
-    stops: [
-      { clientId: CLIENT_ID, saleIds: [SALE_ID], sequence: 1, latitude: -34.61, longitude: -58.41 },
-    ],
-    segments: [
-      { fromStopSequence: 0, toStopSequence: 1, distanceMeters: 3500, durationSeconds: 900 },
-      { fromStopSequence: 1, toStopSequence: 0, distanceMeters: 3500, durationSeconds: 900 },
-    ],
-    metrics: { distanceMeters: 3500, durationSeconds: 900, stopCount: 1, fuelLiters: 0.3 },
-    algorithm: { name: 'nearest-neighbor-2opt-v1', version: 'nearest-neighbor-2opt-v1', provider: 'google-routes' },
-    routingConfigRevision: 3,
-    ruleVersion: 'candidate-eligibility-v1',
-    encodedPolyline: 'encoded-polyline',
-    warnings: ['TIME_WINDOWS_NOT_CONSIDERED'],
-    audit: { createdBy: 'user-1', createdAt: '2026-10-04T03:05:00.000Z' },
-  }
-
-  const loadPreview = async (): Promise<void> => {
-    preview.mockResolvedValue(PREVIEW)
-    await loadCandidates()
-    await userEvent.click(await screen.findByRole('checkbox', { name: 'Almacén Sur' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Calcular recorrido' }))
-    await screen.findByRole('heading', { name: 'Recorrido propuesto' })
-  }
-
-  it('does not render the save action before a valid preview exists', async () => {
-    await loadCandidates()
-
-    expect(screen.queryByRole('button', { name: 'Guardar plan' })).not.toBeInTheDocument()
+  it('uses a generic message for an unstructured preview failure', async () => {
+    preview.mockRejectedValue(new Error('network'))
+    await renderLoaded()
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo calcular el recorrido. Intentá nuevamente.')
   })
 
-  it('saves the current preview and navigates to the saved plan on success', async () => {
-    save.mockResolvedValue(SAVED_PLAN)
-    await loadPreview()
-
-    await userEvent.click(screen.getByRole('button', { name: 'Guardar plan' }))
-
-    expect(save).toHaveBeenCalledWith({
-      serviceDate: '2026-10-04',
-      deliveryZoneId: ZONE_A,
-      saleIds: [SALE_ID],
-      driverId: 'driver-1',
-      vehicleId: 'vehicle-1',
-    })
-    await waitFor(() => expect(push).toHaveBeenCalledWith(`/route/${SAVED_ID}`))
-  })
-
-  it('prevents duplicate submits while the plan is saving', async () => {
-    save.mockReturnValue(new Promise(() => undefined))
-    await loadPreview()
-
+  it('shows the save loading state and prevents a second submit', async () => {
+    let resolveSave!: (value: { _id: string }) => void
+    preview.mockResolvedValue(previewData)
+    save.mockReturnValue(new Promise<{ _id: string }>((resolve) => { resolveSave = resolve }))
+    await renderLoaded()
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Guardar plan' }))
     const saveButton = screen.getByRole('button', { name: 'Guardar plan' })
+    expect(saveButton).toBeDisabled()
+    expect(screen.getByText('Guardando plan de ruta…')).toBeInTheDocument()
     await userEvent.click(saveButton)
-    await userEvent.click(saveButton)
-
-    expect(await screen.findByText(/Guardando plan/)).toBeInTheDocument()
     expect(save).toHaveBeenCalledTimes(1)
+    resolveSave({ _id: '8'.repeat(24) })
+    await waitFor(() => expect(push).toHaveBeenCalledWith(`/route/${'8'.repeat(24)}`))
+  })
+
+  it('renders a known save error without navigating', async () => {
+    preview.mockResolvedValue(previewData)
+    save.mockRejectedValue({ response: { data: { code: 'ROUTE_PLAN_NOT_FOUND', message: 'ignored' } } })
+    await renderLoaded()
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Guardar plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No encontramos el plan de ruta guardado.')
     expect(push).not.toHaveBeenCalled()
   })
 
-  it('renders an accessible error when the save fails', async () => {
-    save.mockRejectedValue({
-      response: { data: { code: 'ROUTING_PROVIDER_UNAVAILABLE', message: 'provider down' } },
-    })
-    await loadPreview()
+  it('preserves an unknown save error message', async () => {
+    preview.mockResolvedValue(previewData)
+    save.mockRejectedValue({ response: { data: { code: 'NEW_SAVE_ERROR', message: 'No se pudo persistir' } } })
+    await renderLoaded()
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Guardar plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo persistir')
+  })
 
-    await userEvent.click(screen.getByRole('button', { name: 'Guardar plan' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('El proveedor de rutas no está disponible')
+  it('reports a missing saved identifier instead of navigating', async () => {
+    preview.mockResolvedValue(previewData)
+    save.mockResolvedValue({ _id: undefined })
+    await renderLoaded()
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Guardar plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo obtener el identificador del plan guardado.')
     expect(push).not.toHaveBeenCalled()
   })
 
-  it('does not offer the save action when the preview request fails', async () => {
-    preview.mockRejectedValue(new Error('boom'))
-    await loadCandidates()
-
-    await userEvent.click(await screen.findByRole('checkbox', { name: 'Almacén Sur' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Calcular recorrido' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo calcular el recorrido')
-    expect(screen.queryByRole('button', { name: 'Guardar plan' })).not.toBeInTheDocument()
+  it('reports an empty saved identifier instead of navigating', async () => {
+    preview.mockResolvedValue(previewData)
+    save.mockResolvedValue({ _id: { toString: () => '' } })
+    await renderLoaded()
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Guardar plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo obtener el identificador del plan guardado.')
   })
 
-  it('hides the save action when the selection is cleared after a preview', async () => {
-    await loadPreview()
-
-    expect(screen.getByRole('button', { name: 'Guardar plan' })).toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole('button', { name: 'Limpiar selección' }))
-
-    expect(screen.queryByRole('button', { name: 'Guardar plan' })).not.toBeInTheDocument()
+  it('navigates using an object identifier returned by the save endpoint', async () => {
+    preview.mockResolvedValue(previewData)
+    save.mockResolvedValue({ _id: { toString: () => '9'.repeat(24) } })
+    await renderLoaded()
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Guardar plan' }))
+    await waitFor(() => expect(push).toHaveBeenCalledWith(`/route/${'9'.repeat(24)}`))
   })
 
-  it('renders an error and does not navigate when the saved plan has no identifier', async () => {
-    save.mockResolvedValue({ ...SAVED_PLAN, _id: undefined })
-    await loadPreview()
-
-    await userEvent.click(screen.getByRole('button', { name: 'Guardar plan' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'No se pudo obtener el identificador del plan guardado'
-    )
-    expect(push).not.toHaveBeenCalled()
-  })
-
-  it('renders an error and does not navigate for an unknown saved identifier shape', async () => {
-    save.mockResolvedValue({ ...SAVED_PLAN, _id: { toString: () => '' } })
-    await loadPreview()
-
-    await userEvent.click(screen.getByRole('button', { name: 'Guardar plan' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'No se pudo obtener el identificador del plan guardado'
-    )
-    expect(push).not.toHaveBeenCalled()
+  it('resets selection and preview when candidates are reloaded', async () => {
+    getCandidates.mockResolvedValue(candidates)
+    render(<RoutePlanner />)
+    await screen.findByRole('option', { name: 'Zona Norte' })
+    await submitFallbackForm()
+    await screen.findByRole('heading', { name: 'Pedidos pendientes' })
+    await selectAssignmentsAndClients()
+    preview.mockResolvedValue(previewData)
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    expect(await screen.findByRole('heading', { name: 'Recorrido propuesto' })).toBeInTheDocument()
+    await userEvent.clear(screen.getByLabelText('Fecha de reparto'))
+    await userEvent.type(screen.getByLabelText('Fecha de reparto'), '2026-10-05')
+    await userEvent.click(screen.getByRole('button', { name: 'Cargar candidatos' }))
+    await waitFor(() => expect(getCandidates).toHaveBeenLastCalledWith({ serviceDate: '2026-10-05', deliveryZoneId: ZONE_ID }))
+    expect(screen.queryByRole('heading', { name: 'Recorrido propuesto' })).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Almacén Sur' })).not.toBeChecked()
   })
 })
