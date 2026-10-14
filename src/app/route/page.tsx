@@ -35,7 +35,7 @@ function RoutePlanningContent() {
         }}
       />
       <Dialog open={plannerOpen} onOpenChange={setPlannerOpen}>
-        <DialogContent className="max-h-[calc(100vh-2rem)] max-w-5xl overflow-hidden">
+         <DialogContent className="max-h-[calc(100vh-2rem)] max-w-[84rem] overflow-hidden">
           <DialogHeader>
            <DialogTitle>Generador de ruta optimizada</DialogTitle>
            <DialogDescription>

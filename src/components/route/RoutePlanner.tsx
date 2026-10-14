@@ -343,21 +343,24 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
     return (
       <tr
         key={group.key}
-        className="border-b border-border-subtle last:border-b-0"
+        className="h-16 border-b border-border-subtle last:border-b-0"
       >
-        <td className="px-3 py-3 align-top">
+        <td className="px-3 py-1 align-middle">
           <Checkbox id={id} checked={checked} disabled={isBlocked} aria-label={group.displayName} onCheckedChange={(value) => toggleClient(group, value === true)} />
         </td>
-        <td className="px-3 py-3 align-top text-sm font-medium text-text-primary">
-          <Label htmlFor={id} className="cursor-pointer">{group.displayName}</Label>
+        <td className="px-3 py-1 align-middle text-sm font-medium text-text-primary">
+          <Label htmlFor={id} title={group.displayName} className="line-clamp-1 cursor-pointer">{group.displayName}</Label>
         </td>
-        <td className="px-3 py-3 align-top text-xs text-text-secondary">
-          <div>{group.addressSummary ?? 'Dirección no disponible'}</div>
+        <td className="px-3 py-1 align-middle text-xs text-text-secondary">
+          <div title={group.addressSummary ?? 'Dirección no disponible'} className="line-clamp-1">{group.addressSummary ?? 'Dirección no disponible'}</div>
           <div>{group.zoneMismatch ? 'Otra zona' : selectedZoneName}</div>
-          {group.reasons.length > 0 && <div className="mt-1 text-state-error">{group.reasons.map((reason) => CANDIDATE_BLOCK_REASON_LABEL[reason] ?? reason).join('. ')}</div>}
+          {group.reasons.length > 0 && (() => {
+            const reasonText = group.reasons.map((reason) => CANDIDATE_BLOCK_REASON_LABEL[reason] ?? reason).join('. ')
+            return <div title={reasonText} className="line-clamp-1 text-state-error">{reasonText}</div>
+          })()}
         </td>
-        <td className="px-3 py-3 align-top text-sm text-text-secondary">{orderCount} {orderCount === 1 ? 'pedido' : 'pedidos'}</td>
-        <td className={isBlocked ? 'px-3 py-3 align-top text-xs font-medium text-state-error' : 'px-3 py-3 align-top text-xs font-medium text-state-success'}>{isBlocked ? 'Bloqueado' : 'Apto'}</td>
+        <td className="px-3 py-1 align-middle text-sm text-text-secondary">{orderCount} {orderCount === 1 ? 'pedido' : 'pedidos'}</td>
+        <td className={isBlocked ? 'px-3 py-1 align-middle text-xs font-medium text-state-error' : 'px-3 py-1 align-middle text-xs font-medium text-state-success'}>{isBlocked ? 'Bloqueado' : 'Apto'}</td>
       </tr>
     )
   }
@@ -482,23 +485,25 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
               <p className="mt-1 text-xs text-text-secondary">
                 Seleccioná clientes. Todos sus pedidos aptos se incluirán en una sola parada.
               </p>
-              <table className="mt-3 w-full border-collapse text-left" aria-label="Pedidos pendientes">
-                <thead className="border-b border-border-subtle text-xs text-text-secondary">
-                  <tr>
-                    <th scope="col" className="w-10 px-3 py-2"><span className="sr-only">Selección</span></th>
-                    <th scope="col" className="px-3 py-2 font-medium">Cliente / Comercio</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Dirección / Zona</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Pedidos</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Estado</th>
-                  </tr>
-                </thead>
-                <tbody>{visibleGroups.map(renderCandidateGroup)}</tbody>
-              </table>
-              {pendingClientPageCount > 1 && <nav aria-label="Paginación de pedidos pendientes" className="mt-3 flex items-center justify-between gap-3">
-                <Button type="button" variant="secondary" size="sm" onClick={() => setPendingClientPage((page) => Math.max(1, page - 1))} disabled={pendingClientPage === 1}>Anterior</Button>
-                <span role="status" aria-live="polite" className="text-xs text-text-secondary">Página {pendingClientPage} de {pendingClientPageCount}</span>
-                <Button type="button" variant="secondary" size="sm" onClick={() => setPendingClientPage((page) => Math.min(pendingClientPageCount, page + 1))} disabled={pendingClientPage === pendingClientPageCount}>Siguiente</Button>
-              </nav>}
+              <div data-testid="pending-orders-table-container" className="mt-3 h-[36rem] overflow-hidden">
+                <table className="w-full table-fixed border-collapse text-left" aria-label="Pedidos pendientes">
+                  <thead className="border-b border-border-subtle text-xs text-text-secondary">
+                    <tr className="h-10">
+                      <th scope="col" className="w-10 px-3 py-2"><span className="sr-only">Selección</span></th>
+                      <th scope="col" className="px-3 py-2 font-medium">Cliente / Comercio</th>
+                      <th scope="col" className="px-3 py-2 font-medium">Dirección / Zona</th>
+                      <th scope="col" className="px-3 py-2 font-medium">Pedidos</th>
+                      <th scope="col" className="px-3 py-2 font-medium">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>{visibleGroups.map(renderCandidateGroup)}</tbody>
+                </table>
+                {pendingClientPageCount > 1 && <nav aria-label="Paginación de pedidos pendientes" className="mt-3 flex items-center justify-between gap-3">
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setPendingClientPage((page) => Math.max(1, page - 1))} disabled={pendingClientPage === 1}>Anterior</Button>
+                  <span role="status" aria-live="polite" className="text-xs text-text-secondary">Página {pendingClientPage} de {pendingClientPageCount}</span>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setPendingClientPage((page) => Math.min(pendingClientPageCount, page + 1))} disabled={pendingClientPage === pendingClientPageCount}>Siguiente</Button>
+                </nav>}
+              </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
                   type="button"

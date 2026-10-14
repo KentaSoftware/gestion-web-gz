@@ -119,13 +119,18 @@ describe('RoutePlanner', () => {
     await screen.findByRole('heading', { name: 'Pedidos pendientes' })
 
     const table = screen.getByRole('table', { name: 'Pedidos pendientes' })
+    const container = screen.getByTestId('pending-orders-table-container')
+    expect(container.className).toContain('h-[36rem]')
+    expect(container.className).toContain('overflow-hidden')
     expect(within(table).getAllByRole('row')).toHaveLength(9)
     expect(screen.getByText('Página 1 de 2')).toBeInTheDocument()
 
     const firstClient = screen.getByRole('checkbox', { name: 'Cliente 1' })
     await userEvent.click(firstClient)
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    expect(screen.getByTestId('pending-orders-table-container').className).toBe(container.className)
     expect(within(table).getAllByRole('row')).toHaveLength(2)
+    expect(within(table).getAllByRole('row').length - 1).toBeLessThanOrEqual(8)
     expect(screen.getByText('Cliente 9')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Anterior' }))
@@ -243,6 +248,32 @@ describe('RoutePlanner', () => {
     await renderLoaded()
     expect(screen.getByText('El cliente no pertenece a la zona seleccionada')).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: 'Cliente bloqueado' })).toBeDisabled()
+  })
+
+  it('keeps long blocked reasons accessible without changing the stable table height', async () => {
+    getCandidates.mockResolvedValue({
+      eligible: manyClientCandidates.eligible,
+      blocked: [{
+        saleId: '1'.repeat(24),
+        clientId: 'a'.repeat(24),
+        displayName: 'Cliente con un nombre bloqueado extremadamente largo',
+        addressSummary: 'Una dirección muy extensa para comprobar que la fila no crece de forma indefinida',
+        reasons: ['CLIENT_ZONE_MISMATCH', 'CLIENT_LOCATION_MISSING', 'CLIENT_LOCATION_UNCONFIRMED'],
+      }],
+      ruleVersion: 'candidate-eligibility-v1',
+    })
+    render(<RoutePlanner initialServiceDate="2026-10-04" initialDeliveryZoneId={ZONE_ID} />)
+    await screen.findByRole('heading', { name: 'Pedidos pendientes' })
+
+    const container = screen.getByTestId('pending-orders-table-container')
+    const initialClassName = container.className
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    const reasonText = 'El cliente no pertenece a la zona seleccionada. El cliente no tiene una ubicación cargada. La ubicación del cliente no está confirmada'
+    const reason = screen.getByTitle(reasonText)
+    expect(reason).toHaveTextContent(reasonText)
+    expect(screen.getByTitle('Una dirección muy extensa para comprobar que la fila no crece de forma indefinida')).toBeInTheDocument()
+    expect(container.className).toBe(initialClassName)
   })
 
   it('does not preview when no clients are selected', async () => {
