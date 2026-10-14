@@ -35,6 +35,28 @@ const dashboard = {
 }
 
 describe('RouteDashboard selected-route detail', () => {
+  it('refetches on the parent refresh token and keeps both sections above lower regions', async () => {
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    const updatedDashboard = { ...dashboard, routes: [{ ...dashboard.routes[0], id: 'route-new' }] }
+    getDashboard.mockResolvedValueOnce(dashboard).mockResolvedValueOnce(updatedDashboard)
+    const { rerender } = render(<RouteDashboard refreshToken={0} />)
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (2)' })).toBeInTheDocument())
+    rerender(<RouteDashboard refreshToken={1} />)
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (1)' })).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ver mapa' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Previsualizar' }))
+    const plannedRoutes = screen.getByRole('heading', { name: 'Rutas planificadas (1)' })
+    const clients = screen.getByRole('heading', { name: 'Clientes con pedidos (0)' })
+    const map = screen.getByRole('heading', { name: 'Mapa interactivo' })
+    const detail = screen.getByRole('heading', { name: 'Detalle de ruta' })
+    expect(plannedRoutes.compareDocumentPosition(clients)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(clients.compareDocumentPosition(map)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(map.compareDocumentPosition(detail)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(getDashboard).toHaveBeenCalledTimes(2)
+  })
+
   it('renders the global dashboard with planning controls separate from its filters', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     getDashboard.mockResolvedValue(dashboard)

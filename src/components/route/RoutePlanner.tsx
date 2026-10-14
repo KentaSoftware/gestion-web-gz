@@ -1,8 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { routePlanService } from '@/services/routePlan.service'
 import type {
   CandidateEntry,
@@ -91,14 +91,13 @@ interface RoutePlannerProps {
   initialServiceDate?: string
   initialDeliveryZoneId?: string
   onClose?: () => void
+  onSaved?: (plan: RoutePlan) => void
 }
 
-export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = '', onClose }: RoutePlannerProps = {}) {
+export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = '', onClose, onSaved }: RoutePlannerProps = {}) {
   const dateFieldId = useId()
   const zoneFieldId = useId()
   const selectionFieldId = useId()
-
-  const router = useRouter()
 
   const [zones, setZones] = useState<DeliveryZone[]>([])
   const [assignmentOptions, setAssignmentOptions] = useState<RouteAssignmentOptions>({ drivers: [], vehicles: [] })
@@ -301,7 +300,8 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
         setSaveStatus('error')
         return
       }
-      router.push(`/route/${savedId}`)
+      toast.success('Ruta guardada correctamente.')
+      onSaved?.(saved)
     } catch (error) {
       const parsed = extractPreviewError(error)
       setSaveErrorCode(parsed?.code ?? null)

@@ -3,12 +3,13 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RoutePreview as RoutePreviewData } from '@/interfaces/routePlan.interface'
 
-const { getActiveDeliveryZones, getCandidates, getAssignmentOptions, preview, save, push } = vi.hoisted(() => ({
-  getActiveDeliveryZones: vi.fn(), getCandidates: vi.fn(), getAssignmentOptions: vi.fn(), preview: vi.fn(), save: vi.fn(), push: vi.fn(),
+const { getActiveDeliveryZones, getCandidates, getAssignmentOptions, preview, save, push, toastSuccess } = vi.hoisted(() => ({
+  getActiveDeliveryZones: vi.fn(), getCandidates: vi.fn(), getAssignmentOptions: vi.fn(), preview: vi.fn(), save: vi.fn(), push: vi.fn(), toastSuccess: vi.fn(),
 }))
 
 vi.mock('@/services/routePlan.service', () => ({ routePlanService: { getActiveDeliveryZones, getCandidates, getAssignmentOptions, preview, save } }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }))
+vi.mock('sonner', () => ({ toast: { success: toastSuccess } }))
 
 import { RoutePlanner } from './RoutePlanner'
 
@@ -171,7 +172,8 @@ describe('RoutePlanner', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'Kiosco Norte' }))
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Confirmar y guardar' }))
-    await waitFor(() => expect(push).toHaveBeenCalledWith(`/route/${'7'.repeat(24)}`))
+    expect(push).not.toHaveBeenCalled()
+    expect(toastSuccess).toHaveBeenCalledWith('Ruta guardada correctamente.')
   })
 
   it('loads candidates after submitting a valid fallback scope', async () => {
@@ -348,7 +350,8 @@ describe('RoutePlanner', () => {
     await userEvent.click(saveButton)
     expect(save).toHaveBeenCalledTimes(1)
     resolveSave({ _id: '8'.repeat(24) })
-    await waitFor(() => expect(push).toHaveBeenCalledWith(`/route/${'8'.repeat(24)}`))
+    expect(push).not.toHaveBeenCalled()
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Ruta guardada correctamente.'))
   })
 
   it('renders a known save error without navigating', async () => {
@@ -393,14 +396,19 @@ describe('RoutePlanner', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo obtener el identificador del plan guardado.')
   })
 
-  it('navigates using an object identifier returned by the save endpoint', async () => {
+  it('passes the saved plan to the callback without navigating', async () => {
     preview.mockResolvedValue(previewData)
-    save.mockResolvedValue({ _id: { toString: () => '9'.repeat(24) } })
-    await renderLoaded()
+    const saved = { _id: { toString: () => '9'.repeat(24) } }
+    const onSaved = vi.fn()
+    save.mockResolvedValue(saved)
+    getCandidates.mockResolvedValue(candidates)
+    render(<RoutePlanner initialServiceDate="2026-10-04" initialDeliveryZoneId={ZONE_ID} onSaved={onSaved} />)
+    await screen.findByRole('heading', { name: 'Pedidos pendientes' })
     await selectAssignmentsAndClients()
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Confirmar y guardar' }))
-    await waitFor(() => expect(push).toHaveBeenCalledWith(`/route/${'9'.repeat(24)}`))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(saved))
+    expect(push).not.toHaveBeenCalled()
   })
 
   it('hides candidate inputs after a successful preview', async () => {

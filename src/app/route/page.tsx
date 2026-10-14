@@ -24,11 +24,13 @@ import { useState } from 'react'
  */
 function RoutePlanningContent() {
   const [plannerOpen, setPlannerOpen] = useState(false)
+  const [dashboardRefreshToken, setDashboardRefreshToken] = useState(0)
   const [plannerDefaults, setPlannerDefaults] = useState({ serviceDate: '', deliveryZoneId: '' })
 
   return (
     <PageContainer>
       <RouteDashboard
+        refreshToken={dashboardRefreshToken}
         onGenerateRoutes={(serviceDate, deliveryZoneId) => {
           setPlannerDefaults({ serviceDate, deliveryZoneId })
           setPlannerOpen(true)
@@ -47,6 +49,10 @@ function RoutePlanningContent() {
               initialServiceDate={plannerDefaults.serviceDate}
               initialDeliveryZoneId={plannerDefaults.deliveryZoneId}
               onClose={() => setPlannerOpen(false)}
+              onSaved={() => {
+                setPlannerOpen(false)
+                setDashboardRefreshToken((token) => token + 1)
+              }}
             />
           )}
         </DialogContent>

@@ -21,9 +21,10 @@ const CLIENT_PAGE_SIZE = 5
 
 interface RouteDashboardProps {
   onGenerateRoutes?: (serviceDate: string, deliveryZoneId: string) => void
+  refreshToken?: number
 }
 
-export function RouteDashboard({ onGenerateRoutes }: RouteDashboardProps = {}) {
+export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDashboardProps = {}) {
   const [dashboard, setDashboard] = useState<RouteDashboardData | null>(null)
   const [clientPage, setClientPage] = useState(1)
   const [clientQuery, setClientQuery] = useState('')
@@ -60,7 +61,7 @@ export function RouteDashboard({ onGenerateRoutes }: RouteDashboardProps = {}) {
       }
     })
     return () => { cancelled = true }
-  }, [reloadToken])
+  }, [reloadToken, refreshToken])
 
   useEffect(() => {
     let cancelled = false

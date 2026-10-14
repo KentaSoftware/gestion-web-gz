@@ -1,9 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route } from 'lucide-react'
 import { SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
 
-const { useSessionAccess, usePermission, push, isModuleEnabled, moduleFlags, getActiveDeliveryZones, getDashboard, getCandidates } = vi.hoisted(() => ({
+const { useSessionAccess, usePermission, push, isModuleEnabled, moduleFlags, getActiveDeliveryZones, getDashboard, getCandidates, getAssignmentOptions, preview, save } = vi.hoisted(() => ({
   useSessionAccess: vi.fn(),
   usePermission: vi.fn(),
   push: vi.fn(),
@@ -12,6 +13,9 @@ const { useSessionAccess, usePermission, push, isModuleEnabled, moduleFlags, get
   getActiveDeliveryZones: vi.fn(),
   getDashboard: vi.fn(),
   getCandidates: vi.fn(),
+  getAssignmentOptions: vi.fn(),
+  preview: vi.fn(),
+  save: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({
@@ -41,10 +45,13 @@ vi.mock('@/services/routePlan.service', () => ({
   routePlanService: {
     getActiveDeliveryZones,
     getDashboard,
-    getAssignmentOptions: vi.fn().mockResolvedValue({ drivers: [], vehicles: [] }),
-     getCandidates,
+    getAssignmentOptions,
+    getCandidates,
+    preview,
+    save,
   },
 }))
+vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
 
 import RouteScreen from './page'
 
@@ -69,6 +76,9 @@ describe('RouteScreen', () => {
       warnings: [],
     })
     getCandidates.mockResolvedValue({ eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' })
+    getAssignmentOptions.mockResolvedValue({ drivers: [], vehicles: [] })
+    preview.mockReset()
+    save.mockReset()
   })
 
   it('renders the route dashboard without a standalone page header or planner section', async () => {
@@ -117,6 +127,53 @@ describe('RouteScreen', () => {
     const dialog = await screen.findByRole('dialog')
     expect(await within(dialog).findByRole('status')).toHaveTextContent('No hay candidatos')
     expect(getCandidates).toHaveBeenCalledWith({ serviceDate: '2026-10-15', deliveryZoneId: 'a'.repeat(24) })
+  })
+
+  it('closes the planner and refreshes the dashboard after saving', async () => {
+    const zoneId = 'a'.repeat(24)
+    const saleA = 'b'.repeat(24)
+    const saleB = 'c'.repeat(24)
+    getCandidates.mockResolvedValue({
+      eligible: [
+        { saleId: saleA, clientId: 'd'.repeat(24), displayName: 'Cliente Uno', addressSummary: 'Calle 1' },
+        { saleId: saleB, clientId: 'e'.repeat(24), displayName: 'Cliente Dos', addressSummary: 'Calle 2' },
+      ],
+      blocked: [],
+      ruleVersion: 'candidate-eligibility-v1',
+    })
+    getAssignmentOptions.mockResolvedValue({ drivers: [{ id: 'driver-1', nickname: 'Ana', isActive: true }], vehicles: [{ id: 'vehicle-1', code: 'AA123BB', fuelConsumptionLitersPer100Km: 10, attributes: {}, availability: true }] })
+    preview.mockResolvedValue({
+      route: { depot: { id: 'depot', name: 'Depósito', latitude: -34.6, longitude: -58.4 }, stops: [], segments: [], encodedPolyline: '' },
+      metrics: { distanceMeters: 1000, durationSeconds: 600, stopCount: 2, fuelLiters: 0.1 },
+      warnings: [], factorsConsidered: [], algorithmVersion: 'test', algorithmProvider: 'test', routingConfigRevision: 1, ruleVersion: 'test',
+    })
+    save.mockResolvedValue({ _id: 'f'.repeat(24) })
+    getDashboard.mockResolvedValueOnce({
+      filters: {}, kpis: { activeRoutes: 0, pendingOrders: 0, totalDistanceMeters: 0, estimatedFuelLiters: 0 }, routes: [],
+      candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' }, warnings: [],
+    }).mockResolvedValueOnce({
+      filters: {}, kpis: { activeRoutes: 1, pendingOrders: 0, totalDistanceMeters: 1000, estimatedFuelLiters: 0.1 }, routes: [{ id: 'route-new', status: 'PENDING', zoneCode: 'NORTE', selectedSaleIds: [saleA, saleB], clientCount: 2, metrics: { distanceMeters: 1000, durationSeconds: 600, fuelLiters: 0.1 }, assignments: { driverId: 'driver-1', vehicleId: 'vehicle-1' }, warnings: [], stale: false }],
+      candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' }, warnings: [],
+    })
+
+    render(<RouteScreen />)
+    const date = await screen.findByLabelText('Fecha de servicio')
+    fireEvent.change(date, { target: { value: '2026-10-15' } })
+    fireEvent.change(screen.getByLabelText('Zona de entrega'), { target: { value: zoneId } })
+    fireEvent.click(screen.getByRole('button', { name: 'Generar rutas' }))
+    const dialog = await screen.findByRole('dialog')
+    await within(dialog).findByRole('heading', { name: 'Pedidos pendientes' })
+    await userEvent.selectOptions(within(dialog).getByLabelText('Repartidor'), 'driver-1')
+    await userEvent.selectOptions(within(dialog).getByLabelText('Vehículo'), 'vehicle-1')
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Cliente Uno' }))
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Cliente Dos' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Generar ruta' }))
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Confirmar y guardar' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (1)' })).toBeInTheDocument())
+    expect(getDashboard).toHaveBeenCalledTimes(2)
+    expect(push).not.toHaveBeenCalledWith(expect.stringContaining('/route/'))
   })
 
   it('announces loading while the session is hydrating', () => {
