@@ -1,25 +1,19 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Permission } from '@/interfaces/auth.interface'
 import type { RoutePreview as RoutePreviewData } from '@/interfaces/routePlan.interface'
 
-const { getActiveDeliveryZones, getCandidates, getAssignmentOptions, preview, save, hasPermission, push } = vi.hoisted(() => ({
+const { getActiveDeliveryZones, getCandidates, getAssignmentOptions, preview, save, push } = vi.hoisted(() => ({
   getActiveDeliveryZones: vi.fn(),
   getCandidates: vi.fn(),
   getAssignmentOptions: vi.fn(),
   preview: vi.fn(),
   save: vi.fn(),
-  hasPermission: vi.fn(),
   push: vi.fn(),
 }))
 
 vi.mock('@/services/routePlan.service', () => ({
   routePlanService: { getActiveDeliveryZones, getCandidates, getAssignmentOptions, preview, save },
-}))
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ hasPermission }),
 }))
 
 vi.mock('next/navigation', () => ({
@@ -97,14 +91,12 @@ describe('RoutePlanner', () => {
     getAssignmentOptions.mockReset()
     preview.mockReset()
     save.mockReset()
-    hasPermission.mockReset()
     push.mockReset()
     getActiveDeliveryZones.mockResolvedValue([zoneA, zoneB])
     getAssignmentOptions.mockResolvedValue({
       drivers: [{ id: 'driver-1', nickname: 'Ana Pérez', isActive: true }],
       vehicles: [{ id: 'vehicle-1', code: 'AA123BB', fuelConsumptionLitersPer100Km: 10.5, attributes: {}, availability: true }],
     })
-    hasPermission.mockReturnValue(true)
   })
 
   it('renders the review controls and loads active zones', async () => {
@@ -250,15 +242,10 @@ describe('RoutePlanner', () => {
     ).toBeInTheDocument()
   })
 
-  it('only renders the preview action with the create route plan permission', async () => {
-    hasPermission.mockReturnValue(false)
-
+  it('renders the preview action for every authenticated route user', async () => {
     await loadCandidates()
 
-    expect(screen.queryByRole('button', { name: 'Calcular recorrido' })).not.toBeInTheDocument()
-    expect(
-      screen.getByText('Necesitás el permiso de creación de rutas para calcular el recorrido.')
-    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Calcular recorrido' })).toBeInTheDocument()
   })
 
   it('rejects a preview without a selection and does not call the service', async () => {
@@ -373,15 +360,6 @@ describe('RoutePlanner', () => {
     await loadCandidates()
 
     expect(screen.queryByRole('button', { name: 'Guardar plan' })).not.toBeInTheDocument()
-  })
-
-  it('only renders the save action with the create route plan permission', async () => {
-    hasPermission.mockReturnValue(false)
-
-    await loadCandidates()
-
-    expect(screen.queryByRole('button', { name: 'Guardar plan' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Calcular recorrido' })).not.toBeInTheDocument()
   })
 
   it('saves the current preview and navigates to the saved plan on success', async () => {

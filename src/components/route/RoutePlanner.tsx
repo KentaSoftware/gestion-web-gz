@@ -14,8 +14,6 @@ import type {
   RoutePreviewErrorResponse,
 } from '@/interfaces/routePlan.interface'
 import { routePlanErrorMessage } from '@/interfaces/routePlan.interface'
-import { Permission } from '@/interfaces/auth.interface'
-import { usePermission } from '@/hooks/usePermission'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -81,8 +79,6 @@ export function RoutePlanner() {
   const zoneFieldId = useId()
   const selectionFieldId = useId()
 
-  const { hasPermission } = usePermission()
-  const canCreateRoutePlan = hasPermission(Permission.CREATE_ROUTE_PLAN)
   const router = useRouter()
 
   const [zones, setZones] = useState<DeliveryZone[]>([])
@@ -436,54 +432,48 @@ export function RoutePlanner() {
           </div>
 
           <div className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md">
-            {canCreateRoutePlan ? (
-              <div className="flex flex-col gap-3">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="flex flex-col gap-2"><Label htmlFor="route-driver">Repartidor</Label><select id="route-driver" value={driverId} onChange={(event) => setDriverId(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un repartidor</option>{assignmentOptions.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.nickname}</option>)}</select></div>
-                  <div className="flex flex-col gap-2"><Label htmlFor="route-vehicle">Vehículo</Label><select id="route-vehicle" value={vehicleId} onChange={(event) => setVehicleId(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un vehículo</option>{assignmentOptions.vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.code} · {vehicle.fuelConsumptionLitersPer100Km} L/100 km</option>)}</select></div>
-                </div>
-                {!hasAssignments && <p role="status" className="text-sm text-text-secondary">Seleccioná un repartidor y un vehículo para habilitar la planificación.</p>}
-                <div className="flex flex-wrap items-center gap-3">
-                  <Button type="button" onClick={() => void handlePreview()} disabled={previewStatus === 'loading' || isSaving || !hasAssignments}>
-                    Calcular recorrido
-                  </Button>
-                  {hasValidPreview && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => void handleSave()}
-                       disabled={isSaving || !hasAssignments}
-                      aria-busy={isSaving}
-                    >
-                      Guardar plan
-                    </Button>
-                  )}
-                  <p className="text-xs text-text-secondary">
-                    Se seleccionaron {selectedSaleIds.length} de {candidates.eligible.length} ventas elegibles.
-                  </p>
-                </div>
-                {isSaving && (
-                  <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-text-secondary">
-                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                    Guardando plan de ruta…
-                  </p>
-                )}
-                {saveStatus === 'error' && (
-                  <p role="alert" className="text-sm font-medium text-state-error">
-                    {routePlanErrorMessage(saveErrorCode, saveErrorMessage ?? undefined)}
-                  </p>
-                )}
-                {selectionError && (
-                  <p role="alert" className="text-sm font-medium text-state-error">
-                    {selectionError}
-                  </p>
-                )}
+            <div className="flex flex-col gap-3">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="flex flex-col gap-2"><Label htmlFor="route-driver">Repartidor</Label><select id="route-driver" value={driverId} onChange={(event) => setDriverId(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un repartidor</option>{assignmentOptions.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.nickname}</option>)}</select></div>
+                <div className="flex flex-col gap-2"><Label htmlFor="route-vehicle">Vehículo</Label><select id="route-vehicle" value={vehicleId} onChange={(event) => setVehicleId(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un vehículo</option>{assignmentOptions.vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.code} · {vehicle.fuelConsumptionLitersPer100Km} L/100 km</option>)}</select></div>
               </div>
-            ) : (
-              <p role="note" className="text-sm text-text-secondary">
-                Necesitás el permiso de creación de rutas para calcular el recorrido.
-              </p>
-            )}
+              {!hasAssignments && <p role="status" className="text-sm text-text-secondary">Seleccioná un repartidor y un vehículo para habilitar la planificación.</p>}
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="button" onClick={() => void handlePreview()} disabled={previewStatus === 'loading' || isSaving || !hasAssignments}>
+                  Calcular recorrido
+                </Button>
+                {hasValidPreview && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void handleSave()}
+                    disabled={isSaving || !hasAssignments}
+                    aria-busy={isSaving}
+                  >
+                    Guardar plan
+                  </Button>
+                )}
+                <p className="text-xs text-text-secondary">
+                  Se seleccionaron {selectedSaleIds.length} de {candidates.eligible.length} ventas elegibles.
+                </p>
+              </div>
+              {isSaving && (
+                <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-text-secondary">
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  Guardando plan de ruta…
+                </p>
+              )}
+              {saveStatus === 'error' && (
+                <p role="alert" className="text-sm font-medium text-state-error">
+                  {routePlanErrorMessage(saveErrorCode, saveErrorMessage ?? undefined)}
+                </p>
+              )}
+              {selectionError && (
+                <p role="alert" className="text-sm font-medium text-state-error">
+                  {selectionError}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}
