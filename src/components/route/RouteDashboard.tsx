@@ -216,7 +216,7 @@ export function RouteDashboard({ onGenerateRoutes }: RouteDashboardProps = {}) {
       {status === 'ready' && dashboard !== null && (
         <>
           <RouteKpiCards kpis={dashboard.kpis} />
-            <div className={`grid gap-4 ${dashboard.routes.length > 0 ? 'lg:grid-cols-2' : ''}`}>
+            <div className="grid gap-4 lg:grid-cols-2">
               <section aria-labelledby="planned-routes-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
                  <div className="flex flex-wrap items-start justify-between gap-3">
                    <h3 id="planned-routes-title" className="text-base font-semibold text-text-primary">Rutas planificadas ({dashboard.routes.length})</h3>
