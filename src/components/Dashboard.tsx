@@ -95,7 +95,7 @@ export default function Dashboard({ children }: { children: ReactNode }) {
           </header>
           <main
             id="dashboard-main"
-            className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-background-canvas"
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-background-canvas"
             suppressHydrationWarning={true}
           >
             {children}

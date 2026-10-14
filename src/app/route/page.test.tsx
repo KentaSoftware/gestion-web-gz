@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route } from 'lucide-react'
 import { SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
@@ -52,8 +53,19 @@ vi.mock('@/services/routePlan.service', () => ({
   },
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
+vi.mock('@/hooks/useLocalStorage', () => ({ default: () => [{ nickname: '', token: '' }, vi.fn(), vi.fn()] }))
+vi.mock('@/redux/hook', () => ({ useAppDispatch: () => vi.fn() }))
+vi.mock('@/redux/userSlice', () => ({ clearUser: vi.fn(), getUser: vi.fn(), setUser: vi.fn() }))
+vi.mock('react-redux', () => ({ useSelector: () => ({ nickname: '', token: '' }) }))
+vi.mock('@/components/AppSidebar', () => ({ default: () => null }))
+vi.mock('@/components/ui/sidebar', () => ({
+  SidebarProvider: ({ children, className }: { children: ReactNode; className?: string }) => <div className={className}>{children}</div>,
+  SidebarInset: ({ children, className, ...props }: { children: ReactNode; className?: string }) => <main className={className} {...props}>{children}</main>,
+  SidebarTrigger: () => <button type="button">Toggle sidebar</button>,
+}))
 
 import RouteScreen from './page'
+import Dashboard from '@/components/Dashboard'
 
 const access = (overrides: Partial<SessionAccess> = {}): SessionAccess => ({
   status: SESSION_STATUS.READY,
@@ -86,7 +98,8 @@ describe('RouteScreen', () => {
 
     const dashboard = screen.getByRole('region', { name: 'Optimización de Rutas' })
     expect(dashboard).toBeInTheDocument()
-    expect(dashboard.parentElement).toHaveClass('h-full', 'min-h-0', 'w-full', 'min-w-0')
+    expect(dashboard.parentElement).toHaveClass('flex-1', 'min-h-0', 'w-full', 'min-w-0')
+    expect(dashboard.parentElement).not.toHaveClass('h-full')
     expect(screen.queryByRole('heading', { level: 1, name: 'Rutas' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 2, name: 'Planificación de rutas' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Actualizar' })).not.toBeInTheDocument()
@@ -203,5 +216,15 @@ describe('RouteScreen', () => {
 
     expect(push).toHaveBeenCalledWith('/')
     expect(screen.queryByRole('heading', { level: 1, name: 'Rutas' })).not.toBeInTheDocument()
+  })
+})
+
+describe('Dashboard layout', () => {
+  it('keeps the dashboard main as a flexible scroll container', () => {
+    render(<Dashboard><div>Dashboard content</div></Dashboard>)
+
+    const main = document.getElementById('dashboard-main')
+    expect(main).toHaveClass('flex', 'min-h-0', 'flex-1', 'flex-col', 'overflow-y-auto')
+    expect(main).not.toHaveClass('h-full')
   })
 })
