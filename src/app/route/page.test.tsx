@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route } from 'lucide-react'
 import { SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
@@ -96,6 +96,21 @@ describe('RouteScreen', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
       expect(screen.queryByLabelText('Fecha de reparto')).not.toBeInTheDocument()
     })
+  })
+
+  it('passes dashboard planning values to the planner as initial props', async () => {
+    render(<RouteScreen />)
+
+    const date = await screen.findByLabelText('Fecha de servicio')
+    const zone = screen.getByLabelText('Zona de entrega')
+    await waitFor(() => expect(zone).toBeEnabled())
+    fireEvent.change(date, { target: { value: '2026-10-15' } })
+    fireEvent.change(zone, { target: { value: 'a'.repeat(24) } })
+    screen.getByRole('button', { name: 'Generar rutas' }).click()
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByLabelText('Fecha de reparto')).toHaveValue('2026-10-15')
+    expect(within(dialog).getByLabelText('Zona de entrega')).toHaveValue('a'.repeat(24))
   })
 
   it('announces loading while the session is hydrating', () => {

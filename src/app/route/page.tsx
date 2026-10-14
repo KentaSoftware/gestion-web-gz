@@ -24,11 +24,15 @@ import { useState } from 'react'
  */
 function RoutePlanningContent() {
   const [plannerOpen, setPlannerOpen] = useState(false)
+  const [plannerDefaults, setPlannerDefaults] = useState({ serviceDate: '', deliveryZoneId: '' })
 
   return (
     <PageContainer>
       <RouteDashboard
-        onGenerateRoutes={() => setPlannerOpen(true)}
+        onGenerateRoutes={(serviceDate, deliveryZoneId) => {
+          setPlannerDefaults({ serviceDate, deliveryZoneId })
+          setPlannerOpen(true)
+        }}
       />
       <Dialog open={plannerOpen} onOpenChange={setPlannerOpen}>
         <DialogContent className="max-h-[calc(100vh-2rem)] max-w-5xl overflow-y-auto">
@@ -38,7 +42,7 @@ function RoutePlanningContent() {
               Seleccioná los pedidos y revisá el recorrido antes de guardar el plan.
             </DialogDescription>
           </DialogHeader>
-          {plannerOpen && <RoutePlanner />}
+          {plannerOpen && <RoutePlanner initialServiceDate={plannerDefaults.serviceDate} initialDeliveryZoneId={plannerDefaults.deliveryZoneId} />}
         </DialogContent>
       </Dialog>
     </PageContainer>

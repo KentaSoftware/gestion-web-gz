@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Map, MapPin, Settings } from 'lucide-react'
+import { Filter, Loader2, Map, MapPin, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { routePlanService } from '@/services/routePlan.service'
-import type { RouteDashboard as RouteDashboardData } from '@/interfaces/routePlan.interface'
+import type { DeliveryZone, RouteDashboard as RouteDashboardData } from '@/interfaces/routePlan.interface'
 import { RouteKpiCards } from './RouteKpiCards'
 import { PlannedRouteCard } from './PlannedRouteCard'
 import { RouteConfigDialog } from './RouteConfigDialog'
@@ -15,11 +15,12 @@ import { RouteStopTimeline, type RouteStopTimelineStop } from './RouteStopTimeli
 import type { RoutePreview } from '@/interfaces/routePlan.interface'
 
 type LoadStatus = 'loading' | 'ready' | 'error'
+type ZoneStatus = 'loading' | 'ready' | 'error'
 
 const CLIENT_PAGE_SIZE = 5
 
 interface RouteDashboardProps {
-  onGenerateRoutes?: () => void
+  onGenerateRoutes?: (serviceDate: string, deliveryZoneId: string) => void
 }
 
 export function RouteDashboard({ onGenerateRoutes }: RouteDashboardProps = {}) {
@@ -34,6 +35,11 @@ export function RouteDashboard({ onGenerateRoutes }: RouteDashboardProps = {}) {
   const [configOpen, setConfigOpen] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
   const [geocodingClient, setGeocodingClient] = useState<{ id: string; name: string; address?: string } | null>(null)
+  const [serviceDate, setServiceDate] = useState('')
+  const [deliveryZoneId, setDeliveryZoneId] = useState('')
+  const [zones, setZones] = useState<DeliveryZone[]>([])
+  const [zoneStatus, setZoneStatus] = useState<ZoneStatus>('loading')
+  const [planningVisible, setPlanningVisible] = useState(true)
 
   useEffect(() => {
     let cancelled = false
@@ -55,6 +61,32 @@ export function RouteDashboard({ onGenerateRoutes }: RouteDashboardProps = {}) {
     })
     return () => { cancelled = true }
   }, [reloadToken])
+
+  useEffect(() => {
+    let cancelled = false
+    setZoneStatus('loading')
+    void routePlanService.getActiveDeliveryZones().then((activeZones) => {
+      if (cancelled) return
+      setZones(activeZones)
+      setZoneStatus('ready')
+    }).catch(() => {
+      if (cancelled) return
+      setZones([])
+      setZoneStatus('error')
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  const loadZones = () => {
+    setZoneStatus('loading')
+    void routePlanService.getActiveDeliveryZones().then((activeZones) => {
+      setZones(activeZones)
+      setZoneStatus('ready')
+    }).catch(() => {
+      setZones([])
+      setZoneStatus('error')
+    })
+  }
 
   const clientCandidates = dashboard === null
     ? []
@@ -116,7 +148,15 @@ export function RouteDashboard({ onGenerateRoutes }: RouteDashboardProps = {}) {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="secondary" onClick={() => setConfigOpen(true)}><Settings aria-hidden="true" /> Configurar ubicaciones</Button>
-          <Button type="button" onClick={() => onGenerateRoutes?.()} disabled={status === 'loading'}>Generar rutas</Button>
+          <Button
+            type="button"
+            variant="secondary"
+            aria-expanded={planningVisible}
+            aria-controls="route-planning-bar"
+            onClick={() => setPlanningVisible((visible) => !visible)}
+          >
+            <Filter aria-hidden="true" /> {planningVisible ? 'Ocultar filtros' : 'Mostrar filtros'}
+          </Button>
         </div>
       </div>
       {status === 'loading' && (
@@ -133,7 +173,46 @@ export function RouteDashboard({ onGenerateRoutes }: RouteDashboardProps = {}) {
       {status === 'ready' && dashboard !== null && (
         <>
           <RouteKpiCards kpis={dashboard.kpis} />
-            <div className="grid gap-4 lg:grid-cols-2">
+          {planningVisible && (
+            <div id="route-planning-bar" role="group" aria-label="Planificación de rutas" className="rounded-lg border border-border-subtle bg-surface-base p-4">
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="dashboard-service-date">Fecha de servicio</Label>
+                  <input
+                    id="dashboard-service-date"
+                    name="serviceDate"
+                    type="date"
+                    value={serviceDate}
+                    onChange={(event) => setServiceDate(event.target.value)}
+                    className="h-10 rounded-md border border-border-subtle bg-surface-base px-3 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-state-focus"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="dashboard-delivery-zone">Zona de entrega</Label>
+                  <select
+                    id="dashboard-delivery-zone"
+                    name="deliveryZoneId"
+                    value={deliveryZoneId}
+                    disabled={zoneStatus === 'loading'}
+                    onChange={(event) => setDeliveryZoneId(event.target.value)}
+                    className="h-10 rounded-md border border-border-subtle bg-surface-base px-3 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-state-focus disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">Todas las zonas</option>
+                    {zones.map((zone) => <option key={zone._id} value={zone._id}>{zone.name}</option>)}
+                  </select>
+                </div>
+                <Button type="button" onClick={() => onGenerateRoutes?.(serviceDate, deliveryZoneId)}>Generar rutas</Button>
+              </div>
+              {zoneStatus === 'loading' && <p role="status" className="mt-3 text-sm text-text-secondary">Cargando zonas…</p>}
+              {zoneStatus === 'error' && (
+                <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-state-error">
+                  <span>No se pudieron cargar las zonas de entrega.</span>
+                  <Button type="button" variant="secondary" size="sm" onClick={loadZones}>Reintentar</Button>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="grid gap-4 lg:grid-cols-2">
               <section aria-labelledby="planned-routes-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
                  <div className="flex flex-wrap items-start justify-between gap-3">
                    <h3 id="planned-routes-title" className="text-base font-semibold text-text-primary">Rutas planificadas ({dashboard.routes.length})</h3>
