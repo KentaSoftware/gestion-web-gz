@@ -145,7 +145,7 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
     : null
 
   return (
-    <section aria-labelledby="route-dashboard-title" className="mb-8 flex flex-col gap-6">
+    <section aria-labelledby="route-dashboard-title" className="mb-8 flex w-full min-w-0 flex-col gap-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 id="route-dashboard-title" className="text-heading-sm font-semibold text-text-primary">
@@ -315,14 +315,14 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
                </section>
              </div>
           {dashboard.warnings.length > 0 && <div role="alert" className="rounded-lg border border-state-warning bg-surface-base p-4 text-sm text-state-warning">{dashboard.warnings.join(' · ')}</div>}
-           {(mapVisible || detailVisible) && <div data-testid="route-lower-panels" className="grid gap-4">
-              {mapVisible && <section id="route-map-region" tabIndex={-1} aria-labelledby="route-map-title" className="min-w-0 rounded-lg border border-border-subtle bg-surface-base p-5">
+           {(mapVisible || detailVisible) && <div data-testid="route-lower-panels" className="grid w-full min-w-0 gap-4">
+              {mapVisible && <section id="route-map-region" tabIndex={-1} aria-labelledby="route-map-title" className="w-full min-w-0 rounded-lg border border-border-subtle bg-surface-base p-5">
                <h3 id="route-map-title" className="flex items-center gap-2 text-base font-semibold text-text-primary"><Map aria-hidden="true" /> Mapa interactivo</h3>
               <p className="mt-3 rounded-md border border-border-subtle bg-background-subtle p-4 text-sm text-text-secondary">El mapa es complementario. La secuencia textual de la ruta seleccionada permanece disponible aunque el proveedor o la API de mapas no estén disponibles.</p>
               {selectedRoutePreview !== null ? <RouteMap route={selectedRoutePreview} mapLocations={dashboard.mapLocations ?? []} /> : <p role="status" className="mt-3 text-sm text-text-secondary">No hay detalle geográfico disponible para esta ruta.</p>}
               {dashboard.routes.some((route) => route.stale) && <p role="status" className="mt-3 rounded-md border border-state-warning p-3 text-sm text-state-warning">Hay snapshots desactualizados. Se muestran en modo solo lectura; generá una nueva ruta para actualizar.</p>}
              </section>}
-              {detailVisible && <section id="route-detail-region" tabIndex={-1} aria-labelledby="route-detail-title" className="min-w-0 rounded-lg border border-border-subtle bg-surface-base p-5">
+              {detailVisible && <section id="route-detail-region" tabIndex={-1} aria-labelledby="route-detail-title" className="w-full min-w-0 rounded-lg border border-border-subtle bg-surface-base p-5">
               <h3 id="route-detail-title" className="text-base font-semibold text-text-primary">Detalle de ruta</h3>
               {selectedRoute === undefined ? <p className="mt-3 text-sm text-text-secondary">No hay una ruta seleccionada.</p> : (
                 <>
