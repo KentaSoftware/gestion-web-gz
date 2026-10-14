@@ -17,7 +17,7 @@
 
 **Preconditions:**
 - Dev server reachable at `http://127.0.0.1:3000` (Playwright `webServer`).
-- `NEXT_PUBLIC_ROUTE_ENABLED=true` in the dev process environment. **Observed blocker:** this repository's dev environment does not enable the route module flag, so `/route` renders `Módulo no disponible` (the sidebar also omits `Rutas`) and this case cannot start. Enabling the flag is an environment/config change outside this suite's edit surface; the spec is preserved and must run once the flag is enabled.
+- Authenticated session seeded with `read_route_plan` and `create_route_plan` permissions; route access is controlled by `read_route_plan`.
 - Session seeded in `localStorage.user` before app load: token present, `role.permissions = ["read_route_plan", "create_route_plan"]`.
 - `page.route()` intercepts `deliveryZone` and `routePlan*` requests regardless of `NEXT_PUBLIC_DB_HOST`:
   - `GET /deliveryZone` → one active zone.

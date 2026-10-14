@@ -4,16 +4,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAppSelector } from '@/redux/hook'
 import { getUser } from '@/redux/userSlice'
 import {
-  Permission,
   SESSION_STATUS,
   type SessionAccess,
   type SessionStatus,
 } from '@/interfaces/auth.interface'
 import {
   DEFAULT_MODULE_GATES,
-  MODULE_FLAG,
-  MODULE_FLAGS,
-  MODULE_GATE,
 } from '@/config/moduleRegistry'
 
 /**
@@ -23,9 +19,8 @@ import {
  * genuinely missing one (`anonymous`), so consumers can render a loading or
  * neutral state instead of the forbidden UI while permissions are unknown.
  *
- * The route gate is evidence-backed: it is met only when the route module flag
- * resolves to exactly `true` and the authenticated session can read route
- * plans. Every other module gate keeps its externally approved default.
+ * Module gates keep their externally approved defaults. Rutas is permission
+ * gated through the module registry and does not require a module gate.
  */
 export const useSessionAccess = (): SessionAccess => {
   const user = useAppSelector(getUser)
@@ -47,18 +42,7 @@ export const useSessionAccess = (): SessionAccess => {
 
   const permissions = useMemo(() => user.role?.permissions ?? [], [user.role])
 
-  const routeFlagEnabled = MODULE_FLAGS[MODULE_FLAG.ROUTE]
-
-  const gates = useMemo(() => {
-    const canReadRoutePlan =
-      status === SESSION_STATUS.READY &&
-      permissions.includes(Permission.READ_ROUTE_PLAN)
-
-    return {
-      ...DEFAULT_MODULE_GATES,
-      [MODULE_GATE.ROUTE]: routeFlagEnabled === true && canReadRoutePlan,
-    }
-  }, [status, permissions, routeFlagEnabled])
+  const gates = useMemo(() => DEFAULT_MODULE_GATES, [])
 
   return {
     status,

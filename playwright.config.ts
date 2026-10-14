@@ -13,9 +13,6 @@ export default defineConfig({
     url: 'http://127.0.0.1:3000',
     reuseExistingServer: !process.env.CI,
     env: {
-      // Legacy test-only setup: production access still requires the module
-      // flag plus read_route_plan, so E2E must enable the flag explicitly.
-      NEXT_PUBLIC_ROUTE_ENABLED: 'true',
       NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: '',
     },
   },

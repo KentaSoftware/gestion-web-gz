@@ -30,10 +30,9 @@ vi.mock('@/config/moduleRegistry', async (importOriginal) => {
 import AppSidebar from './AppSidebar'
 
 describe('AppSidebar', () => {
-  const routeEnabledForRepartidor = (entry: { id: string }, access: { permissions: string[]; gates: Record<string, boolean> }) =>
+  const routeEnabledForRepartidor = (entry: { id: string }, access: { permissions: string[] }) =>
     entry.id === 'home' || (
       entry.id === 'route' &&
-      access.gates.route === true &&
       access.permissions.includes('read_route_plan')
     )
 
@@ -41,7 +40,7 @@ describe('AppSidebar', () => {
     useSessionAccess.mockReturnValue({
       status: SESSION_STATUS.READY,
       permissions: [],
-      gates: { route: false, stock: false, finance: false, simulation: false },
+      gates: { stock: false, finance: false, simulation: false },
     })
     isModuleEnabled.mockImplementation(routeEnabledForRepartidor)
 
