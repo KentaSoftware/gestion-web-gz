@@ -145,7 +145,7 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
     : null
 
   return (
-    <section aria-labelledby="route-dashboard-title" className="mb-8 flex w-full min-w-0 flex-col gap-6">
+    <section aria-labelledby="route-dashboard-title" className="mb-8 flex w-full min-w-0 flex-1 min-h-0 flex-col gap-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 id="route-dashboard-title" className="text-heading-sm font-semibold text-text-primary">
@@ -315,7 +315,7 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
                </section>
              </div>
           {dashboard.warnings.length > 0 && <div role="alert" className="rounded-lg border border-state-warning bg-surface-base p-4 text-sm text-state-warning">{dashboard.warnings.join(' · ')}</div>}
-           {(mapVisible || detailVisible) && <div data-testid="route-lower-panels" className="grid w-full min-w-0 gap-4">
+            {(mapVisible || detailVisible) && <div data-testid="route-lower-panels" className="grid w-full min-w-0 flex-1 min-h-0 items-stretch gap-4">
               {mapVisible && <section id="route-map-region" tabIndex={-1} aria-labelledby="route-map-title" className="w-full min-w-0 rounded-lg border border-border-subtle bg-surface-base p-5">
                <h3 id="route-map-title" className="flex items-center gap-2 text-base font-semibold text-text-primary"><Map aria-hidden="true" /> Mapa interactivo</h3>
               <p className="mt-3 rounded-md border border-border-subtle bg-background-subtle p-4 text-sm text-text-secondary">El mapa es complementario. La secuencia textual de la ruta seleccionada permanece disponible aunque el proveedor o la API de mapas no estén disponibles.</p>
