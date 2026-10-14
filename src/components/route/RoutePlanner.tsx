@@ -349,7 +349,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
           <Checkbox id={id} checked={checked} disabled={isBlocked} aria-label={group.displayName} onCheckedChange={(value) => toggleClient(group, value === true)} />
         </td>
         <td className="px-3 py-1 align-middle text-sm font-medium text-text-primary">
-          <Label htmlFor={id} title={group.displayName} className="line-clamp-1 cursor-pointer">{group.displayName}</Label>
+          <Label htmlFor={id} title={group.displayName} className="line-clamp-2 cursor-pointer">{group.displayName}</Label>
         </td>
         <td className="px-3 py-1 align-middle text-xs text-text-secondary">
           <div title={group.addressSummary ?? 'Dirección no disponible'} className="line-clamp-1">{group.addressSummary ?? 'Dirección no disponible'}</div>
@@ -479,7 +479,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
 
       {loadStatus === 'ready' && candidates !== null && !isEmpty && (
         <div className="flex flex-col gap-4">
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-[1.08fr_1fr]">
             <section aria-labelledby="pending-orders-title" className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md">
               <h3 id="pending-orders-title" className="text-sm font-semibold text-brand-primary">Pedidos pendientes</h3>
               <p className="mt-1 text-xs text-text-secondary">
@@ -487,6 +487,13 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
               </p>
               <div data-testid="pending-orders-table-container" className="mt-3 h-[38rem] overflow-hidden">
                 <table className="w-full table-fixed border-collapse text-left" aria-label="Pedidos pendientes">
+                  <colgroup>
+                    <col className="w-10" />
+                    <col className="w-[30%]" />
+                    <col className="w-[42%]" />
+                    <col className="w-[13%]" />
+                    <col className="w-[15%]" />
+                  </colgroup>
                   <thead className="border-b border-border-subtle text-xs text-text-secondary">
                     <tr className="h-10">
                       <th scope="col" className="w-10 px-3 py-2"><span className="sr-only">Selección</span></th>
