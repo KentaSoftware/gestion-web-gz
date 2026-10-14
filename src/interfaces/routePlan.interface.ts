@@ -44,6 +44,9 @@ export interface CandidateEntry {
   clientId?: string
   displayName?: string
   addressSummary?: string
+  latitude?: number
+  longitude?: number
+  distanceMeters?: number
 }
 
 /** A candidate that was excluded with at least one stable reason. */

@@ -137,4 +137,61 @@ describe('RouteDashboard selected-route detail', () => {
     expect(within(list).getAllByRole('listitem')).toHaveLength(5)
     expect(screen.getByText('Página 1 de 2')).toBeInTheDocument()
   })
+
+  it('filters clients by name, address, or sale id and resets pagination', async () => {
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValue({
+      ...dashboard,
+      candidates: {
+        eligible: Array.from({ length: 6 }, (_, index) => ({
+          saleId: `sale-${index + 1}`,
+          displayName: `Cliente ${index + 1}`,
+          addressSummary: index === 5 ? 'Calle buscada 123' : `Dirección ${index + 1}`,
+        })),
+        blocked: [],
+        ruleVersion: 'candidate-eligibility-v1',
+      },
+    })
+    render(<RouteDashboard />)
+
+    await waitFor(() => expect(screen.getByText('Página 1 de 2')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Página siguiente' }))
+    expect(screen.getByText('Página 2 de 2')).toBeInTheDocument()
+
+    const search = screen.getByRole('searchbox', { name: 'Buscar cliente o dirección…' })
+    fireEvent.change(search, { target: { value: 'calle buscada' } })
+
+    expect(screen.getByText('Cliente 6')).toBeInTheDocument()
+    expect(screen.getByText('Página 1 de 1')).toBeInTheDocument()
+    expect(screen.queryByText('Cliente 1')).not.toBeInTheDocument()
+
+    fireEvent.change(search, { target: { value: 'sale-2' } })
+    expect(screen.getByText('Cliente 2')).toBeInTheDocument()
+
+    fireEvent.change(search, { target: { value: 'sin coincidencias' } })
+    expect(screen.getByRole('status', { name: 'Clientes sin coincidencias' })).toHaveTextContent('No se encontraron clientes')
+  })
+
+  it('renders location status and distance for eligible and blocked clients', async () => {
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValue({
+      ...dashboard,
+      candidates: {
+        eligible: [{ saleId: 'eligible-geo', displayName: 'Cliente geográfico', addressSummary: 'Dirección confirmada', latitude: -34.6, longitude: -58.4, distanceMeters: 1250 }],
+        blocked: [
+          { saleId: 'blocked-missing', displayName: 'Cliente sin ubicación', reasons: ['CLIENT_LOCATION_MISSING'] },
+          { saleId: 'blocked-unconfirmed', displayName: 'Cliente sin confirmar', reasons: ['CLIENT_LOCATION_UNCONFIRMED'] },
+        ],
+        ruleVersion: 'candidate-eligibility-v1',
+      },
+    })
+    render(<RouteDashboard />)
+
+    await waitFor(() => expect(screen.getByText('Cliente geográfico')).toBeInTheDocument())
+    expect(screen.getByText(/1,3 km/)).toBeInTheDocument()
+    expect(screen.getByText(/Ubicación confirmada/)).toBeInTheDocument()
+    expect(screen.getByText(/No posee coordenadas/)).toBeInTheDocument()
+    expect(screen.getByText(/Ubicación no confirmada/)).toBeInTheDocument()
+    expect(screen.getAllByText(/Distancia no disponible/)).toHaveLength(2)
+  })
 })

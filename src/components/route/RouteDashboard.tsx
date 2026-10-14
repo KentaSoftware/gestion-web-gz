@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useId, useState } from 'react'
-import { Filter, Loader2, Map, RefreshCw, Settings } from 'lucide-react'
+import { Filter, Loader2, Map, MapPin, RefreshCw, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { routePlanService } from '@/services/routePlan.service'
@@ -28,6 +28,7 @@ export function RouteDashboard() {
   const [zonesStatus, setZonesStatus] = useState<LoadStatus>('loading')
   const [dashboard, setDashboard] = useState<RouteDashboardData | null>(null)
   const [clientPage, setClientPage] = useState(1)
+  const [clientQuery, setClientQuery] = useState('')
   const [status, setStatus] = useState<LoadStatus>('loading')
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
   const [configOpen, setConfigOpen] = useState(false)
@@ -75,10 +76,15 @@ export function RouteDashboard() {
     ? []
     : [
         ...dashboard.candidates.eligible.map((candidate) => ({ candidate, blocked: false as const })),
-        ...dashboard.candidates.blocked.map((candidate) => ({ candidate, blocked: true as const })),
-      ]
-  const clientPageCount = Math.max(1, Math.ceil(clientCandidates.length / CLIENT_PAGE_SIZE))
-  const visibleClientCandidates = clientCandidates.slice((clientPage - 1) * CLIENT_PAGE_SIZE, clientPage * CLIENT_PAGE_SIZE)
+         ...dashboard.candidates.blocked.map((candidate) => ({ candidate, blocked: true as const })),
+       ]
+  const normalizedClientQuery = clientQuery.trim().toLocaleLowerCase()
+  const filteredClientCandidates = normalizedClientQuery === ''
+    ? clientCandidates
+    : clientCandidates.filter(({ candidate }) => [candidate.displayName, candidate.addressSummary, candidate.saleId]
+        .some((value) => value?.toLocaleLowerCase().includes(normalizedClientQuery)))
+  const clientPageCount = Math.max(1, Math.ceil(filteredClientCandidates.length / CLIENT_PAGE_SIZE))
+  const visibleClientCandidates = filteredClientCandidates.slice((clientPage - 1) * CLIENT_PAGE_SIZE, clientPage * CLIENT_PAGE_SIZE)
   const selectedRoute = dashboard?.routes.find((route) => route.id === selectedRouteId) ?? dashboard?.routes[0]
   const focusRegion = (regionId: string) => {
     const region = document.getElementById(regionId)
@@ -222,11 +228,58 @@ export function RouteDashboard() {
                 </div>
               </section>
               <section aria-labelledby="dashboard-clients-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
-                <h3 id="dashboard-clients-title" className="text-base font-semibold text-text-primary">Clientes con pedidos</h3>
-                <p className="mt-1 text-sm text-text-secondary">{dashboard.candidates.eligible.length} elegibles · {dashboard.candidates.blocked.length} bloqueados</p>
-                 <ul className="mt-4 flex flex-col gap-2" aria-label="Clientes y pedidos">
-                   {visibleClientCandidates.map(({ candidate, blocked }) => blocked ? <li key={candidate.saleId} className="rounded-md border border-state-warning p-3"><p className="font-medium text-text-primary">{candidate.displayName ?? candidate.saleId}</p><p className="text-xs text-state-warning">{candidate.reasons.map((reason) => reason === 'CLIENT_LOCATION_MISSING' ? 'La ubicación del cliente no está disponible' : reason === 'CLIENT_LOCATION_UNCONFIRMED' ? 'La ubicación necesita confirmación' : reason).join(' · ')}</p>{candidate.clientId !== undefined && (candidate.reasons.includes('CLIENT_LOCATION_MISSING') || candidate.reasons.includes('CLIENT_LOCATION_UNCONFIRMED')) && <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={() => setGeocodingClient({ id: candidate.clientId as string, name: candidate.displayName ?? candidate.saleId, address: candidate.addressSummary })}>Buscar ubicación</Button>}</li> : <li key={candidate.saleId} className="rounded-md border border-border-subtle p-3"><p className="font-medium text-text-primary">{candidate.displayName ?? candidate.saleId}</p><p className="text-xs text-text-secondary">{candidate.addressSummary ?? 'Dirección no disponible'} · Pedido elegible</p></li>)}
-                 </ul>
+                <h3 id="dashboard-clients-title" className="text-base font-semibold text-text-primary">Clientes con pedidos ({clientCandidates.length})</h3>
+                <p className="mt-1 text-sm text-text-secondary">{dashboard.candidates.eligible.length} elegibles · {dashboard.candidates.blocked.length} bloqueados{clientQuery.trim() !== '' ? ` · ${filteredClientCandidates.length} coincidencias` : ''}</p>
+                <div className="mt-4 flex flex-col gap-2">
+                  <Label htmlFor="dashboard-client-search">Buscar cliente o dirección…</Label>
+                  <input
+                    id="dashboard-client-search"
+                    type="search"
+                    value={clientQuery}
+                    onChange={(event) => { setClientQuery(event.target.value); setClientPage(1) }}
+                    placeholder="Buscar cliente o dirección…"
+                    className="h-10 rounded-md border border-border-subtle bg-surface-base px-3 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-state-focus"
+                  />
+                </div>
+                {filteredClientCandidates.length === 0 ? (
+                  <p role="status" aria-label="Clientes sin coincidencias" className="mt-4 rounded-md border border-border-subtle bg-background-subtle p-3 text-sm text-text-secondary">
+                    No se encontraron clientes para la búsqueda.
+                  </p>
+                ) : (
+                  <ul className="mt-4 flex flex-col gap-2" aria-label="Clientes y pedidos">
+                    {visibleClientCandidates.map(({ candidate, blocked }) => {
+                      const hasCoordinates = Number.isFinite(candidate.latitude) && Number.isFinite(candidate.longitude)
+                      const distanceMeters = candidate.distanceMeters
+                      const hasDistance = distanceMeters !== undefined && Number.isFinite(distanceMeters)
+                      const locationStatus = blocked
+                        ? candidate.reasons.includes('CLIENT_LOCATION_MISSING')
+                          ? 'No posee coordenadas'
+                          : candidate.reasons.includes('CLIENT_LOCATION_UNCONFIRMED')
+                            ? 'Ubicación no confirmada'
+                            : 'Pedido excluido'
+                        : hasCoordinates ? 'Ubicación confirmada' : 'Ubicación no confirmada'
+                      const reasonLabel = blocked ? candidate.reasons.map((reason) => reason === 'CLIENT_LOCATION_MISSING' ? 'La ubicación del cliente no está disponible' : reason === 'CLIENT_LOCATION_UNCONFIRMED' ? 'La ubicación necesita confirmación' : reason).join(' · ') : ''
+                      return (
+                        <li key={candidate.saleId} className={`rounded-md border p-3 ${blocked ? 'border-state-warning' : 'border-border-subtle'}`}>
+                          <div className="flex items-start gap-2">
+                            <MapPin className={`mt-0.5 size-4 shrink-0 ${blocked ? 'text-state-warning' : hasCoordinates ? 'text-state-success' : 'text-state-warning'}`} aria-hidden="true" />
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-text-primary">{candidate.displayName ?? candidate.saleId}</p>
+                              <p className="text-xs text-text-secondary">{candidate.addressSummary ?? 'Dirección no disponible'}</p>
+                              <p className={`mt-1 text-xs ${blocked ? 'text-state-warning' : hasCoordinates ? 'text-state-success' : 'text-state-warning'}`}>
+                                {locationStatus ?? reasonLabel}
+                                {' · '}
+                                {hasDistance ? `${(distanceMeters / 1000).toLocaleString('es-AR', { maximumFractionDigits: 1 })} km` : 'Distancia no disponible'}
+                              </p>
+                              {blocked && <p className="mt-1 text-xs text-state-warning">{reasonLabel}</p>}
+                              {blocked && candidate.clientId !== undefined && (candidate.reasons.includes('CLIENT_LOCATION_MISSING') || candidate.reasons.includes('CLIENT_LOCATION_UNCONFIRMED')) && <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={() => setGeocodingClient({ id: candidate.clientId as string, name: candidate.displayName ?? candidate.saleId, address: candidate.addressSummary })}>Buscar ubicación</Button>}
+                            </div>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
                  <nav aria-label="Paginación de clientes" className="mt-4 flex items-center justify-between gap-3">
                    <Button type="button" variant="secondary" size="sm" onClick={() => setClientPage((page) => page - 1)} disabled={clientPage === 1} aria-label="Página anterior">Anterior</Button>
                    <span role="status" aria-live="polite" className="text-sm text-text-secondary">Página {clientPage} de {clientPageCount}</span>
