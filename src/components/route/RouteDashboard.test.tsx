@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { RouteDashboard } from './RouteDashboard'
 
@@ -49,5 +49,44 @@ describe('RouteDashboard selected-route detail', () => {
     expect(screen.getByText('Ruta route-2')).toBeInTheDocument()
     expect(screen.getAllByText('driver-2').length).toBeGreaterThan(0)
     expect(screen.getByText('No hay detalle geográfico disponible para esta ruta.')).toBeInTheDocument()
+  })
+
+  it('paginates combined eligible and blocked clients', async () => {
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValue({
+      ...dashboard,
+      candidates: {
+        eligible: [
+          { saleId: 'eligible-1', displayName: 'Cliente elegible 1', addressSummary: 'Dirección 1' },
+          { saleId: 'eligible-2', displayName: 'Cliente elegible 2', addressSummary: 'Dirección 2' },
+          { saleId: 'eligible-3', displayName: 'Cliente elegible 3', addressSummary: 'Dirección 3' },
+        ],
+        blocked: [
+          { saleId: 'blocked-1', displayName: 'Cliente bloqueado 1', reasons: ['CLIENT_LOCATION_MISSING'] },
+          { saleId: 'blocked-2', displayName: 'Cliente bloqueado 2', reasons: ['CLIENT_LOCATION_UNCONFIRMED'] },
+          { saleId: 'blocked-3', displayName: 'Cliente bloqueado 3', reasons: ['CLIENT_LOCATION_MISSING'] },
+          { saleId: 'blocked-4', displayName: 'Cliente bloqueado 4', reasons: ['CLIENT_LOCATION_MISSING'] },
+        ],
+        ruleVersion: 'candidate-eligibility-v1',
+      },
+    })
+    render(<RouteDashboard />)
+
+    await waitFor(() => expect(screen.getByText('Cliente elegible 1')).toBeInTheDocument())
+    const list = screen.getByRole('list', { name: 'Clientes y pedidos' })
+    expect(within(list).getAllByRole('listitem')).toHaveLength(5)
+    expect(screen.getByRole('button', { name: 'Página anterior' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Página siguiente' })).not.toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Página siguiente' }))
+
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.getByText('Página 2 de 2')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Página siguiente' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Página anterior' }))
+
+    expect(within(list).getAllByRole('listitem')).toHaveLength(5)
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument()
   })
 })

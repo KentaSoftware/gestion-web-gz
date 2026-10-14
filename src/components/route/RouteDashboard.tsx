@@ -17,6 +17,7 @@ import type { RoutePreview } from '@/interfaces/routePlan.interface'
 type LoadStatus = 'loading' | 'ready' | 'error'
 
 const today = (): string => new Date().toISOString().slice(0, 10)
+const CLIENT_PAGE_SIZE = 5
 
 export function RouteDashboard() {
   const dateId = useId()
@@ -26,6 +27,7 @@ export function RouteDashboard() {
   const [zones, setZones] = useState<DeliveryZone[]>([])
   const [zonesStatus, setZonesStatus] = useState<LoadStatus>('loading')
   const [dashboard, setDashboard] = useState<RouteDashboardData | null>(null)
+  const [clientPage, setClientPage] = useState(1)
   const [status, setStatus] = useState<LoadStatus>('loading')
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
   const [configOpen, setConfigOpen] = useState(false)
@@ -50,6 +52,7 @@ export function RouteDashboard() {
     try {
       const result = await routePlanService.getDashboard({ serviceDate, zoneCode })
       setDashboard(result)
+      setClientPage(1)
       setSelectedRouteId(result.routes[0]?.id ?? null)
       setStatus('ready')
     } catch {
@@ -67,6 +70,14 @@ export function RouteDashboard() {
   }, [loadDashboard])
 
   const isEmpty = dashboard !== null && dashboard.routes.length === 0 && dashboard.candidates.eligible.length === 0
+  const clientCandidates = dashboard === null
+    ? []
+    : [
+        ...dashboard.candidates.eligible.map((candidate) => ({ candidate, blocked: false as const })),
+        ...dashboard.candidates.blocked.map((candidate) => ({ candidate, blocked: true as const })),
+      ]
+  const clientPageCount = Math.max(1, Math.ceil(clientCandidates.length / CLIENT_PAGE_SIZE))
+  const visibleClientCandidates = clientCandidates.slice((clientPage - 1) * CLIENT_PAGE_SIZE, clientPage * CLIENT_PAGE_SIZE)
   const selectedRoute = dashboard?.routes.find((route) => route.id === selectedRouteId) ?? dashboard?.routes[0]
   const selectedRoutePreview: RoutePreview['route'] | null = selectedRoute?.depot && selectedRoute.stops
     ? {
@@ -194,10 +205,14 @@ export function RouteDashboard() {
               <section aria-labelledby="dashboard-clients-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
                 <h3 id="dashboard-clients-title" className="text-base font-semibold text-text-primary">Clientes con pedidos</h3>
                 <p className="mt-1 text-sm text-text-secondary">{dashboard.candidates.eligible.length} elegibles · {dashboard.candidates.blocked.length} bloqueados</p>
-                <ul className="mt-4 flex flex-col gap-2" aria-label="Clientes y pedidos">
-                  {dashboard.candidates.eligible.map((candidate) => <li key={candidate.saleId} className="rounded-md border border-border-subtle p-3"><p className="font-medium text-text-primary">{candidate.displayName ?? candidate.saleId}</p><p className="text-xs text-text-secondary">{candidate.addressSummary ?? 'Dirección no disponible'} · Pedido elegible</p></li>)}
-                   {dashboard.candidates.blocked.map((candidate) => <li key={candidate.saleId} className="rounded-md border border-state-warning p-3"><p className="font-medium text-text-primary">{candidate.displayName ?? candidate.saleId}</p><p className="text-xs text-state-warning">{candidate.reasons.map((reason) => reason === 'CLIENT_LOCATION_MISSING' ? 'La ubicación del cliente no está disponible' : reason === 'CLIENT_LOCATION_UNCONFIRMED' ? 'La ubicación necesita confirmación' : reason).join(' · ')}</p>{candidate.clientId !== undefined && (candidate.reasons.includes('CLIENT_LOCATION_MISSING') || candidate.reasons.includes('CLIENT_LOCATION_UNCONFIRMED')) && <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={() => setGeocodingClient({ id: candidate.clientId as string, name: candidate.displayName ?? candidate.saleId, address: candidate.addressSummary })}>Buscar ubicación</Button>}</li>)}
+                 <ul className="mt-4 flex flex-col gap-2" aria-label="Clientes y pedidos">
+                   {visibleClientCandidates.map(({ candidate, blocked }) => blocked ? <li key={candidate.saleId} className="rounded-md border border-state-warning p-3"><p className="font-medium text-text-primary">{candidate.displayName ?? candidate.saleId}</p><p className="text-xs text-state-warning">{candidate.reasons.map((reason) => reason === 'CLIENT_LOCATION_MISSING' ? 'La ubicación del cliente no está disponible' : reason === 'CLIENT_LOCATION_UNCONFIRMED' ? 'La ubicación necesita confirmación' : reason).join(' · ')}</p>{candidate.clientId !== undefined && (candidate.reasons.includes('CLIENT_LOCATION_MISSING') || candidate.reasons.includes('CLIENT_LOCATION_UNCONFIRMED')) && <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={() => setGeocodingClient({ id: candidate.clientId as string, name: candidate.displayName ?? candidate.saleId, address: candidate.addressSummary })}>Buscar ubicación</Button>}</li> : <li key={candidate.saleId} className="rounded-md border border-border-subtle p-3"><p className="font-medium text-text-primary">{candidate.displayName ?? candidate.saleId}</p><p className="text-xs text-text-secondary">{candidate.addressSummary ?? 'Dirección no disponible'} · Pedido elegible</p></li>)}
                  </ul>
+                 <nav aria-label="Paginación de clientes" className="mt-4 flex items-center justify-between gap-3">
+                   <Button type="button" variant="secondary" size="sm" onClick={() => setClientPage((page) => page - 1)} disabled={clientPage === 1} aria-label="Página anterior">Anterior</Button>
+                   <span role="status" aria-live="polite" className="text-sm text-text-secondary">Página {clientPage} de {clientPageCount}</span>
+                   <Button type="button" variant="secondary" size="sm" onClick={() => setClientPage((page) => page + 1)} disabled={clientPage === clientPageCount} aria-label="Página siguiente">Siguiente</Button>
+                 </nav>
               </section>
             </div>
           )}
