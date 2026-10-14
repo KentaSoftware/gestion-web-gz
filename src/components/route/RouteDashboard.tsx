@@ -216,30 +216,33 @@ export function RouteDashboard({ onGenerateRoutes }: RouteDashboardProps = {}) {
       {status === 'ready' && dashboard !== null && (
         <>
           <RouteKpiCards kpis={dashboard.kpis} />
-           <div className={`grid gap-4 ${dashboard.routes.length > 0 ? 'lg:grid-cols-2' : ''}`}>
-             {dashboard.routes.length > 0 && <section aria-labelledby="planned-routes-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <h3 id="planned-routes-title" className="text-base font-semibold text-text-primary">Rutas planificadas ({dashboard.routes.length})</h3>
-                  <div role="group" aria-label="Estados de ruta" className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
+            <div className={`grid gap-4 ${dashboard.routes.length > 0 ? 'lg:grid-cols-2' : ''}`}>
+              <section aria-labelledby="planned-routes-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
+                 <div className="flex flex-wrap items-start justify-between gap-3">
+                   <h3 id="planned-routes-title" className="text-base font-semibold text-text-primary">Rutas planificadas ({dashboard.routes.length})</h3>
+                   <div role="group" aria-label="Estados de ruta" className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
                     <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-state-warning" aria-hidden="true" />Pendiente</span>
                     <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-state-info" aria-hidden="true" />En progreso</span>
                     <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-state-success" aria-hidden="true" />Completada</span>
                   </div>
                 </div>
                     <div className="mt-4 flex flex-col gap-3">
-                     {dashboard.routes.map((route) => (
-                       <PlannedRouteCard
-                         key={route.id}
-                         route={route}
-                         selected={selectedRoute?.id === route.id}
-                         onSelect={() => setSelectedRouteId(route.id)}
-                         onViewMap={() => handleRouteAction(route.id, 'route-map-region')}
-                         onPreview={() => handleRouteAction(route.id, 'route-detail-region')}
-                       />
-                     ))}
-                   </div>
+                      {dashboard.routes.length === 0 ? (
+                        <p role="status" className="flex min-h-32 items-center justify-center rounded-md border border-border-subtle bg-background-subtle p-4 text-center text-sm text-text-secondary">
+                          No existen rutas planificadas para el usuario
+                        </p>
+                      ) : dashboard.routes.map((route) => (
+                        <PlannedRouteCard
+                          key={route.id}
+                          route={route}
+                          selected={selectedRoute?.id === route.id}
+                          onSelect={() => setSelectedRouteId(route.id)}
+                          onViewMap={() => handleRouteAction(route.id, 'route-map-region')}
+                          onPreview={() => handleRouteAction(route.id, 'route-detail-region')}
+                        />
+                      ))}
+                    </div>
                 </section>
-             }
              <section aria-labelledby="dashboard-clients-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
                 <h3 id="dashboard-clients-title" className="text-base font-semibold text-text-primary">Clientes con pedidos ({clientCandidates.length})</h3>
                 <p className="mt-1 text-sm text-text-secondary">{dashboard.candidates.eligible.length} elegibles · {dashboard.candidates.blocked.length} bloqueados{clientQuery.trim() !== '' ? ` · ${filteredClientCandidates.length} coincidencias` : ''}</p>

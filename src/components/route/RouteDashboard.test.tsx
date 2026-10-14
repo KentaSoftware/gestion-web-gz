@@ -98,14 +98,15 @@ describe('RouteDashboard selected-route detail', () => {
     expect(document.activeElement).toBe(document.getElementById('route-detail-region'))
   })
 
-  it('omits the planned-routes panel when no routes exist while keeping clients visible', async () => {
+  it('keeps the planned-routes panel visible when no routes exist', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     getDashboard.mockResolvedValue({ ...dashboard, routes: [], candidates: { ...dashboard.candidates } })
     render(<RouteDashboard />)
 
     await waitFor(() => expect(screen.getByRole('heading', { name: /Clientes con pedidos/ })).toBeInTheDocument())
-    expect(screen.queryByRole('heading', { name: 'Rutas planificadas (0)' })).not.toBeInTheDocument()
-    expect(screen.queryByText('No existen rutas planificadas para el usuario')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Rutas planificadas (0)' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Estados de ruta' })).toBeInTheDocument()
+    expect(screen.getByText('No existen rutas planificadas para el usuario')).toBeInTheDocument()
     expect(screen.queryByText('No hay rutas ni clientes pendientes para la fecha y zona seleccionadas.')).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Mapa interactivo' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Detalle de ruta' })).not.toBeInTheDocument()
