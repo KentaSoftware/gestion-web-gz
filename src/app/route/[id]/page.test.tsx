@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route } from 'lucide-react'
-import { Permission, SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
+import { SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
 import type { RoutePlan } from '@/interfaces/routePlan.interface'
 
 const { getById, preview, useParams, push, refresh, back, useSessionAccess, usePermission, isModuleEnabled, moduleFlags } =
@@ -47,7 +47,7 @@ vi.mock('@/config/moduleRegistry', () => ({
       label: 'Rutas',
       icon: Route,
       flag: 'route',
-      requiredPermissions: [Permission.READ_ROUTE_PLAN],
+       requiredPermissions: [],
       gate: 'route',
     },
   ],
@@ -60,7 +60,7 @@ import RoutePlanDetailScreen from './page'
 
 const access = (overrides: Partial<SessionAccess> = {}): SessionAccess => ({
   status: SESSION_STATUS.READY,
-  permissions: [Permission.READ_ROUTE_PLAN],
+  permissions: [],
   gates: { route: true, stock: false, finance: false, simulation: false },
   ...overrides,
 })
@@ -105,6 +105,16 @@ describe('RoutePlanDetailScreen', () => {
     render(<RoutePlanDetailScreen />)
 
     expect(screen.getByRole('status')).toHaveTextContent('Cargando plan de ruta')
+  })
+
+  it('opens saved plan detail without route-specific permissions', async () => {
+    getById.mockResolvedValue(SNAPSHOT)
+    useSessionAccess.mockReturnValue(access({ permissions: [] }))
+    usePermission.mockReturnValue({ hasPermission: () => false, hasAnyPermission: () => false })
+
+    render(<RoutePlanDetailScreen />)
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Plan de ruta guardado' })).toBeInTheDocument()
   })
 
   it('renders the saved snapshot and never calls the preview or provider', async () => {

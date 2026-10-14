@@ -17,8 +17,8 @@
 
 **Preconditions:**
 - Dev server reachable at `http://127.0.0.1:3000` (Playwright `webServer`).
-- Authenticated session seeded with `read_route_plan` and `create_route_plan` permissions; route access is controlled by `read_route_plan`.
-- Session seeded in `localStorage.user` before app load: token present, `role.permissions = ["read_route_plan", "create_route_plan"]`.
+- Authenticated session seeded with no route-specific permissions; authentication is required but route-flow access is not permission-gated.
+- Session seeded in `localStorage.user` before app load: token present, `role.permissions = []`.
 - `page.route()` intercepts `deliveryZone` and `routePlan*` requests regardless of `NEXT_PUBLIC_DB_HOST`:
   - `GET /deliveryZone` → one active zone.
   - `GET /routePlan/candidates` → one eligible and one blocked destination.

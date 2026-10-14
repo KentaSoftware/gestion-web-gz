@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route } from 'lucide-react'
-import { Permission, SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
+import { SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
 
 const { useSessionAccess, usePermission, push, isModuleEnabled, moduleFlags } = vi.hoisted(() => ({
   useSessionAccess: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock('@/config/moduleRegistry', () => ({
       label: 'Rutas',
       icon: Route,
       flag: 'route',
-      requiredPermissions: [Permission.READ_ROUTE_PLAN],
+       requiredPermissions: [],
       gate: 'route',
     },
   ],
@@ -46,7 +46,7 @@ import RouteScreen from './page'
 
 const access = (overrides: Partial<SessionAccess> = {}): SessionAccess => ({
   status: SESSION_STATUS.READY,
-  permissions: [Permission.READ_ROUTE_PLAN],
+  permissions: [],
   gates: { route: true, stock: false, finance: false, simulation: false },
   ...overrides,
 })
@@ -58,7 +58,7 @@ describe('RouteScreen', () => {
     usePermission.mockReturnValue({ hasPermission: () => true, hasAnyPermission: () => true })
   })
 
-  it('renders the route planning shell for an authorized session', () => {
+  it('renders the route planning shell for any authenticated session', () => {
     render(<RouteScreen />)
 
     expect(screen.getByRole('heading', { level: 1, name: 'Rutas' })).toBeInTheDocument()
@@ -74,27 +74,13 @@ describe('RouteScreen', () => {
     expect(screen.queryByRole('heading', { level: 1, name: 'Rutas' })).not.toBeInTheDocument()
   })
 
-  it('renders the forbidden state when the session cannot read route plans', () => {
-    isModuleEnabled.mockReturnValue(false)
+  it('renders the route planning shell without route-specific permissions', () => {
     useSessionAccess.mockReturnValue(access({ permissions: [] }))
     usePermission.mockReturnValue({ hasPermission: () => false, hasAnyPermission: () => false })
 
     render(<RouteScreen />)
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Acceso restringido')
-    expect(screen.queryByRole('heading', { level: 1, name: 'Rutas' })).not.toBeInTheDocument()
-  })
-
-  it('renders the unavailable state when the module gate is unmet', () => {
-    isModuleEnabled.mockReturnValue(false)
-    useSessionAccess.mockReturnValue(
-      access({ gates: { route: false, stock: false, finance: false, simulation: false } })
-    )
-
-    render(<RouteScreen />)
-
-    expect(screen.getByRole('alert')).toHaveTextContent('Módulo no disponible')
-    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Rutas' })).toBeInTheDocument()
   })
 
   it('redirects anonymous sessions home without rendering the shell', () => {

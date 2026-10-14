@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route } from 'lucide-react'
 import { SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
 import type { ModuleRegistryEntry } from '@/config/moduleRegistry'
-import { REPARTIDOR_ACCESS, WITHOUT_ROUTE_READ_ACCESS } from '@/test/fixtures/sessionAccess'
+import { REPARTIDOR_ACCESS } from '@/test/fixtures/sessionAccess'
 
 const { refresh, useSessionAccess, isModuleEnabled } = vi.hoisted(() => ({
   refresh: vi.fn(),
@@ -26,12 +26,12 @@ const entry: ModuleRegistryEntry = {
   icon: Route,
   flag: null,
   gate: null,
-  requiredPermissions: ['read_route_plan'],
+  requiredPermissions: [],
 }
 
 const access = (status: SessionAccess['status'], gates: Readonly<Record<string, boolean>>): SessionAccess => ({
   status,
-  permissions: ['read_route_plan'],
+  permissions: [],
   gates,
 })
 
@@ -50,13 +50,13 @@ describe('ModuleGate', () => {
     expect(screen.queryByText('Visible content')).not.toBeInTheDocument()
   })
 
-  it('renders a forbidden state when the module is enabled but permissions are absent', () => {
+  it('renders a forbidden state when a gated module is disabled', () => {
     render(<ModuleGate entry={entry}>Visible content</ModuleGate>)
 
     expect(screen.getByRole('alert')).toHaveTextContent('Acceso restringido')
   })
 
-  it('allows the enabled Rutas module for the Repartidor fixture', () => {
+  it('allows the enabled Rutas module without route-specific permissions', () => {
     useSessionAccess.mockReturnValue(REPARTIDOR_ACCESS)
     isModuleEnabled.mockReturnValue(true)
 
@@ -65,13 +65,12 @@ describe('ModuleGate', () => {
     expect(screen.getByText('Visible content')).toBeInTheDocument()
   })
 
-  it('denies direct Rutas access without read_route_plan', () => {
-    useSessionAccess.mockReturnValue(WITHOUT_ROUTE_READ_ACCESS)
-    isModuleEnabled.mockReturnValue(false)
+  it('allows direct Rutas access for an authenticated user without route permissions', () => {
+    useSessionAccess.mockReturnValue({ ...REPARTIDOR_ACCESS, permissions: [] })
+    isModuleEnabled.mockReturnValue(true)
 
     render(<ModuleGate entry={entry}>Visible content</ModuleGate>)
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Acceso restringido')
-    expect(screen.queryByText('Visible content')).not.toBeInTheDocument()
+    expect(screen.getByText('Visible content')).toBeInTheDocument()
   })
 })

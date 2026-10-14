@@ -2,7 +2,7 @@ import { expect, type Page, test } from '@playwright/test'
 
 const session = {
   nickname: 'e2e-operator', token: 'e2e-token', id: 'user-1', email: 'e2e@example.com',
-  role: { _id: 'role-1', name: 'operator', permissions: ['read_route_plan', 'create_route_plan'] },
+  role: { _id: 'role-1', name: 'operator', permissions: [] },
 }
 
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })

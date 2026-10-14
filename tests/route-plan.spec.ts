@@ -26,7 +26,7 @@ const SESSION = {
   role: {
     _id: 'role-1',
     name: 'operator',
-    permissions: ['read_route_plan', 'create_route_plan'],
+    permissions: [],
   },
 }
 
@@ -192,7 +192,7 @@ test.describe('Route plan acceptance', () => {
 
       await page.goto('/route')
 
-      // Authorized shell (session hydrated from localStorage, route module gate).
+       // Authenticated shell (session hydrated from localStorage; no route permission is required).
       // Generous timeout: the first `/route` request compiles the dev chunk.
       await expect(page.getByRole('heading', { level: 1, name: 'Rutas' })).toBeVisible({ timeout: 15_000 })
       await expect(page.getByRole('heading', { level: 2, name: 'Planificación de rutas' })).toBeVisible({

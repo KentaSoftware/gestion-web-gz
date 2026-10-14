@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import ProtectedRoute from '@/components/ProtectedRoute'
-import { Permission } from '@/interfaces/auth.interface'
 import { PageContainer, PageHeader } from '@/components/layout/PageLayout'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -55,8 +54,7 @@ const BackToPlanner = () => (
  * Saved route-plan detail (T-F.6).
  *
  * Reads one immutable snapshot by identifier and renders it exactly as stored.
- * Access is gated by the existing `ProtectedRoute` path-prefix behavior for
- * `/route`, which requires `read_route_plan`. The page only calls `getById`: it
+ * Access requires an authenticated session. The page only calls `getById`: it
  * never recalculates a preview nor calls the routing provider, so a saved plan
  * stays viewable when providers are unavailable.
  */
@@ -156,10 +154,7 @@ function RoutePlanDetailContent() {
 
 export default function RoutePlanDetailScreen() {
   return (
-    <ProtectedRoute
-      requiredPermission={Permission.READ_ROUTE_PLAN}
-      deniedMessage="No tienes permisos para ver los planes de ruta. Contacta a tu administrador si necesitas acceso."
-    >
+    <ProtectedRoute>
       <Suspense
         fallback={
           <div className="flex min-h-screen items-center justify-center bg-background-canvas">

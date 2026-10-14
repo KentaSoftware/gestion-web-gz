@@ -9,7 +9,7 @@ import { Permission, SESSION_STATUS, type SessionAccess } from '@/interfaces/aut
 
 const repartidorAccess: SessionAccess = {
   status: SESSION_STATUS.READY,
-  permissions: [Permission.READ_ROUTE_PLAN],
+  permissions: [],
   gates: {
     stock: false,
     finance: false,
@@ -43,19 +43,19 @@ describe('MODULE_REGISTRY', () => {
     expect(repartidorAccess.permissions).not.toContain(Permission.REFUND_SALE)
   })
 
-  it('enables Rutas for an authenticated session with read_route_plan', () => {
+  it('enables Rutas for any authenticated session without route permissions', () => {
     const route = MODULE_REGISTRY.find((entry) => entry.id === 'route')
 
     expect(route).toBeDefined()
-    expect(route).toMatchObject({ flag: null, gate: null, requiredPermissions: [Permission.READ_ROUTE_PLAN] })
+    expect(route).toMatchObject({ flag: null, gate: null, requiredPermissions: [] })
     expect(isModuleEnabled(route!, repartidorAccess)).toBe(true)
   })
 
-  it('does not enable Rutas for a session without read_route_plan', () => {
+  it('does not reintroduce route-specific permission requirements', () => {
     const route = MODULE_REGISTRY.find((entry) => entry.id === 'route')
 
     expect(route).toBeDefined()
-    expect(isModuleEnabled(route!, { ...repartidorAccess, permissions: [] })).toBe(false)
+    expect(isModuleEnabled(route!, { ...repartidorAccess, permissions: ['unrelated_permission'] })).toBe(true)
   })
 
   it('does not expose modules while the session is hydrating', () => {

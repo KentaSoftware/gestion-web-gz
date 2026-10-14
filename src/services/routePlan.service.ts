@@ -26,16 +26,17 @@ const ROUTE_CONFIG_URL = '/routePlan/config'
  * HTTP client for route planning (T-F.2 candidate review, T-F.4 preview,
  * T-F.6 saved plans).
  *
- * Read calls require `read_route_plan`; preview and save require
- * `create_route_plan`. Saving persists the current preview immediately and
- * returns the immutable snapshot; reading returns the stored snapshot only and
- * never recomputes the route or calls the provider. Request failures propagate
- * unchanged so callers keep the existing apiClient error behavior.
+ * Route-flow calls remain authenticated API requests; frontend route access is
+ * intentionally not gated by route-specific permissions for now. Saving
+ * persists the current preview immediately and returns the immutable snapshot;
+ * reading returns the stored snapshot only and never recomputes the route or
+ * calls the provider. Request failures propagate unchanged so callers keep the
+ * existing apiClient error behavior.
  */
 export const routePlanService = {
   /**
    * Active delivery zones available for planning.
-   * Requires: read_route_plan permission.
+   * Requires an authenticated API session.
    */
   getActiveDeliveryZones: async (): Promise<DeliveryZone[]> => {
     const response = await apiClient.get<DeliveryZone[]>(DELIVERY_ZONE_URL, {
@@ -81,7 +82,7 @@ export const routePlanService = {
 
   /**
    * Eligible and blocked candidates for a civil service date and zone.
-   * Requires: read_route_plan permission.
+    * Requires an authenticated API session.
    */
   getCandidates: async ({
     serviceDate,
@@ -96,7 +97,7 @@ export const routePlanService = {
   /**
    * Deterministic route preview for the selected sales of one service date and
    * zone. The backend groups selected sales by client and returns ordered stops.
-   * Requires: create_route_plan permission.
+    * Requires an authenticated API session.
    */
   preview: async ({
     serviceDate,
@@ -118,7 +119,7 @@ export const routePlanService = {
   /**
    * Persists the current preview as an immutable snapshot and returns it.
    * The backend recomputes and validates the preview before saving; there is no
-   * partial save. Requires: create_route_plan permission.
+    * partial save. Requires an authenticated API session.
    */
   save: async ({
     serviceDate,
@@ -140,7 +141,7 @@ export const routePlanService = {
   /**
    * Reads one stored snapshot by identifier. This never recomputes the route or
    * calls the routing provider: saved plans remain viewable when providers are
-   * unavailable. Requires: read_route_plan permission.
+    * unavailable. Requires an authenticated API session.
    */
   getById: async (id: string): Promise<RoutePlan> => {
     const response = await apiClient.get<RoutePlan>(`${ROUTE_PLAN_URL}/${id}`)
