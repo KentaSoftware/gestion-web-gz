@@ -1,9 +1,9 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RoutePreview as RoutePreviewData } from '@/interfaces/routePlan.interface'
 
-const { useApiLoadingStatus } = vi.hoisted(() => ({ useApiLoadingStatus: vi.fn() }))
+const { useApiLoadingStatus, useMap } = vi.hoisted(() => ({ useApiLoadingStatus: vi.fn(), useMap: vi.fn() }))
 
 /**
  * Stable map-package mock. The real `@vis.gl/react-google-maps` injects the
@@ -23,10 +23,13 @@ vi.mock('@vis.gl/react-google-maps', () => {
   return {
     APILoadingStatus,
     useApiLoadingStatus,
+    useMap,
+    ControlPosition: { TOP_RIGHT: 'TOP_RIGHT' },
     APIProvider: ({ children }: { children?: ReactNode }) => (
       <div data-testid="api-provider">{children}</div>
     ),
     Map: ({ children }: { children?: ReactNode }) => <div data-testid="map">{children}</div>,
+    MapControl: ({ children }: { children?: ReactNode }) => <div data-testid="map-control">{children}</div>,
     Marker: ({
       position,
       label,
@@ -116,6 +119,8 @@ afterEach(() => {
   if (ORIGINAL_API_KEY === undefined) delete process.env[API_KEY_ENV]
   else process.env[API_KEY_ENV] = ORIGINAL_API_KEY
   useApiLoadingStatus.mockReset()
+  useMap.mockReset()
+  useMap.mockReturnValue(null)
 })
 
 describe('decodePolyline', () => {
@@ -191,6 +196,59 @@ describe('RouteMap', () => {
     expect(renderedPolylinePath()).not.toEqual(APPROXIMATE_CONNECTOR)
     expect(screen.getByText(/trazado vial/i)).toBeInTheDocument()
     expect(screen.queryByText(/no representa la geometría vial/i)).not.toBeInTheDocument()
+  })
+
+  it('renders categorized locations in the default full view without duplicating route stops', () => {
+    process.env[API_KEY_ENV] = 'test-key'
+    useApiLoadingStatus.mockReturnValue('LOADED')
+    render(<RouteMap route={ROUTE} mapLocations={[
+      { clientId: 'client-1', displayName: 'Pedido existente', latitude: -34.61, longitude: -58.41, status: 'ORDER' as const },
+      { clientId: 'client-3', displayName: 'Sin pedido', latitude: -34.63, longitude: -58.43, status: 'NO_ORDER' as const },
+      { clientId: 'client-4', displayName: 'Excluido', latitude: -34.64, longitude: -58.44, status: 'EXCLUDED' as const },
+    ]} />)
+
+    expect(screen.getAllByTestId('map-marker')).toHaveLength(5)
+    expect(screen.getAllByTestId('map-marker').map((marker) => marker.getAttribute('data-title'))).toEqual([
+      'Depósito Central', 'Parada 1', 'Parada 2', 'NO_ORDER · Sin pedido', 'EXCLUDED · Excluido',
+    ])
+    expect(screen.getByText('Depósito')).toBeInTheDocument()
+    expect(screen.getByText('Clientes con pedido')).toBeInTheDocument()
+    expect(screen.getByText('Clientes sin pedido')).toBeInTheDocument()
+    expect(screen.getByText('Excluidos')).toBeInTheDocument()
+  })
+
+  it('toggles route view and exposes keyboard-accessible map controls', () => {
+    process.env[API_KEY_ENV] = 'test-key'
+    useApiLoadingStatus.mockReturnValue('LOADED')
+    render(<RouteMap route={ROUTE} mapLocations={[{ clientId: 'client-3', displayName: 'Sin pedido', latitude: -34.63, longitude: -58.43, status: 'NO_ORDER' as const }]} />)
+
+    expect(screen.getByRole('button', { name: 'Vista completa' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Vista de ruta' }))
+    expect(screen.getByRole('button', { name: 'Vista de ruta' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getAllByTestId('map-marker')).toHaveLength(3)
+    expect(screen.getByRole('button', { name: 'Centrar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Acercar mapa' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Alejar mapa' })).toBeInTheDocument()
+  })
+
+  it('uses the Google map instance for zoom and center controls when available', () => {
+    process.env[API_KEY_ENV] = 'test-key'
+    useApiLoadingStatus.mockReturnValue('LOADED')
+    const map = {
+      getZoom: vi.fn(() => 12),
+      setZoom: vi.fn(),
+      panTo: vi.fn(),
+    }
+    useMap.mockReturnValue(map)
+    render(<RouteMap route={ROUTE} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Acercar mapa' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Alejar mapa' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Centrar' }))
+
+    expect(map.setZoom).toHaveBeenNthCalledWith(1, 13)
+    expect(map.setZoom).toHaveBeenNthCalledWith(2, 11)
+    expect(map.panTo).toHaveBeenCalledWith({ lat: -34.61, lng: -58.41 })
   })
 
   describe('geometry fallback', () => {

@@ -1,15 +1,18 @@
 'use client'
 
-import { useId, type ReactNode } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import {
   APIProvider,
   APILoadingStatus,
   Map,
+  MapControl,
   Marker,
   Polyline,
+  ControlPosition,
+  useMap,
   useApiLoadingStatus,
 } from '@vis.gl/react-google-maps'
-import type { RoutePreview } from '@/interfaces/routePlan.interface'
+import { ROUTE_MAP_LOCATION_STATUS, type RouteMapLocation, type RoutePreview } from '@/interfaces/routePlan.interface'
 
 type PreviewRoute = RoutePreview['route']
 
@@ -22,6 +25,7 @@ export interface RouteMapPoint {
 interface RouteMapProps {
   /** Ordered preview route as returned by the backend. Never reordered here. */
   route: PreviewRoute
+  mapLocations?: RouteMapLocation[]
 }
 
 const MISSING_KEY_MESSAGE = 'El mapa no está configurado. Las paradas se detallan en la lista del recorrido.'
@@ -104,6 +108,11 @@ const centerOf = (route: PreviewRoute): { lat: number; lng: number } => {
   }
 }
 
+const centerOfPoints = (points: RouteMapPoint[]): { lat: number; lng: number } => ({
+  lat: (Math.min(...points.map((point) => point.lat)) + Math.max(...points.map((point) => point.lat))) / 2,
+  lng: (Math.min(...points.map((point) => point.lng)) + Math.max(...points.map((point) => point.lng))) / 2,
+})
+
 const MapFallback = ({ message }: { message: string }) => (
   <p
     role="status"
@@ -117,10 +126,71 @@ interface RouteMapCanvasProps {
   route: PreviewRoute
   /** Decoded road geometry, or null when the backend polyline is unusable. */
   roadGeometry: RouteMapPoint[] | null
+  mapLocations: RouteMapLocation[]
 }
 
-const RouteMapCanvas = ({ route, roadGeometry }: RouteMapCanvasProps) => {
+type MapView = 'full' | 'route'
+
+const mapLocationTitle = (location: RouteMapLocation): string => `${location.status} · ${location.displayName}`
+
+const MapControls = ({ onFit, onZoomIn, onZoomOut, onCenter }: { onFit: () => void; onZoomIn: () => void; onZoomOut: () => void; onCenter: () => void }) => (
+  <div className="flex flex-wrap gap-1 rounded-md border border-border-subtle bg-surface-base p-1 shadow-sm" role="group" aria-label="Controles del mapa">
+    <button type="button" className="rounded px-2 py-1 text-xs text-text-primary hover:bg-background-subtle" onClick={onFit}>Ajustar vista</button>
+    <button type="button" className="rounded px-2 py-1 text-xs text-text-primary hover:bg-background-subtle" onClick={onCenter}>Centrar</button>
+    <button type="button" className="rounded px-2 py-1 text-xs text-text-primary hover:bg-background-subtle" onClick={onZoomIn} aria-label="Acercar mapa">+</button>
+    <button type="button" className="rounded px-2 py-1 text-xs text-text-primary hover:bg-background-subtle" onClick={onZoomOut} aria-label="Alejar mapa">−</button>
+  </div>
+)
+
+const RouteMapCanvas = ({ route, roadGeometry, mapLocations }: RouteMapCanvasProps) => {
   const status = useApiLoadingStatus()
+  const map = useMap()
+  const [view, setView] = useState<MapView>('full')
+
+  // Road geometry from the backend when available; otherwise an approximate
+  // connector built from the known depot/stop coordinates in backend order.
+  const path: RouteMapPoint[] =
+    roadGeometry !== null
+      ? roadGeometry
+      : [
+          { lat: route.depot.latitude, lng: route.depot.longitude },
+          ...route.stops.map((stop) => ({ lat: stop.latitude, lng: stop.longitude })),
+          { lat: route.depot.latitude, lng: route.depot.longitude },
+        ]
+
+  const routeClientIds = new Set(route.stops.map((stop) => stop.clientId))
+  const additionalLocations = view === 'full' ? mapLocations.filter((location) => !routeClientIds.has(location.clientId)) : []
+  const visibleStops = view === 'route' ? route.stops : [...route.stops, ...additionalLocations]
+  const visiblePoints: RouteMapPoint[] = [
+    { lat: route.depot.latitude, lng: route.depot.longitude },
+    ...visibleStops.map((location) => ({ lat: location.latitude, lng: location.longitude })),
+  ]
+  const fitVisiblePoints = () => {
+    if (map === null || visiblePoints.length === 0 || typeof google === 'undefined') return
+    const bounds = new google.maps.LatLngBounds()
+    visiblePoints.forEach((point) => bounds.extend(point))
+    map.fitBounds(bounds)
+  }
+  const centerVisiblePoints = () => {
+    if (map === null) return
+    map.panTo(centerOfPoints(visiblePoints))
+  }
+  const changeZoom = (delta: number) => {
+    if (map === null) return
+    map.setZoom((map.getZoom() ?? 12) + delta)
+  }
+
+  useEffect(() => {
+    const stopsForBounds = view === 'route' ? route.stops : [...route.stops, ...mapLocations.filter((location) => !route.stops.some((stop) => stop.clientId === location.clientId))]
+    const points: RouteMapPoint[] = [
+      { lat: route.depot.latitude, lng: route.depot.longitude },
+      ...stopsForBounds.map((location) => ({ lat: location.latitude, lng: location.longitude })),
+    ]
+    if (map === null || points.length === 0 || typeof google === 'undefined') return
+    const bounds = new google.maps.LatLngBounds()
+    points.forEach((point) => bounds.extend(point))
+    map.fitBounds(bounds)
+  }, [map, view, mapLocations, route])
 
   if (status === APILoadingStatus.FAILED || status === APILoadingStatus.AUTH_FAILURE) {
     return <MapFallback message={FAILURE_MESSAGE} />
@@ -134,20 +204,23 @@ const RouteMapCanvas = ({ route, roadGeometry }: RouteMapCanvasProps) => {
     )
   }
 
-  // Road geometry from the backend when available; otherwise an approximate
-  // connector built from the known depot/stop coordinates in backend order.
-  const path: RouteMapPoint[] =
-    roadGeometry !== null
-      ? roadGeometry
-      : [
-          { lat: route.depot.latitude, lng: route.depot.longitude },
-          ...route.stops.map((stop) => ({ lat: stop.latitude, lng: stop.longitude })),
-          { lat: route.depot.latitude, lng: route.depot.longitude },
-        ]
-
   return (
-    <div className="h-64 w-full overflow-hidden rounded-md border border-border-subtle md:h-80">
+    <div>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div role="group" aria-label="Vista del mapa" className="flex gap-1">
+          <button type="button" className="rounded border border-border-subtle px-2 py-1 text-xs text-text-primary" aria-pressed={view === 'full'} onClick={() => setView('full')}>Vista completa</button>
+          <button type="button" className="rounded border border-border-subtle px-2 py-1 text-xs text-text-primary" aria-pressed={view === 'route'} onClick={() => setView('route')}>Vista de ruta</button>
+        </div>
+      </div>
+      <div className="mb-2 flex flex-wrap gap-3 text-xs text-text-secondary" aria-label="Leyenda del mapa">
+        <span><span className="mr-1 inline-block size-2 rounded-full bg-brand-primary" aria-hidden="true" />Depósito</span>
+        <span><span className="mr-1 inline-block size-2 rounded-full bg-state-success" aria-hidden="true" />Clientes con pedido</span>
+        <span><span className="mr-1 inline-block size-2 rounded-full bg-state-info" aria-hidden="true" />Clientes sin pedido</span>
+        <span><span className="mr-1 inline-block size-2 rounded-full bg-state-warning" aria-hidden="true" />Excluidos</span>
+      </div>
+      <div className="h-64 w-full overflow-hidden rounded-md border border-border-subtle md:h-80">
       <Map defaultCenter={centerOf(route)} defaultZoom={12} gestureHandling="cooperative">
+        <MapControl position={ControlPosition.TOP_RIGHT}><MapControls onFit={fitVisiblePoints} onCenter={centerVisiblePoints} onZoomIn={() => changeZoom(1)} onZoomOut={() => changeZoom(-1)} /></MapControl>
         <Marker
           position={{ lat: route.depot.latitude, lng: route.depot.longitude }}
           title={route.depot.name}
@@ -163,8 +236,18 @@ const RouteMapCanvas = ({ route, roadGeometry }: RouteMapCanvasProps) => {
             zIndex={index + 1}
           />
         ))}
+        {additionalLocations.map((location) => (
+          <Marker
+            key={location.clientId}
+            position={{ lat: location.latitude, lng: location.longitude }}
+            title={mapLocationTitle(location)}
+            label={location.status === ROUTE_MAP_LOCATION_STATUS.ORDER ? 'P' : location.status === ROUTE_MAP_LOCATION_STATUS.NO_ORDER ? 'S' : 'E'}
+            zIndex={0}
+          />
+        ))}
         <Polyline path={path} strokeColor={ROUTE_STROKE_COLOR} strokeWeight={3} />
       </Map>
+      </div>
     </div>
   )
 }
@@ -181,7 +264,7 @@ const RouteMapCanvas = ({ route, roadGeometry }: RouteMapCanvasProps) => {
  * failure all resolve to an accessible status message, and the ordered stop list
  * in `RoutePreview` remains the authoritative fallback.
  */
-export function RouteMap({ route }: RouteMapProps) {
+export function RouteMap({ route, mapLocations = [] }: RouteMapProps) {
   const headingId = useId()
   // Public client key: Next.js inlines NEXT_PUBLIC_ variables only through
   // static member access in client components.
@@ -193,7 +276,7 @@ export function RouteMap({ route }: RouteMapProps) {
   const content: ReactNode =
     typeof apiKey === 'string' && apiKey.trim() !== '' ? (
       <APIProvider apiKey={apiKey}>
-        <RouteMapCanvas route={route} roadGeometry={roadGeometry} />
+        <RouteMapCanvas route={route} roadGeometry={roadGeometry} mapLocations={mapLocations} />
       </APIProvider>
     ) : (
       <MapFallback message={MISSING_KEY_MESSAGE} />
