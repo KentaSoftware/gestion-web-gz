@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useId, useState } from 'react'
-import { Filter, Loader2, Map, MapPin, RefreshCw, Settings } from 'lucide-react'
+import { ClipboardList, Filter, Loader2, Map, MapPin, RefreshCw, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { routePlanService } from '@/services/routePlan.service'
@@ -31,6 +31,9 @@ export function RouteDashboard() {
   const [clientQuery, setClientQuery] = useState('')
   const [status, setStatus] = useState<LoadStatus>('loading')
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
+  const [mapVisible, setMapVisible] = useState(false)
+  const [detailVisible, setDetailVisible] = useState(false)
+  const [focusRegionId, setFocusRegionId] = useState<string | null>(null)
   const [configOpen, setConfigOpen] = useState(false)
   const [filtersVisible, setFiltersVisible] = useState(true)
   const [geocodingClient, setGeocodingClient] = useState<{ id: string; name: string; address?: string } | null>(null)
@@ -51,6 +54,9 @@ export function RouteDashboard() {
   const loadDashboard = useCallback(async () => {
     if (zoneCode === '') return
     setStatus('loading')
+    setMapVisible(false)
+    setDetailVisible(false)
+    setFocusRegionId(null)
     try {
       const result = await routePlanService.getDashboard({ serviceDate, zoneCode })
       setDashboard(result)
@@ -71,7 +77,6 @@ export function RouteDashboard() {
     void loadDashboard()
   }, [loadDashboard])
 
-  const isEmpty = dashboard !== null && dashboard.routes.length === 0 && dashboard.candidates.eligible.length === 0
   const clientCandidates = dashboard === null
     ? []
     : [
@@ -86,15 +91,19 @@ export function RouteDashboard() {
   const clientPageCount = Math.max(1, Math.ceil(filteredClientCandidates.length / CLIENT_PAGE_SIZE))
   const visibleClientCandidates = filteredClientCandidates.slice((clientPage - 1) * CLIENT_PAGE_SIZE, clientPage * CLIENT_PAGE_SIZE)
   const selectedRoute = dashboard?.routes.find((route) => route.id === selectedRouteId) ?? dashboard?.routes[0]
-  const focusRegion = (regionId: string) => {
-    const region = document.getElementById(regionId)
+  useEffect(() => {
+    if (focusRegionId === null) return
+    const region = document.getElementById(focusRegionId)
     if (!(region instanceof HTMLElement)) return
     region.focus({ preventScroll: true })
     region.scrollIntoView?.({ block: 'start' })
-  }
+    setFocusRegionId(null)
+  }, [focusRegionId, mapVisible, detailVisible])
   const handleRouteAction = (routeId: string, regionId: string) => {
     setSelectedRouteId(routeId)
-    focusRegion(regionId)
+    if (regionId === 'route-map-region') setMapVisible(true)
+    if (regionId === 'route-detail-region') setDetailVisible(true)
+    setFocusRegionId(regionId)
   }
   const selectedRoutePreview: RoutePreview['route'] | null = selectedRoute?.depot && selectedRoute.stops
     ? {
@@ -199,12 +208,7 @@ export function RouteDashboard() {
       {status === 'ready' && dashboard !== null && (
         <>
           <RouteKpiCards kpis={dashboard.kpis} />
-          {isEmpty ? (
-            <p role="status" className="rounded-lg border border-border-subtle bg-surface-base p-5 text-sm text-text-secondary">
-              No hay rutas ni clientes pendientes para la fecha y zona seleccionadas.
-            </p>
-          ) : (
-            <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
               <section aria-labelledby="planned-routes-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <h3 id="planned-routes-title" className="text-base font-semibold text-text-primary">Rutas planificadas ({dashboard.routes.length})</h3>
@@ -214,36 +218,48 @@ export function RouteDashboard() {
                     <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-state-success" aria-hidden="true" />Completada</span>
                   </div>
                 </div>
-                <div className="mt-4 flex flex-col gap-3">
-                  {dashboard.routes.map((route) => (
-                    <PlannedRouteCard
-                      key={route.id}
-                      route={route}
-                      selected={selectedRoute?.id === route.id}
-                      onSelect={() => setSelectedRouteId(route.id)}
-                      onViewMap={() => handleRouteAction(route.id, 'route-map-region')}
-                      onPreview={() => handleRouteAction(route.id, 'route-detail-region')}
-                    />
-                  ))}
-                </div>
-              </section>
+                 {dashboard.routes.length === 0 ? (
+                    <div role="status" className="mt-4 flex min-h-56 flex-col items-center justify-center gap-4 rounded-md border border-border-subtle bg-background-subtle p-6 text-center">
+                      <span className="flex size-16 items-center justify-center rounded-full bg-surface-base text-brand-primary shadow-sm" aria-hidden="true"><ClipboardList className="size-8" /></span>
+                      <p className="text-base font-medium text-brand-primary">No existen rutas planificadas para el usuario</p>
+                   </div>
+                 ) : (
+                   <div className="mt-4 flex flex-col gap-3">
+                     {dashboard.routes.map((route) => (
+                       <PlannedRouteCard
+                         key={route.id}
+                         route={route}
+                         selected={selectedRoute?.id === route.id}
+                         onSelect={() => setSelectedRouteId(route.id)}
+                         onViewMap={() => handleRouteAction(route.id, 'route-map-region')}
+                         onPreview={() => handleRouteAction(route.id, 'route-detail-region')}
+                       />
+                     ))}
+                   </div>
+                 )}
+               </section>
               <section aria-labelledby="dashboard-clients-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
                 <h3 id="dashboard-clients-title" className="text-base font-semibold text-text-primary">Clientes con pedidos ({clientCandidates.length})</h3>
                 <p className="mt-1 text-sm text-text-secondary">{dashboard.candidates.eligible.length} elegibles · {dashboard.candidates.blocked.length} bloqueados{clientQuery.trim() !== '' ? ` · ${filteredClientCandidates.length} coincidencias` : ''}</p>
-                <div className="mt-4 flex flex-col gap-2">
-                  <Label htmlFor="dashboard-client-search">Buscar cliente o dirección…</Label>
-                  <input
-                    id="dashboard-client-search"
-                    type="search"
-                    value={clientQuery}
-                    onChange={(event) => { setClientQuery(event.target.value); setClientPage(1) }}
-                    placeholder="Buscar cliente o dirección…"
-                    className="h-10 rounded-md border border-border-subtle bg-surface-base px-3 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-state-focus"
-                  />
-                </div>
-                {filteredClientCandidates.length === 0 ? (
-                  <p role="status" aria-label="Clientes sin coincidencias" className="mt-4 rounded-md border border-border-subtle bg-background-subtle p-3 text-sm text-text-secondary">
-                    No se encontraron clientes para la búsqueda.
+                 {clientCandidates.length === 0 ? (
+                   <p role="status" className="mt-4 rounded-md border border-border-subtle bg-background-subtle p-3 text-sm text-text-secondary">
+                     No hay clientes pendientes para asignar a una ruta.
+                   </p>
+                 ) : <>
+                   <div className="mt-4 flex flex-col gap-2">
+                     <Label htmlFor="dashboard-client-search">Buscar cliente o dirección…</Label>
+                     <input
+                       id="dashboard-client-search"
+                       type="search"
+                       value={clientQuery}
+                       onChange={(event) => { setClientQuery(event.target.value); setClientPage(1) }}
+                       placeholder="Buscar cliente o dirección…"
+                       className="h-10 rounded-md border border-border-subtle bg-surface-base px-3 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-state-focus"
+                     />
+                   </div>
+                 {filteredClientCandidates.length === 0 ? (
+                   <p role="status" aria-label="Clientes sin coincidencias" className="mt-4 rounded-md border border-border-subtle bg-background-subtle p-3 text-sm text-text-secondary">
+                     No se encontraron clientes para la búsqueda.
                   </p>
                 ) : (
                   <ul className="mt-4 flex flex-col gap-2" aria-label="Clientes y pedidos">
@@ -279,24 +295,24 @@ export function RouteDashboard() {
                       )
                     })}
                   </ul>
-                )}
+                 )}
                  <nav aria-label="Paginación de clientes" className="mt-4 flex items-center justify-between gap-3">
                    <Button type="button" variant="secondary" size="sm" onClick={() => setClientPage((page) => page - 1)} disabled={clientPage === 1} aria-label="Página anterior">Anterior</Button>
                    <span role="status" aria-live="polite" className="text-sm text-text-secondary">Página {clientPage} de {clientPageCount}</span>
                    <Button type="button" variant="secondary" size="sm" onClick={() => setClientPage((page) => page + 1)} disabled={clientPage === clientPageCount} aria-label="Página siguiente">Siguiente</Button>
-                 </nav>
-              </section>
-            </div>
-          )}
+                  </nav>
+                 </>}
+               </section>
+             </div>
           {dashboard.warnings.length > 0 && <div role="alert" className="rounded-lg border border-state-warning bg-surface-base p-4 text-sm text-state-warning">{dashboard.warnings.join(' · ')}</div>}
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <section id="route-map-region" tabIndex={-1} aria-labelledby="route-map-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
-              <h3 id="route-map-title" className="flex items-center gap-2 text-base font-semibold text-text-primary"><Map aria-hidden="true" /> Mapa de ruta seleccionada</h3>
+          {(mapVisible || detailVisible) && <div className={`grid gap-4 ${mapVisible && detailVisible ? 'lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : ''}`}>
+             {mapVisible && <section id="route-map-region" tabIndex={-1} aria-labelledby="route-map-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
+               <h3 id="route-map-title" className="flex items-center gap-2 text-base font-semibold text-text-primary"><Map aria-hidden="true" /> Mapa interactivo</h3>
               <p className="mt-3 rounded-md border border-border-subtle bg-background-subtle p-4 text-sm text-text-secondary">El mapa es complementario. La secuencia textual de la ruta seleccionada permanece disponible aunque el proveedor o la API de mapas no estén disponibles.</p>
               {selectedRoutePreview !== null ? <RouteMap route={selectedRoutePreview} mapLocations={dashboard.mapLocations ?? []} /> : <p role="status" className="mt-3 text-sm text-text-secondary">No hay detalle geográfico disponible para esta ruta.</p>}
               {dashboard.routes.some((route) => route.stale) && <p role="status" className="mt-3 rounded-md border border-state-warning p-3 text-sm text-state-warning">Hay snapshots desactualizados. Se muestran en modo solo lectura; generá una nueva ruta para actualizar.</p>}
-            </section>
-            <section id="route-detail-region" tabIndex={-1} aria-labelledby="route-detail-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
+             </section>}
+             {detailVisible && <section id="route-detail-region" tabIndex={-1} aria-labelledby="route-detail-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
               <h3 id="route-detail-title" className="text-base font-semibold text-text-primary">Detalle de ruta</h3>
               {selectedRoute === undefined ? <p className="mt-3 text-sm text-text-secondary">No hay una ruta seleccionada.</p> : (
                 <>
@@ -316,8 +332,8 @@ export function RouteDashboard() {
                   {selectedRoute.stale && <p role="status" className="mt-3 text-sm text-state-warning">Esta ruta está desactualizada y es de solo lectura; generá una nueva ruta para actualizarla.</p>}
                 </>
               )}
-            </section>
-          </div>
+             </section>}
+           </div>}
         </>
       )}
       {configOpen && <RouteConfigDialog open onOpenChange={setConfigOpen} />}

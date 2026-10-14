@@ -59,20 +59,54 @@ describe('RouteDashboard selected-route detail', () => {
     expect(toolbar).toBeVisible()
   })
 
-  it('renders the selected route detail and keeps legacy cards usable', async () => {
+  it('keeps map and detail hidden until a route action is used', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     getDashboard.mockResolvedValue(dashboard)
     render(<RouteDashboard />)
 
-    await waitFor(() => expect(screen.getByText('Ruta route-1')).toBeInTheDocument())
-    expect(screen.getByText('Parada 1')).toBeInTheDocument()
-    expect(screen.getByText('sale-1')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (2)' })).toBeInTheDocument())
+    expect(screen.queryByRole('heading', { name: 'Mapa interactivo' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Detalle de ruta' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /seleccionar ruta route-2/i }))
 
-    expect(screen.getByText('Ruta route-2')).toBeInTheDocument()
-    expect(screen.getAllByText('driver-2').length).toBeGreaterThan(0)
-    expect(screen.getByText('No hay detalle geográfico disponible para esta ruta.')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Mapa interactivo' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Detalle de ruta' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver mapa' })[1])
+    expect(screen.getByRole('heading', { name: 'Mapa interactivo' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Detalle de ruta' })).not.toBeInTheDocument()
+    expect(document.activeElement).toBe(document.getElementById('route-map-region'))
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Previsualizar' })[1])
+    expect(screen.getByRole('heading', { name: 'Mapa interactivo' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Detalle de ruta' })).toBeInTheDocument()
+    expect(document.activeElement).toBe(document.getElementById('route-detail-region'))
+  })
+
+  it('reveals only the requested panel from each route action', async () => {
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValue(dashboard)
+    render(<RouteDashboard />)
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (2)' })).toBeInTheDocument())
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Previsualizar' })[0])
+    expect(screen.getByRole('heading', { name: 'Detalle de ruta' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Mapa interactivo' })).not.toBeInTheDocument()
+    expect(document.activeElement).toBe(document.getElementById('route-detail-region'))
+  })
+
+  it('renders the planned-routes empty state without the generic dashboard message', async () => {
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValue({ ...dashboard, routes: [], candidates: { ...dashboard.candidates } })
+    render(<RouteDashboard />)
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (0)' })).toBeInTheDocument())
+    expect(screen.getByText('No existen rutas planificadas para el usuario')).toBeInTheDocument()
+    expect(screen.queryByText('No hay rutas ni clientes pendientes para la fecha y zona seleccionadas.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Mapa interactivo' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Detalle de ruta' })).not.toBeInTheDocument()
   })
 
   it('renders planned-route parity controls and selects from route actions', async () => {
