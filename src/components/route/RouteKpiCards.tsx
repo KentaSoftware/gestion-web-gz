@@ -17,10 +17,10 @@ const formatLiters = (liters: number | null): string => {
 
 export function RouteKpiCards({ kpis }: RouteKpiCardsProps) {
   const cards = [
-    { label: 'Total de rutas', value: kpis.activeRoutes.toLocaleString('es-AR'), icon: RouteIcon },
-    { label: 'Total de clientes/paradas', value: kpis.pendingOrders.toLocaleString('es-AR'), icon: Users },
+    { label: 'Rutas activas', value: kpis.activeRoutes.toLocaleString('es-AR'), icon: RouteIcon },
+    { label: 'Pedidos pendientes', value: kpis.pendingOrders.toLocaleString('es-AR'), icon: Users },
     { label: 'Distancia total', value: formatDistance(kpis.totalDistanceMeters), icon: Map },
-    { label: 'Combustible proyectado', value: formatLiters(kpis.estimatedFuelLiters), icon: Fuel },
+    { label: 'Combustible estimado', value: formatLiters(kpis.estimatedFuelLiters), icon: Fuel },
   ]
 
   return (
@@ -29,7 +29,9 @@ export function RouteKpiCards({ kpis }: RouteKpiCardsProps) {
         <article key={label} className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <h3 className="text-sm font-medium text-text-secondary">{label}</h3>
-            <Icon className="size-5 text-brand-primary" aria-hidden="true" />
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-background-subtle text-brand-primary">
+              <Icon className="size-5" aria-hidden="true" />
+            </span>
           </div>
           <p className="mt-3 text-2xl font-semibold text-text-primary" aria-label={`${label}: ${value}`}>
             {value}

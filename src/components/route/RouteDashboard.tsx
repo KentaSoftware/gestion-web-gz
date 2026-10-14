@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useId, useState } from 'react'
-import { Loader2, Map, RefreshCw, Settings } from 'lucide-react'
+import { Filter, Loader2, Map, RefreshCw, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { routePlanService } from '@/services/routePlan.service'
@@ -31,6 +31,7 @@ export function RouteDashboard() {
   const [status, setStatus] = useState<LoadStatus>('loading')
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
   const [configOpen, setConfigOpen] = useState(false)
+  const [filtersVisible, setFiltersVisible] = useState(true)
   const [geocodingClient, setGeocodingClient] = useState<{ id: string; name: string; address?: string } | null>(null)
 
   const loadZones = useCallback(async () => {
@@ -103,10 +104,10 @@ export function RouteDashboard() {
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 id="route-dashboard-title" className="text-heading-sm font-semibold text-text-primary">
-            Panel de optimización de rutas
+            Optimización de Rutas
           </h2>
           <p className="mt-1 text-label text-text-secondary">
-            Consultá el estado de las rutas, clientes y distancia proyectada para una fecha y zona.
+            Planificá y asigná rutas de entrega de forma eficiente
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -115,10 +116,20 @@ export function RouteDashboard() {
           <RefreshCw aria-hidden="true" />
           Actualizar
           </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            aria-expanded={filtersVisible}
+            aria-controls="route-dashboard-filters"
+            onClick={() => setFiltersVisible((visible) => !visible)}
+          >
+            <Filter aria-hidden="true" />
+            {filtersVisible ? 'Ocultar filtros' : 'Mostrar filtros'}
+          </Button>
         </div>
       </div>
 
-      <div className="grid gap-4 rounded-lg border border-border-subtle bg-surface-base p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+      <div id="route-dashboard-filters" hidden={!filtersVisible} className="grid gap-4 rounded-lg border border-border-subtle bg-surface-base p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
         <div className="flex flex-col gap-2">
           <Label htmlFor={dateId}>Fecha de servicio</Label>
           <input
@@ -143,7 +154,7 @@ export function RouteDashboard() {
           </select>
         </div>
         <Button type="button" onClick={() => void loadDashboard()} disabled={status === 'loading' || zoneCode === ''}>
-          Consultar dashboard
+          Generar rutas
         </Button>
       </div>
 

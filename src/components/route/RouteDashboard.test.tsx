@@ -35,6 +35,30 @@ const dashboard = {
 }
 
 describe('RouteDashboard selected-route detail', () => {
+  it('renders the approved header and filter controls', async () => {
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValue(dashboard)
+    render(<RouteDashboard />)
+
+    expect(screen.getByRole('heading', { name: 'Optimización de Rutas' })).toBeInTheDocument()
+    expect(screen.getByText('Planificá y asigná rutas de entrega de forma eficiente')).toBeInTheDocument()
+
+    const toggle = screen.getByRole('button', { name: 'Ocultar filtros' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    const toolbar = document.getElementById('route-dashboard-filters')
+    expect(toolbar).not.toBeNull()
+    expect(toolbar).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Generar rutas' })).toBeInTheDocument()
+
+    fireEvent.click(toggle)
+    expect(screen.getByRole('button', { name: 'Mostrar filtros' })).toHaveAttribute('aria-expanded', 'false')
+    expect(toolbar).not.toBeVisible()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar filtros' }))
+    expect(screen.getByRole('button', { name: 'Ocultar filtros' })).toHaveAttribute('aria-expanded', 'true')
+    expect(toolbar).toBeVisible()
+  })
+
   it('renders the selected route detail and keeps legacy cards usable', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     getDashboard.mockResolvedValue(dashboard)
