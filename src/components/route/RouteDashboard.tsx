@@ -105,11 +105,19 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
   const selectedRoute = dashboard?.routes.find((route) => route.id === selectedRouteId) ?? dashboard?.routes[0]
   useEffect(() => {
     if (focusRegionId === null) return
-    const region = document.getElementById(focusRegionId)
-    if (!(region instanceof HTMLElement)) return
-    region.focus({ preventScroll: true })
-    region.scrollIntoView?.({ block: 'start' })
-    setFocusRegionId(null)
+    let cancelled = false
+    const frameId = window.requestAnimationFrame(() => {
+      if (cancelled) return
+      const region = document.getElementById(focusRegionId)
+      if (!(region instanceof HTMLElement)) return
+      region.focus({ preventScroll: true })
+      region.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setFocusRegionId(null)
+    })
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(frameId)
+    }
   }, [focusRegionId, mapVisible, detailVisible])
   const handleRouteAction = (routeId: string, regionId: string) => {
     setSelectedRouteId(routeId)

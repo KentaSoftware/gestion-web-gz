@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RouteDashboard } from './RouteDashboard'
 
 const { getActiveDeliveryZones, getDashboard } = vi.hoisted(() => ({
@@ -8,6 +8,18 @@ const { getActiveDeliveryZones, getDashboard } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/services/routePlan.service', () => ({ routePlanService: { getActiveDeliveryZones, getDashboard } }))
+
+const scrollIntoView = vi.fn()
+
+beforeEach(() => {
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    callback(0)
+    return 1
+  })
+  vi.stubGlobal('cancelAnimationFrame', vi.fn())
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView })
+  scrollIntoView.mockClear()
+})
 
 const dashboard = {
   filters: {},
@@ -120,11 +132,14 @@ describe('RouteDashboard selected-route detail', () => {
     expect(screen.getByRole('heading', { name: 'Mapa interactivo' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Detalle de ruta' })).not.toBeInTheDocument()
     expect(document.activeElement).toBe(document.getElementById('route-map-region'))
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: 'smooth', block: 'start' })
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Previsualizar' })[1])
     expect(screen.getByRole('heading', { name: 'Mapa interactivo' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Detalle de ruta' })).toBeInTheDocument()
     expect(document.activeElement).toBe(document.getElementById('route-detail-region'))
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: 'smooth', block: 'start' })
+    expect(scrollIntoView).toHaveBeenCalledTimes(2)
   })
 
   it('reveals only the requested panel from each route action', async () => {
