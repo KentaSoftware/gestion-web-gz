@@ -63,9 +63,11 @@ describe('RouteDashboard selected-route detail', () => {
     const clients = screen.getByRole('heading', { name: 'Clientes con pedidos (0)' })
     const map = screen.getByRole('heading', { name: 'Mapa interactivo' })
     const detail = screen.getByRole('heading', { name: 'Detalle de ruta' })
+    const lowerPanels = screen.getByTestId('route-lower-panels')
     expect(plannedRoutes.compareDocumentPosition(clients)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     expect(clients.compareDocumentPosition(map)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     expect(map.compareDocumentPosition(detail)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(lowerPanels).not.toHaveClass('lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]')
     expect(getDashboard).toHaveBeenCalledTimes(2)
   })
 
