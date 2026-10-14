@@ -224,7 +224,7 @@ describe('Dashboard layout', () => {
     render(<Dashboard><div>Dashboard content</div></Dashboard>)
 
     const main = document.getElementById('dashboard-main')
-    expect(main).toHaveClass('flex', 'h-0', 'min-h-0', 'flex-1', 'flex-col', 'overflow-y-auto')
+    expect(main).toHaveClass('flex', 'h-0', 'min-h-0', 'flex-1', 'flex-col', 'overflow-y-auto', 'bg-background-canvas')
     expect(main).not.toHaveClass('h-full')
   })
 })

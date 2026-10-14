@@ -71,6 +71,7 @@ describe('RouteDashboard selected-route detail', () => {
     expect(clients.compareDocumentPosition(map)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     expect(map.compareDocumentPosition(detail)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     expect(dashboardRoot).toHaveClass('w-full', 'min-w-0', 'flex-1', 'min-h-0')
+    expect(dashboardRoot).not.toHaveClass('mb-8')
     expect(dashboardRoot).not.toHaveClass('h-full')
     expect(lowerPanels).toHaveClass('w-full', 'min-w-0', 'flex-1', 'min-h-0')
     expect(mapPanel).toHaveClass('w-full', 'min-w-0')
