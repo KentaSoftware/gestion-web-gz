@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RoutePreview as RoutePreviewData } from '@/interfaces/routePlan.interface'
@@ -26,6 +26,17 @@ const candidates = {
     { saleId: SALE_B1, clientId: CLIENT_B, displayName: 'Kiosco Norte', addressSummary: 'Calle Falsa 123' },
   ],
   blocked: [{ saleId: '1'.repeat(24), clientId: '9'.repeat(24), displayName: 'Cliente bloqueado', addressSummary: 'Otra calle', reasons: ['CLIENT_ZONE_MISMATCH'] }],
+  ruleVersion: 'candidate-eligibility-v1',
+}
+
+const manyClientCandidates = {
+  eligible: Array.from({ length: 9 }, (_, index) => ({
+    saleId: `${index + 1}`.repeat(24),
+    clientId: `${String(index + 1).repeat(24)}`,
+    displayName: `Cliente ${index + 1}`,
+    addressSummary: `Calle ${index + 1}`,
+  })),
+  blocked: [],
   ruleVersion: 'candidate-eligibility-v1',
 }
 
@@ -68,7 +79,7 @@ describe('RoutePlanner', () => {
   it('automatically loads candidates from valid initial date and zone', async () => {
     await renderLoaded()
     expect(screen.queryByRole('button', { name: 'Cargar candidatos' })).not.toBeInTheDocument()
-    expect(screen.getByText('Zona Norte · 2 pedidos pendientes')).toBeInTheDocument()
+    expect(screen.getAllByText('Zona Norte')).toHaveLength(2)
   })
 
   it('keeps the date and zone form as a fallback without initial scope', async () => {
@@ -81,14 +92,44 @@ describe('RoutePlanner', () => {
     await renderLoaded()
     const client = screen.getByRole('checkbox', { name: 'Almacén Sur' })
     expect(screen.getAllByText('Almacén Sur')).toHaveLength(1)
-    expect(screen.getByText(/2 pedidos pendientes/)).toBeInTheDocument()
+    expect(screen.getByText('2 pedidos')).toBeInTheDocument()
     expect(screen.getAllByText('Apto')).toHaveLength(2)
-    expect(screen.getByText('Zona Norte · 1 pedido pendiente')).toBeInTheDocument()
+    expect(within(screen.getByRole('row', { name: /Almacén Sur/ })).getByText('Zona Norte')).toBeInTheDocument()
     expect(screen.getByText('Bloqueado')).toBeInTheDocument()
     await userEvent.click(client)
     expect(client).toBeChecked()
     await userEvent.click(screen.getByRole('button', { name: 'Limpiar selección' }))
     expect(client).not.toBeChecked()
+  })
+
+  it('renders pending clients in a semantic table with the expected columns', async () => {
+    await renderLoaded()
+
+    const table = screen.getByRole('table', { name: 'Pedidos pendientes' })
+    expect(within(table).getByRole('columnheader', { name: 'Cliente / Comercio' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Dirección / Zona' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Pedidos' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Estado' })).toBeInTheDocument()
+    expect(within(table).getAllByRole('row')).toHaveLength(4)
+  })
+
+  it('paginates pending clients at eight rows and keeps selection across pages', async () => {
+    getCandidates.mockResolvedValue(manyClientCandidates)
+    render(<RoutePlanner initialServiceDate="2026-10-04" initialDeliveryZoneId={ZONE_ID} />)
+    await screen.findByRole('heading', { name: 'Pedidos pendientes' })
+
+    const table = screen.getByRole('table', { name: 'Pedidos pendientes' })
+    expect(within(table).getAllByRole('row')).toHaveLength(9)
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument()
+
+    const firstClient = screen.getByRole('checkbox', { name: 'Cliente 1' })
+    await userEvent.click(firstClient)
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    expect(within(table).getAllByRole('row')).toHaveLength(2)
+    expect(screen.getByText('Cliente 9')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Anterior' }))
+    expect(screen.getByRole('checkbox', { name: 'Cliente 1' })).toBeChecked()
   })
 
   it('requires two clients, driver, and vehicle before generating', async () => {

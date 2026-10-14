@@ -28,6 +28,7 @@ type SaveStatus = 'idle' | 'saving' | 'error'
 
 const CIVIL_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const OBJECT_ID_PATTERN = /^[a-fA-F0-9]{24}$/
+const PENDING_CLIENT_PAGE_SIZE = 8
 
 interface CandidateGroup {
   key: string
@@ -110,6 +111,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('idle')
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedSaleIds, setSelectedSaleIds] = useState<string[]>([])
+  const [pendingClientPage, setPendingClientPage] = useState(1)
   const [selectionError, setSelectionError] = useState<string | null>(null)
   const [previewStatus, setPreviewStatus] = useState<RoutePreviewStatus>('idle')
   const [previewData, setPreviewData] = useState<RoutePreviewData | null>(null)
@@ -187,6 +189,10 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
       return false
     }
   }, [deliveryZoneId, resetPreview, serviceDate])
+
+  useEffect(() => {
+    setPendingClientPage(1)
+  }, [candidates])
 
   useEffect(() => {
     if (!initialScopeIsValid) return
@@ -308,6 +314,11 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
     candidates !== null && candidates.eligible.length === 0 && candidates.blocked.length === 0
   const groups = candidateGroups(candidates)
   const eligibleGroups = groups.filter((group) => group.eligible.length > 0)
+  const pendingClientPageCount = Math.max(1, Math.ceil(groups.length / PENDING_CLIENT_PAGE_SIZE))
+  const visibleGroups = groups.slice(
+    (pendingClientPage - 1) * PENDING_CLIENT_PAGE_SIZE,
+    pendingClientPage * PENDING_CLIENT_PAGE_SIZE,
+  )
   const selectedClientCount = eligibleGroups.filter((group) => group.eligible.some((candidate) => selectedSaleIds.includes(candidate.saleId))).length
   const allEligibleSelected =
     candidates !== null &&
@@ -320,39 +331,47 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
   const canPreview = hasAssignments && selectedClientCount >= 2
   const selectedZoneName = zones.find((zone) => zone._id === deliveryZoneId)?.name ?? 'Otra zona'
 
+  useEffect(() => {
+    setPendingClientPage((page) => Math.min(page, pendingClientPageCount))
+  }, [pendingClientPageCount])
+
   const renderCandidateGroup = (group: CandidateGroup) => {
     const checked = group.eligible.length > 0 && group.eligible.every((candidate) => selectedSaleIds.includes(candidate.saleId))
     const id = `${selectionFieldId}-${group.key.replace(/[^a-zA-Z0-9_-]/g, '-')}`
     const isBlocked = group.eligible.length === 0
+    const orderCount = group.eligible.length + group.blocked.length
     return (
-      <li
+      <tr
         key={group.key}
-        className="rounded-md border border-border-subtle bg-background-subtle p-3"
+        className="border-b border-border-subtle last:border-b-0"
       >
-        <div className="flex items-start gap-3">
-          <Checkbox id={id} className="mt-0.5" checked={checked} disabled={isBlocked} aria-label={group.displayName} onCheckedChange={(value) => toggleClient(group, value === true)} />
-          <Label htmlFor={id} className="flex flex-1 cursor-pointer flex-col items-start gap-0.5">
-            <span className="text-sm font-medium text-text-primary">{group.displayName}</span>
-            <span className="text-xs font-normal text-text-secondary">{group.addressSummary ?? 'Dirección no disponible'}</span>
-            <span className="text-xs text-text-secondary">{group.zoneMismatch ? 'Otra zona' : selectedZoneName} · {group.eligible.length + group.blocked.length} {group.eligible.length + group.blocked.length === 1 ? 'pedido pendiente' : 'pedidos pendientes'}</span>
-          </Label>
-          <span className={isBlocked ? 'text-xs font-medium text-state-error' : 'text-xs font-medium text-state-success'}>{isBlocked ? 'Bloqueado' : 'Apto'}</span>
-        </div>
-        {group.reasons.length > 0 && <ul className="mt-2 list-disc pl-8 text-xs text-state-error">{group.reasons.map((reason) => <li key={reason}>{CANDIDATE_BLOCK_REASON_LABEL[reason] ?? reason}</li>)}</ul>}
-      </li>
+        <td className="px-3 py-3 align-top">
+          <Checkbox id={id} checked={checked} disabled={isBlocked} aria-label={group.displayName} onCheckedChange={(value) => toggleClient(group, value === true)} />
+        </td>
+        <td className="px-3 py-3 align-top text-sm font-medium text-text-primary">
+          <Label htmlFor={id} className="cursor-pointer">{group.displayName}</Label>
+        </td>
+        <td className="px-3 py-3 align-top text-xs text-text-secondary">
+          <div>{group.addressSummary ?? 'Dirección no disponible'}</div>
+          <div>{group.zoneMismatch ? 'Otra zona' : selectedZoneName}</div>
+          {group.reasons.length > 0 && <div className="mt-1 text-state-error">{group.reasons.map((reason) => CANDIDATE_BLOCK_REASON_LABEL[reason] ?? reason).join('. ')}</div>}
+        </td>
+        <td className="px-3 py-3 align-top text-sm text-text-secondary">{orderCount} {orderCount === 1 ? 'pedido' : 'pedidos'}</td>
+        <td className={isBlocked ? 'px-3 py-3 align-top text-xs font-medium text-state-error' : 'px-3 py-3 align-top text-xs font-medium text-state-success'}>{isBlocked ? 'Bloqueado' : 'Apto'}</td>
+      </tr>
     )
   }
 
   return (
-    <section aria-labelledby="route-planner-title" className="flex flex-col gap-6">
-      <div>
+    <section aria-labelledby={initialScopeIsValid ? undefined : 'route-planner-title'} aria-label={initialScopeIsValid ? 'Generador de ruta optimizada' : undefined} className="flex flex-col gap-6">
+      {!initialScopeIsValid && <div>
         <h2 id="route-planner-title" className="text-base font-semibold text-text-primary">
           Planificación de rutas
         </h2>
         <p className="mt-1 text-label text-text-secondary">
            Seleccioná pedidos aptos y asigná los recursos de la ruta.
         </p>
-      </div>
+      </div>}
 
       {(!initialScopeIsValid || loadStatus === 'error') && <form
         onSubmit={handleSubmit}
@@ -463,9 +482,23 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
               <p className="mt-1 text-xs text-text-secondary">
                 Seleccioná clientes. Todos sus pedidos aptos se incluirán en una sola parada.
               </p>
-              <ul className="mt-3 flex flex-col gap-2" aria-label="Pedidos pendientes">
-                {groups.map(renderCandidateGroup)}
-              </ul>
+              <table className="mt-3 w-full border-collapse text-left" aria-label="Pedidos pendientes">
+                <thead className="border-b border-border-subtle text-xs text-text-secondary">
+                  <tr>
+                    <th scope="col" className="w-10 px-3 py-2"><span className="sr-only">Selección</span></th>
+                    <th scope="col" className="px-3 py-2 font-medium">Cliente / Comercio</th>
+                    <th scope="col" className="px-3 py-2 font-medium">Dirección / Zona</th>
+                    <th scope="col" className="px-3 py-2 font-medium">Pedidos</th>
+                    <th scope="col" className="px-3 py-2 font-medium">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>{visibleGroups.map(renderCandidateGroup)}</tbody>
+              </table>
+              {pendingClientPageCount > 1 && <nav aria-label="Paginación de pedidos pendientes" className="mt-3 flex items-center justify-between gap-3">
+                <Button type="button" variant="secondary" size="sm" onClick={() => setPendingClientPage((page) => Math.max(1, page - 1))} disabled={pendingClientPage === 1}>Anterior</Button>
+                <span role="status" aria-live="polite" className="text-xs text-text-secondary">Página {pendingClientPage} de {pendingClientPageCount}</span>
+                <Button type="button" variant="secondary" size="sm" onClick={() => setPendingClientPage((page) => Math.min(pendingClientPageCount, page + 1))} disabled={pendingClientPage === pendingClientPageCount}>Siguiente</Button>
+              </nav>}
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
                   type="button"
