@@ -485,7 +485,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
               <p className="mt-1 text-xs text-text-secondary">
                 Seleccioná clientes. Todos sus pedidos aptos se incluirán en una sola parada.
               </p>
-              <div data-testid="pending-orders-table-container" className="mt-3 h-[36rem] overflow-hidden">
+              <div data-testid="pending-orders-table-container" className="mt-3 h-[38rem] overflow-hidden">
                 <table className="w-full table-fixed border-collapse text-left" aria-label="Pedidos pendientes">
                   <thead className="border-b border-border-subtle text-xs text-text-secondary">
                     <tr className="h-10">

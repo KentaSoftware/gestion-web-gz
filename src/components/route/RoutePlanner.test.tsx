@@ -120,7 +120,7 @@ describe('RoutePlanner', () => {
 
     const table = screen.getByRole('table', { name: 'Pedidos pendientes' })
     const container = screen.getByTestId('pending-orders-table-container')
-    expect(container.className).toContain('h-[36rem]')
+    expect(container.className).toContain('h-[38rem]')
     expect(container.className).toContain('overflow-hidden')
     expect(within(table).getAllByRole('row')).toHaveLength(9)
     expect(screen.getByText('Página 1 de 2')).toBeInTheDocument()
