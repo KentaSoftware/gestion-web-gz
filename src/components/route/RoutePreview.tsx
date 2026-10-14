@@ -81,6 +81,7 @@ const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, 
           segments={route.segments}
           estimates={estimates}
           depot={{ name: depotName ?? route.depot.name, address: depotAddress ?? route.depot.address }}
+          showHeader={false}
         />
       </div>
       <div role="tabpanel" id={panelId('sales')} aria-labelledby="route-tab-sales" hidden={activeTab !== 'sales'} className="pt-4">
