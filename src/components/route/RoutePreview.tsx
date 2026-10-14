@@ -1,7 +1,7 @@
  'use client'
 
 import { useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Package } from 'lucide-react'
 import {
   type CandidateEntry,
   type RouteSaleReference,
@@ -39,6 +39,40 @@ interface RouteTabsProps {
   candidateEntries?: readonly CandidateEntry[]
   stale?: boolean
   readWarnings?: readonly string[]
+}
+
+const NO_DATA = 'No disponible'
+
+interface SaleItemsDisplay {
+  primary: string
+  secondary?: string
+}
+
+const formatSaleItems = (reference: RouteSaleReference | undefined): SaleItemsDisplay => {
+  if (reference?.productCount !== undefined && reference.unitCount !== undefined) {
+    return { primary: `${reference.productCount} productos`, secondary: `${reference.unitCount} unidades` }
+  }
+  if (reference?.productCount !== undefined) return { primary: `${reference.productCount} productos` }
+  if (reference?.unitCount !== undefined) return { primary: `${reference.unitCount} unidades` }
+  if (reference?.itemCount !== undefined) return { primary: `${reference.itemCount} ${reference.itemCount === 1 ? 'ítem' : 'ítems'}` }
+  return { primary: NO_DATA }
+}
+
+const SALE_STATUS_LABEL = {
+  PENDING: 'Pendiente',
+  DELIVERED: 'Entregado',
+} as const
+
+const formatSaleStatus = (reference: RouteSaleReference | undefined): string => {
+  const status = reference?.currentStatus ?? reference?.statusAtSave
+  return status === undefined || status === null ? NO_DATA : SALE_STATUS_LABEL[status as keyof typeof SALE_STATUS_LABEL] ?? status
+}
+
+const saleStatusClass = (reference: RouteSaleReference | undefined): string => {
+  const status = reference?.currentStatus ?? reference?.statusAtSave
+  if (status === 'DELIVERED') return 'bg-state-success/15 text-state-success'
+  if (status === 'PENDING') return 'bg-state-warning/15 text-state-warning'
+  return 'bg-background-subtle text-text-secondary'
 }
 
 const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, candidateEntries = [], stale = false, readWarnings = [] }: RouteTabsProps) => {
@@ -86,18 +120,52 @@ const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, 
       </div>
       <div role="tabpanel" id={panelId('sales')} aria-labelledby="route-tab-sales" hidden={activeTab !== 'sales'} className="pt-4">
         <h4 className="text-sm font-semibold text-text-primary">Pedidos vinculados</h4>
-        <ul aria-label="Pedidos vinculados" className="mt-3 flex flex-col gap-2">
-          {(saleReferences?.length
-            ? saleReferences.map((reference) => (
-                <li key={reference.saleId} className="rounded-md border border-border-subtle bg-background-subtle p-3 text-xs text-text-secondary">
-                  <span className="font-medium text-text-primary">{reference.saleId}</span>
-                  {reference.currentStatus && <span className="ml-2">Estado: {reference.currentStatus}</span>}
-                </li>
-              ))
-            : route.stops.flatMap((stop) => stop.saleIds).map((saleId) => (
-                <li key={saleId} className="rounded-md border border-border-subtle bg-background-subtle p-3 text-xs text-text-secondary">{saleId}</li>
-              )))}
-        </ul>
+        <div className="mt-3 overflow-x-auto">
+          <table aria-label="Pedidos vinculados" className="w-full min-w-[48rem] border-collapse text-left text-xs">
+            <thead className="border-b border-border-subtle text-text-secondary">
+              <tr>
+                <th scope="col" className="px-3 py-2 font-medium">#</th>
+                <th scope="col" className="px-3 py-2 font-medium">Cliente / Comercio</th>
+                <th scope="col" className="px-3 py-2 font-medium">N° de pedido</th>
+                <th scope="col" className="px-3 py-2 font-medium">Dirección / Zona</th>
+                <th scope="col" className="px-3 py-2 font-medium">Items (unidades)</th>
+                <th scope="col" className="px-3 py-2 font-medium">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {route.stops.flatMap((stop) => stop.saleIds).map((saleId, index) => {
+                const reference = saleReferences?.find((candidate) => candidate.saleId === saleId)
+                const candidate = candidateEntries.find((entry) => entry.saleId === saleId)
+                const clientName = reference?.clientName ?? candidate?.displayName ?? saleId
+                const address = reference?.address ?? candidate?.addressSummary
+                const location = [address, reference?.zoneName ?? candidate?.zoneName].filter(Boolean).join(' · ') || NO_DATA
+                const items = formatSaleItems(reference)
+                return (
+                  <tr key={saleId} className="border-b border-border-subtle last:border-b-0">
+                    <td className="px-3 py-3 align-middle"><span aria-label={`Pedido ${index + 1}`} className="inline-flex size-6 items-center justify-center rounded-full bg-brand-primary text-xs font-semibold text-text-inverse">{index + 1}</span></td>
+                    <td className="px-3 py-3 align-middle font-medium text-text-primary">{clientName}</td>
+                    <td className="px-3 py-3 align-middle text-text-secondary">{saleId}</td>
+                    <td className="px-3 py-3 align-middle text-text-secondary">{location}</td>
+                    <td className="px-3 py-3 align-middle text-text-secondary">
+                      <div className="flex items-start gap-2">
+                        <Package className="mt-0.5 size-4 shrink-0 text-brand-primary" aria-hidden="true" />
+                        <span>
+                          <span className="block text-text-primary">{items.primary}</span>
+                          {items.secondary && <span className="block text-text-secondary">{items.secondary}</span>}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 align-middle">
+                      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${saleStatusClass(reference)}`}>
+                        {formatSaleStatus(reference)}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
       {stale && <p role="status" className="mt-4 rounded-md border border-state-warning p-3 text-xs text-state-warning">Este snapshot está desactualizado y es de solo lectura. Para actualizarlo, generá una nueva ruta.</p>}
       {readWarnings.map((warning) => <p key={warning} className="mt-2 text-xs text-state-warning">{warning}</p>)}

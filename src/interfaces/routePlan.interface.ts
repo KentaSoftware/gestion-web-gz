@@ -44,6 +44,7 @@ export interface CandidateEntry {
   clientId?: string
   displayName?: string
   addressSummary?: string
+  zoneName?: string
   latitude?: number
   longitude?: number
   distanceMeters?: number
@@ -149,9 +150,16 @@ export interface RouteStopEstimate {
 
 export interface RouteSaleReference {
   saleId: string
-  versionAtSave: number | null
-  currentVersion: number | null
-  currentStatus: string | null
+  versionAtSave?: number | null
+  statusAtSave?: string | null
+  currentVersion?: number | null
+  currentStatus?: string | null
+  clientName?: string
+  address?: string
+  zoneName?: string
+  itemCount?: number
+  productCount?: number
+  unitCount?: number
 }
 
 export interface RouteDashboardCard {
@@ -465,6 +473,7 @@ export interface RoutePlan {
   readonly encodedPolyline: string
   readonly warnings: readonly string[]
   readonly audit: RoutePlanAudit
+  readonly saleReferences?: readonly RouteSaleReference[]
   readonly createdAt?: string
 }
 

@@ -186,4 +186,35 @@ describe('RoutePreview', () => {
     expect(within(stops).getAllByRole('listitem')[2]).toHaveTextContent('Cliente: Cliente Dos')
     expect(within(stops).getAllByRole('listitem')[2]).toHaveTextContent('Calle 2')
   })
+
+  it('renders linked orders as an enriched table in route order with safe fallbacks', () => {
+    render(
+      <RoutePreview
+        status="ready"
+        preview={{
+          ...PREVIEW,
+          saleReferences: [
+            { saleId: 'sale-3', statusAtSave: 'DELIVERED', clientName: 'Comercio Dos', address: 'Calle 2', zoneName: 'Sur', productCount: 2, unitCount: 5 },
+            { saleId: 'sale-1', statusAtSave: 'PENDING', clientName: 'Cliente Uno', address: 'Calle 1', zoneName: 'Norte', itemCount: 1 },
+          ],
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Pedidos vinculados' }))
+    const table = screen.getByRole('table', { name: 'Pedidos vinculados' })
+    expect(within(table).getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      '#', 'Cliente / Comercio', 'N° de pedido', 'Dirección / Zona', 'Items (unidades)', 'Estado',
+    ])
+    const rows = within(table).getAllByRole('row')
+    expect(rows[1]).toHaveTextContent('Cliente Uno')
+    expect(rows[1]).toHaveTextContent('sale-1')
+    expect(rows[1]).toHaveTextContent('1 ítem')
+    expect(rows[2]).toHaveTextContent('sale-2')
+    expect(rows[2]).toHaveTextContent('No disponible')
+    expect(rows[3]).toHaveTextContent('Comercio Dos')
+    expect(rows[3]).toHaveTextContent('2 productos')
+    expect(rows[3]).toHaveTextContent('5 unidades')
+    expect(rows[3]).toHaveTextContent('Entregado')
+  })
 })

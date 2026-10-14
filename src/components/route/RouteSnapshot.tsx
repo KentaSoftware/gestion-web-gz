@@ -18,6 +18,7 @@ interface SnapshotDashboardFields {
   staleness?: { stale: boolean }
   readWarnings?: readonly string[]
   fuelAssumptions?: { availability?: string; vehicleCode?: string | null }
+  saleReferences?: RoutePlan['saleReferences']
 }
 
 const decimal = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
@@ -190,9 +191,10 @@ export function RouteSnapshot({ snapshot }: RouteSnapshotProps) {
         </div>
       </dl>
 
-       <RouteTabs
-         route={toPreviewRoute(snapshot)}
-         estimates={dashboard.stopEstimates}
+        <RouteTabs
+          route={toPreviewRoute(snapshot)}
+          estimates={dashboard.stopEstimates}
+          saleReferences={dashboard.saleReferences ?? snapshot.saleReferences}
           depotName={snapshot.depot.name}
           depotAddress={snapshot.depot.address}
          stale={dashboard.staleness?.stale === true}
