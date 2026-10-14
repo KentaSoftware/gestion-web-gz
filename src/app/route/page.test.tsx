@@ -60,7 +60,7 @@ vi.mock('react-redux', () => ({ useSelector: () => ({ nickname: '', token: '' })
 vi.mock('@/components/AppSidebar', () => ({ default: () => null }))
 vi.mock('@/components/ui/sidebar', () => ({
   SidebarProvider: ({ children, className }: { children: ReactNode; className?: string }) => <div className={className}>{children}</div>,
-  SidebarInset: ({ children, className, ...props }: { children: ReactNode; className?: string }) => <main className={className} {...props}>{children}</main>,
+  SidebarInset: ({ children, className, ...props }: { children: ReactNode; className?: string }) => <div className={className} {...props}>{children}</div>,
   SidebarTrigger: () => <button type="button">Toggle sidebar</button>,
 }))
 
@@ -224,6 +224,10 @@ describe('Dashboard layout', () => {
     render(<Dashboard><div>Dashboard content</div></Dashboard>)
 
     const main = document.getElementById('dashboard-main')
+    const mains = document.querySelectorAll('main')
+    expect(mains).toHaveLength(1)
+    expect(mains[0]).toBe(main)
+    expect(main).toHaveAttribute('id', 'dashboard-main')
     expect(main).toHaveClass('flex', 'h-0', 'min-h-0', 'flex-1', 'flex-col', 'overflow-y-auto', 'bg-background-canvas')
     expect(main).not.toHaveClass('h-full')
   })
