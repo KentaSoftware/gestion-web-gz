@@ -145,7 +145,7 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
     : null
 
   return (
-    <section aria-labelledby="route-dashboard-title" className="mb-8 flex w-full min-w-0 flex-1 min-h-0 flex-col gap-6">
+    <section aria-labelledby="route-dashboard-title" className="mb-8 flex h-full w-full min-w-0 flex-1 min-h-0 flex-col gap-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 id="route-dashboard-title" className="text-heading-sm font-semibold text-text-primary">

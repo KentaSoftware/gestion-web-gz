@@ -84,7 +84,9 @@ describe('RouteScreen', () => {
   it('renders the route dashboard without a standalone page header or planner section', async () => {
     render(<RouteScreen />)
 
-    expect(screen.getByRole('heading', { level: 2, name: 'Optimización de Rutas' })).toBeInTheDocument()
+    const dashboard = screen.getByRole('region', { name: 'Optimización de Rutas' })
+    expect(dashboard).toBeInTheDocument()
+    expect(dashboard.parentElement).toHaveClass('h-full', 'min-h-0', 'w-full', 'min-w-0')
     expect(screen.queryByRole('heading', { level: 1, name: 'Rutas' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 2, name: 'Planificación de rutas' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Actualizar' })).not.toBeInTheDocument()

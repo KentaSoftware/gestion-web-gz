@@ -28,7 +28,7 @@ function RoutePlanningContent() {
   const [plannerDefaults, setPlannerDefaults] = useState({ serviceDate: '', deliveryZoneId: '' })
 
   return (
-    <PageContainer>
+    <PageContainer className="h-full min-h-0 w-full min-w-0">
       <RouteDashboard
         refreshToken={dashboardRefreshToken}
         onGenerateRoutes={(serviceDate, deliveryZoneId) => {
