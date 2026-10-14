@@ -80,6 +80,16 @@ export function RouteDashboard() {
   const clientPageCount = Math.max(1, Math.ceil(clientCandidates.length / CLIENT_PAGE_SIZE))
   const visibleClientCandidates = clientCandidates.slice((clientPage - 1) * CLIENT_PAGE_SIZE, clientPage * CLIENT_PAGE_SIZE)
   const selectedRoute = dashboard?.routes.find((route) => route.id === selectedRouteId) ?? dashboard?.routes[0]
+  const focusRegion = (regionId: string) => {
+    const region = document.getElementById(regionId)
+    if (!(region instanceof HTMLElement)) return
+    region.focus({ preventScroll: true })
+    region.scrollIntoView?.({ block: 'start' })
+  }
+  const handleRouteAction = (routeId: string, regionId: string) => {
+    setSelectedRouteId(routeId)
+    focusRegion(regionId)
+  }
   const selectedRoutePreview: RoutePreview['route'] | null = selectedRoute?.depot && selectedRoute.stops
     ? {
         depot: { id: 'deposito_1', ...selectedRoute.depot },
@@ -190,26 +200,24 @@ export function RouteDashboard() {
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
               <section aria-labelledby="planned-routes-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
-                <h3 id="planned-routes-title" className="text-base font-semibold text-text-primary">Rutas planificadas</h3>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <h3 id="planned-routes-title" className="text-base font-semibold text-text-primary">Rutas planificadas ({dashboard.routes.length})</h3>
+                  <div role="group" aria-label="Estados de ruta" className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
+                    <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-state-warning" aria-hidden="true" />Pendiente</span>
+                    <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-state-info" aria-hidden="true" />En progreso</span>
+                    <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-state-success" aria-hidden="true" />Completada</span>
+                  </div>
+                </div>
                 <div className="mt-4 flex flex-col gap-3">
                   {dashboard.routes.map((route) => (
-                    <div
+                    <PlannedRouteCard
                       key={route.id}
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Seleccionar ruta ${route.id}`}
-                      aria-pressed={selectedRoute?.id === route.id}
-                      className={selectedRoute?.id === route.id ? 'rounded-lg ring-2 ring-brand-primary' : 'rounded-lg'}
-                      onClick={() => setSelectedRouteId(route.id)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          setSelectedRouteId(route.id)
-                        }
-                      }}
-                    >
-                      <PlannedRouteCard route={route} />
-                    </div>
+                      route={route}
+                      selected={selectedRoute?.id === route.id}
+                      onSelect={() => setSelectedRouteId(route.id)}
+                      onViewMap={() => handleRouteAction(route.id, 'route-map-region')}
+                      onPreview={() => handleRouteAction(route.id, 'route-detail-region')}
+                    />
                   ))}
                 </div>
               </section>
@@ -229,13 +237,13 @@ export function RouteDashboard() {
           )}
           {dashboard.warnings.length > 0 && <div role="alert" className="rounded-lg border border-state-warning bg-surface-base p-4 text-sm text-state-warning">{dashboard.warnings.join(' · ')}</div>}
           <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <section aria-labelledby="route-map-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
+            <section id="route-map-region" tabIndex={-1} aria-labelledby="route-map-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
               <h3 id="route-map-title" className="flex items-center gap-2 text-base font-semibold text-text-primary"><Map aria-hidden="true" /> Mapa de ruta seleccionada</h3>
               <p className="mt-3 rounded-md border border-border-subtle bg-background-subtle p-4 text-sm text-text-secondary">El mapa es complementario. La secuencia textual de la ruta seleccionada permanece disponible aunque el proveedor o la API de mapas no estén disponibles.</p>
               {selectedRoutePreview !== null ? <RouteMap route={selectedRoutePreview} /> : <p role="status" className="mt-3 text-sm text-text-secondary">No hay detalle geográfico disponible para esta ruta.</p>}
               {dashboard.routes.some((route) => route.stale) && <p role="status" className="mt-3 rounded-md border border-state-warning p-3 text-sm text-state-warning">Hay snapshots desactualizados. Se muestran en modo solo lectura; generá una nueva ruta para actualizar.</p>}
             </section>
-            <section aria-labelledby="route-detail-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
+            <section id="route-detail-region" tabIndex={-1} aria-labelledby="route-detail-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
               <h3 id="route-detail-title" className="text-base font-semibold text-text-primary">Detalle de ruta</h3>
               {selectedRoute === undefined ? <p className="mt-3 text-sm text-text-secondary">No hay una ruta seleccionada.</p> : (
                 <>

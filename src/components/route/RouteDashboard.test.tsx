@@ -75,6 +75,30 @@ describe('RouteDashboard selected-route detail', () => {
     expect(screen.getByText('No hay detalle geográfico disponible para esta ruta.')).toBeInTheDocument()
   })
 
+  it('renders planned-route parity controls and selects from route actions', async () => {
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValue(dashboard)
+    render(<RouteDashboard />)
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (2)' })).toBeInTheDocument())
+    expect(screen.getByRole('group', { name: 'Estados de ruta' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Ver mapa' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Previsualizar' })).toHaveLength(2)
+
+    const selection = screen.getByRole('button', { name: 'Seleccionar ruta route-2' })
+    expect(selection).toHaveAttribute('aria-pressed', 'false')
+    selection.focus()
+    expect(document.activeElement).toBe(selection)
+    fireEvent.click(selection)
+    expect(selection).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver mapa' })[1])
+    expect(screen.getByText('Ruta route-2')).toBeInTheDocument()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Previsualizar' })[1])
+    expect(screen.getByText('Ruta route-2')).toBeInTheDocument()
+  })
+
   it('paginates combined eligible and blocked clients', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     getDashboard.mockResolvedValue({
