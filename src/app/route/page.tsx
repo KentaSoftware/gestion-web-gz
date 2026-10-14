@@ -2,10 +2,18 @@
 
 import { Suspense } from 'react'
 import ProtectedRoute from '@/components/ProtectedRoute'
-import { PageContainer, PageHeader } from '@/components/layout/PageLayout'
+import { PageContainer } from '@/components/layout/PageLayout'
 import { Spinner } from '@/components/ui/spinner'
 import { RoutePlanner } from '@/components/route/RoutePlanner'
 import { RouteDashboard } from '@/components/route/RouteDashboard'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { useState } from 'react'
 
 /**
  * Route planning page shell (T-F.1 / T-F.C1) with candidate review (T-F.3).
@@ -15,12 +23,33 @@ import { RouteDashboard } from '@/components/route/RouteDashboard'
  * the accessible page frame and the read-only candidate review panel.
  */
 function RoutePlanningContent() {
+  const [plannerOpen, setPlannerOpen] = useState(false)
+  const [plannerDefaults, setPlannerDefaults] = useState({ serviceDate: '', deliveryZoneId: '' })
+
   return (
     <PageContainer>
-      <PageHeader title="Rutas" description="Panel operativo de optimización y planificación de rutas de reparto." />
-
-      <RouteDashboard />
-      <RoutePlanner />
+      <RouteDashboard
+        onGenerateRoutes={(serviceDate, deliveryZoneId) => {
+          setPlannerDefaults({ serviceDate, deliveryZoneId })
+          setPlannerOpen(true)
+        }}
+      />
+      <Dialog open={plannerOpen} onOpenChange={setPlannerOpen}>
+        <DialogContent className="max-h-[calc(100vh-2rem)] max-w-5xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Planificación de rutas</DialogTitle>
+            <DialogDescription>
+              Seleccioná los pedidos y revisá el recorrido antes de guardar el plan.
+            </DialogDescription>
+          </DialogHeader>
+          {plannerOpen && (
+            <RoutePlanner
+              initialServiceDate={plannerDefaults.serviceDate}
+              initialDeliveryZoneId={plannerDefaults.deliveryZoneId}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   )
 }

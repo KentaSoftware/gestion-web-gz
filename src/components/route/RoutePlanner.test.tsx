@@ -112,6 +112,14 @@ describe('RoutePlanner', () => {
     expect(getActiveDeliveryZones).toHaveBeenCalledTimes(1)
   })
 
+  it('initializes date and zone fields from optional props', async () => {
+    render(<RoutePlanner initialServiceDate="2026-10-10" initialDeliveryZoneId={ZONE_B} />)
+
+    expect(screen.getByLabelText('Fecha de reparto')).toHaveValue('2026-10-10')
+    await screen.findByRole('option', { name: 'Zona Sur' })
+    expect(screen.getByLabelText('Zona de entrega')).toHaveValue(ZONE_B)
+  })
+
   it('rejects a missing date without calling the candidates endpoint', async () => {
     render(<RoutePlanner />)
 

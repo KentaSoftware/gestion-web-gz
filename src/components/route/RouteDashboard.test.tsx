@@ -49,6 +49,7 @@ describe('RouteDashboard selected-route detail', () => {
     expect(toolbar).not.toBeNull()
     expect(toolbar).toBeVisible()
     expect(screen.getByRole('button', { name: 'Generar rutas' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Actualizar' })).not.toBeInTheDocument()
 
     fireEvent.click(toggle)
     expect(screen.getByRole('button', { name: 'Mostrar filtros' })).toHaveAttribute('aria-expanded', 'false')
@@ -97,16 +98,29 @@ describe('RouteDashboard selected-route detail', () => {
     expect(document.activeElement).toBe(document.getElementById('route-detail-region'))
   })
 
-  it('renders the planned-routes empty state without the generic dashboard message', async () => {
+  it('omits the planned-routes panel when no routes exist while keeping clients visible', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     getDashboard.mockResolvedValue({ ...dashboard, routes: [], candidates: { ...dashboard.candidates } })
     render(<RouteDashboard />)
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (0)' })).toBeInTheDocument())
-    expect(screen.getByText('No existen rutas planificadas para el usuario')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Clientes con pedidos/ })).toBeInTheDocument())
+    expect(screen.queryByRole('heading', { name: 'Rutas planificadas (0)' })).not.toBeInTheDocument()
+    expect(screen.queryByText('No existen rutas planificadas para el usuario')).not.toBeInTheDocument()
     expect(screen.queryByText('No hay rutas ni clientes pendientes para la fecha y zona seleccionadas.')).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Mapa interactivo' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Detalle de ruta' })).not.toBeInTheDocument()
+  })
+
+  it('passes the current dashboard date and selected zone id to route generation', async () => {
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValue(dashboard)
+    const onGenerateRoutes = vi.fn()
+    render(<RouteDashboard onGenerateRoutes={onGenerateRoutes} />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Generar rutas' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Generar rutas' }))
+
+    expect(onGenerateRoutes).toHaveBeenCalledWith('2026-10-14', 'zone-1')
   })
 
   it('renders planned-route parity controls and selects from route actions', async () => {

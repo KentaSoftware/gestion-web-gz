@@ -1,14 +1,16 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route } from 'lucide-react'
 import { SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
 
-const { useSessionAccess, usePermission, push, isModuleEnabled, moduleFlags } = vi.hoisted(() => ({
+const { useSessionAccess, usePermission, push, isModuleEnabled, moduleFlags, getActiveDeliveryZones, getDashboard } = vi.hoisted(() => ({
   useSessionAccess: vi.fn(),
   usePermission: vi.fn(),
   push: vi.fn(),
   isModuleEnabled: vi.fn(),
   moduleFlags: { route: true, stock: false, finance: false, simulation: false } as Record<string, boolean>,
+  getActiveDeliveryZones: vi.fn(),
+  getDashboard: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({
@@ -36,7 +38,8 @@ vi.mock('@/config/moduleRegistry', () => ({
 // suite and must not perform real zone/network work here.
 vi.mock('@/services/routePlan.service', () => ({
   routePlanService: {
-    getActiveDeliveryZones: () => new Promise(() => undefined),
+    getActiveDeliveryZones,
+    getDashboard,
     getAssignmentOptions: vi.fn().mockResolvedValue({ drivers: [], vehicles: [] }),
     getCandidates: vi.fn(),
   },
@@ -56,13 +59,43 @@ describe('RouteScreen', () => {
     isModuleEnabled.mockReturnValue(true)
     useSessionAccess.mockReturnValue(access())
     usePermission.mockReturnValue({ hasPermission: () => true, hasAnyPermission: () => true })
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'a'.repeat(24), code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValue({
+      filters: { serviceDate: '2026-10-14', zoneCode: 'NORTE' },
+      kpis: { activeRoutes: 0, pendingOrders: 0, totalDistanceMeters: 0, estimatedFuelLiters: 0 },
+      routes: [],
+      candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' },
+      warnings: [],
+    })
   })
 
-  it('renders the route planning shell for any authenticated session', () => {
+  it('renders the route dashboard without a standalone page header or planner section', async () => {
     render(<RouteScreen />)
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Rutas' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: 'Planificación de rutas' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Optimización de Rutas' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 1, name: 'Rutas' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 2, name: 'Planificación de rutas' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Actualizar' })).not.toBeInTheDocument()
+  })
+
+  it('opens the planner dialog with the dashboard filter defaults and closes it', async () => {
+    render(<RouteScreen />)
+
+    const generateButton = await screen.findByRole('button', { name: 'Generar rutas' })
+    await waitFor(() => expect(generateButton).toBeEnabled())
+    generateButton.click()
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Seleccioná los pedidos y revisá el recorrido antes de guardar el plan.')).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Fecha de reparto')).toHaveValue('2026-10-14')
+    expect(within(dialog).getByLabelText('Zona de entrega')).toHaveValue('a'.repeat(24))
+
+    screen.getByRole('button', { name: 'Close' }).click()
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Fecha de reparto')).not.toBeInTheDocument()
+    })
   })
 
   it('announces loading while the session is hydrating', () => {
@@ -80,7 +113,7 @@ describe('RouteScreen', () => {
 
     render(<RouteScreen />)
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Rutas' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Optimización de Rutas' })).toBeInTheDocument()
   })
 
   it('redirects anonymous sessions home without rendering the shell', () => {

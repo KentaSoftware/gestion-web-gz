@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useId, useState } from 'react'
-import { ClipboardList, Filter, Loader2, Map, MapPin, RefreshCw, Settings } from 'lucide-react'
+import { Filter, Loader2, Map, MapPin, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { routePlanService } from '@/services/routePlan.service'
@@ -19,7 +19,11 @@ type LoadStatus = 'loading' | 'ready' | 'error'
 const today = (): string => new Date().toISOString().slice(0, 10)
 const CLIENT_PAGE_SIZE = 5
 
-export function RouteDashboard() {
+interface RouteDashboardProps {
+  onGenerateRoutes?: (serviceDate: string, deliveryZoneId: string) => void
+}
+
+export function RouteDashboard({ onGenerateRoutes }: RouteDashboardProps = {}) {
   const dateId = useId()
   const zoneId = useId()
   const [serviceDate, setServiceDate] = useState(today)
@@ -91,6 +95,14 @@ export function RouteDashboard() {
   const clientPageCount = Math.max(1, Math.ceil(filteredClientCandidates.length / CLIENT_PAGE_SIZE))
   const visibleClientCandidates = filteredClientCandidates.slice((clientPage - 1) * CLIENT_PAGE_SIZE, clientPage * CLIENT_PAGE_SIZE)
   const selectedRoute = dashboard?.routes.find((route) => route.id === selectedRouteId) ?? dashboard?.routes[0]
+  const handleGenerateRoutes = () => {
+    if (onGenerateRoutes !== undefined) {
+      const deliveryZoneId = zones.find((zone) => zone.code === zoneCode)?._id
+      if (deliveryZoneId !== undefined) onGenerateRoutes(serviceDate, deliveryZoneId)
+      return
+    }
+    void loadDashboard()
+  }
   useEffect(() => {
     if (focusRegionId === null) return
     const region = document.getElementById(focusRegionId)
@@ -137,10 +149,6 @@ export function RouteDashboard() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="secondary" onClick={() => setConfigOpen(true)}><Settings aria-hidden="true" /> Configurar ubicaciones</Button>
-          <Button type="button" variant="secondary" onClick={() => void loadDashboard()} disabled={status === 'loading' || zoneCode === ''}>
-          <RefreshCw aria-hidden="true" />
-          Actualizar
-          </Button>
           <Button
             type="button"
             variant="secondary"
@@ -178,7 +186,7 @@ export function RouteDashboard() {
             {zones.map((zone) => <option key={zone._id} value={zone.code}>{zone.name}</option>)}
           </select>
         </div>
-        <Button type="button" onClick={() => void loadDashboard()} disabled={status === 'loading' || zoneCode === ''}>
+       <Button type="button" onClick={handleGenerateRoutes} disabled={status === 'loading' || zoneCode === ''}>
           Generar rutas
         </Button>
       </div>
@@ -208,8 +216,8 @@ export function RouteDashboard() {
       {status === 'ready' && dashboard !== null && (
         <>
           <RouteKpiCards kpis={dashboard.kpis} />
-          <div className="grid gap-4 lg:grid-cols-2">
-              <section aria-labelledby="planned-routes-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
+           <div className={`grid gap-4 ${dashboard.routes.length > 0 ? 'lg:grid-cols-2' : ''}`}>
+             {dashboard.routes.length > 0 && <section aria-labelledby="planned-routes-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <h3 id="planned-routes-title" className="text-base font-semibold text-text-primary">Rutas planificadas ({dashboard.routes.length})</h3>
                   <div role="group" aria-label="Estados de ruta" className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
@@ -218,13 +226,7 @@ export function RouteDashboard() {
                     <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-state-success" aria-hidden="true" />Completada</span>
                   </div>
                 </div>
-                 {dashboard.routes.length === 0 ? (
-                    <div role="status" className="mt-4 flex min-h-56 flex-col items-center justify-center gap-4 rounded-md border border-border-subtle bg-background-subtle p-6 text-center">
-                      <span className="flex size-16 items-center justify-center rounded-full bg-surface-base text-brand-primary shadow-sm" aria-hidden="true"><ClipboardList className="size-8" /></span>
-                      <p className="text-base font-medium text-brand-primary">No existen rutas planificadas para el usuario</p>
-                   </div>
-                 ) : (
-                   <div className="mt-4 flex flex-col gap-3">
+                    <div className="mt-4 flex flex-col gap-3">
                      {dashboard.routes.map((route) => (
                        <PlannedRouteCard
                          key={route.id}
@@ -236,9 +238,9 @@ export function RouteDashboard() {
                        />
                      ))}
                    </div>
-                 )}
-               </section>
-              <section aria-labelledby="dashboard-clients-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
+                </section>
+             }
+             <section aria-labelledby="dashboard-clients-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
                 <h3 id="dashboard-clients-title" className="text-base font-semibold text-text-primary">Clientes con pedidos ({clientCandidates.length})</h3>
                 <p className="mt-1 text-sm text-text-secondary">{dashboard.candidates.eligible.length} elegibles · {dashboard.candidates.blocked.length} bloqueados{clientQuery.trim() !== '' ? ` · ${filteredClientCandidates.length} coincidencias` : ''}</p>
                  {clientCandidates.length === 0 ? (

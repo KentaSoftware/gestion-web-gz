@@ -74,7 +74,12 @@ const routePlanId = (plan: RoutePlan): string => {
  * plain `saleIds`; grouping sales of the same client into one stop remains
  * backend behavior. Preview never mutates sales or persists plans.
  */
-export function RoutePlanner() {
+interface RoutePlannerProps {
+  initialServiceDate?: string
+  initialDeliveryZoneId?: string
+}
+
+export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = '' }: RoutePlannerProps = {}) {
   const dateFieldId = useId()
   const zoneFieldId = useId()
   const selectionFieldId = useId()
@@ -86,8 +91,8 @@ export function RoutePlanner() {
   const [driverId, setDriverId] = useState('')
   const [vehicleId, setVehicleId] = useState('')
   const [zoneStatus, setZoneStatus] = useState<ZoneStatus>('loading')
-  const [serviceDate, setServiceDate] = useState('')
-  const [deliveryZoneId, setDeliveryZoneId] = useState('')
+  const [serviceDate, setServiceDate] = useState(initialServiceDate)
+  const [deliveryZoneId, setDeliveryZoneId] = useState(initialDeliveryZoneId)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [candidates, setCandidates] = useState<CandidateResult | null>(null)
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('idle')
