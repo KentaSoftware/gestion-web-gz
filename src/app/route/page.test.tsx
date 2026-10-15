@@ -220,15 +220,19 @@ describe('RouteScreen', () => {
 })
 
 describe('Dashboard layout', () => {
-  it('keeps the dashboard main as a flexible scroll container', () => {
+  it('keeps the dashboard main as the page landmark and delegates scrolling to its child', () => {
     render(<Dashboard><div>Dashboard content</div></Dashboard>)
 
     const main = document.getElementById('dashboard-main')
     const mains = document.querySelectorAll('main')
+    const scrollRegion = screen.getByTestId('dashboard-scroll-region')
     expect(mains).toHaveLength(1)
     expect(mains[0]).toBe(main)
     expect(main).toHaveAttribute('id', 'dashboard-main')
-    expect(main).toHaveClass('flex', 'h-0', 'min-h-0', 'flex-1', 'flex-col', 'overflow-y-auto', 'bg-background-canvas')
+    expect(main).toHaveClass('flex', 'h-0', 'min-h-0', 'flex-1', 'flex-col', 'bg-background-canvas')
+    expect(main).not.toHaveClass('overflow-y-auto')
+    expect(scrollRegion.parentElement).toBe(main)
+    expect(scrollRegion).toHaveClass('h-0', 'min-h-0', 'flex-1', 'overflow-y-auto')
     expect(main).not.toHaveClass('h-full')
   })
 })
