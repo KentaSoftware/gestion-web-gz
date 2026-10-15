@@ -10,7 +10,7 @@ const { useSessionAccess, usePermission, push, isModuleEnabled, moduleFlags, get
   usePermission: vi.fn(),
   push: vi.fn(),
   isModuleEnabled: vi.fn(),
-  moduleFlags: { route: true, stock: false, finance: false, simulation: false } as Record<string, boolean>,
+  moduleFlags: { route: true, finance: false, simulation: false } as Record<string, boolean>,
   getActiveDeliveryZones: vi.fn(),
   getDashboard: vi.fn(),
   getCandidates: vi.fn(),
@@ -70,7 +70,7 @@ import Dashboard from '@/components/Dashboard'
 const access = (overrides: Partial<SessionAccess> = {}): SessionAccess => ({
   status: SESSION_STATUS.READY,
   permissions: [],
-  gates: { route: true, stock: false, finance: false, simulation: false },
+  gates: { route: true, finance: false, simulation: false },
   ...overrides,
 })
 

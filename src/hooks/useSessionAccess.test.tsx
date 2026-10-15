@@ -8,7 +8,7 @@ const { useAppSelector } = vi.hoisted(() => ({
 
 vi.mock('@/redux/hook', () => ({ useAppSelector }))
 vi.mock('@/config/moduleRegistry', () => ({
-  DEFAULT_MODULE_GATES: { stock: false, finance: false, simulation: false },
+  DEFAULT_MODULE_GATES: { finance: false, simulation: false },
 }))
 
 import { useSessionAccess } from './useSessionAccess'
@@ -66,6 +66,6 @@ describe('useSessionAccess', () => {
 
     const { result } = renderHook(() => useSessionAccess())
 
-    expect(result.current.gates).toMatchObject({ stock: false, finance: false, simulation: false })
+    expect(result.current.gates).toMatchObject({ finance: false, simulation: false })
   })
 })

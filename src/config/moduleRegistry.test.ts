@@ -11,21 +11,18 @@ const repartidorAccess: SessionAccess = {
   status: SESSION_STATUS.READY,
   permissions: [],
   gates: {
-    stock: false,
     finance: false,
     simulation: false,
   },
 }
 
 describe('MODULE_REGISTRY', () => {
-  it('keeps Phase 0 module flags and gates disabled by default', () => {
+  it('keeps the remaining gated module flags and gates disabled by default', () => {
     expect(MODULE_FLAGS).toEqual({
-      stock: false,
       finance: false,
       simulation: false,
     })
     expect(DEFAULT_MODULE_GATES).toEqual({
-      stock: false,
       finance: false,
       simulation: false,
     })
@@ -33,13 +30,9 @@ describe('MODULE_REGISTRY', () => {
 
   it('keeps a Repartidor read-only while allowing legacy read navigation', () => {
     const home = MODULE_REGISTRY.find((entry) => entry.id === 'home')
-    const stock = MODULE_REGISTRY.find((entry) => entry.id === 'stock')
 
     expect(home).toBeDefined()
-    expect(stock).toBeDefined()
     expect(isModuleEnabled(home!, repartidorAccess)).toBe(true)
-    expect(isModuleEnabled(stock!, repartidorAccess)).toBe(false)
-    expect(repartidorAccess.permissions).not.toContain(Permission.ADJUST_STOCK)
     expect(repartidorAccess.permissions).not.toContain(Permission.REFUND_SALE)
   })
 
