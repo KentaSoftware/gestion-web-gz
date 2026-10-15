@@ -18,7 +18,7 @@ interface ResponsiveGridProps extends LayoutProps {
 
 export function PageContainer({ children, className }: LayoutProps) {
   return (
-    <div className={cn('flex flex-1 flex-col bg-background-canvas p-4 md:p-6', className)}>
+    <div className={cn('flex flex-1 min-h-0 flex-col bg-background-canvas p-4 md:p-6', className)}>
       {children}
     </div>
   )

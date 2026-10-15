@@ -95,10 +95,12 @@ export default function Dashboard({ children }: { children: ReactNode }) {
           </header>
           <main
             id="dashboard-main"
-            className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-background-canvas"
+            className="flex h-0 min-h-0 flex-1 flex-col bg-background-canvas"
             suppressHydrationWarning={true}
           >
-            {children}
+            <div data-testid="dashboard-scroll-region" className="h-0 min-h-0 flex-1 overflow-y-auto">
+              {children}
+            </div>
           </main>
         </SidebarInset>
       </SidebarProvider>
