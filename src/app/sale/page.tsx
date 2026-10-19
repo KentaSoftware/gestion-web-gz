@@ -3,6 +3,7 @@
 
 import { AnimatedNumber } from '@/components/AnimatedNumber'
 import Button from '@/components/Button'
+import Confirm from '@/components/Confirm'
 import InfoSale from '@/components/sale/InfoSale'
 import ModalPrintSale from '@/components/sale/ModalPrintSale'
 import PrintMultipleSale from '@/components/sale/PrintMultipleSale'
@@ -13,6 +14,7 @@ import { Sale } from '@/interfaces/sale.interface'
 import { useAppDispatch } from '@/redux/hook'
 import { getLoading, setLoading } from '@/redux/loadingSlice'
 import { getUser, setUser } from '@/redux/userSlice'
+import { commercialFactService } from '@/services/commercialFact.service'
 import apiClient from '@/utils/client'
 import { Types } from 'mongoose'
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime'
@@ -21,6 +23,17 @@ import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { useSelector } from 'react-redux'
 import { io } from 'socket.io-client'
+
+const isSalePayable = (item: Sale): boolean =>
+  !item.paidAt && item.estado !== 'Cancelado'
+
+const todayCivilDate = (): string => {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
 
 // ─── Local row component (approved in TICKET-07) ─────────────────────────────
 
@@ -31,9 +44,10 @@ interface SaleRowProps {
   onEdit: () => void
   onPrint: () => void
   onInfo: () => void
+  onCollect?: () => void
 }
 
-function SaleRow({ item, isSelected, onSelect, onEdit, onPrint, onInfo }: SaleRowProps) {
+function SaleRow({ item, isSelected, onSelect, onEdit, onPrint, onInfo, onCollect }: SaleRowProps) {
   return (
     <li
       className={`my-1.5 flex h-auto min-h-[70px] w-full cursor-pointer list-none items-center justify-center rounded-xl border p-4 font-semibold transition-[background-color,border-color] duration-500 ease-linear hover:border-brand-primary hover:bg-background-subtle max-[500px]:flex-col ${isSelected ? 'border-brand-primary bg-background-subtle' : 'border-border-subtle bg-surface-base'}`}
@@ -53,6 +67,9 @@ function SaleRow({ item, isSelected, onSelect, onEdit, onPrint, onInfo }: SaleRo
         </h2>
       </div>
       <div className="flex items-center gap-2">
+        {onCollect && (
+          <Button text='COBRAR' variant='primary' onClick={onCollect} />
+        )}
         <Button text='EDITAR'   variant='ghost' onClick={onEdit} />
         <Button text='IMPRIMIR' variant='ghost' onClick={onPrint} />
         <Button text='+INFO'    variant='ghost' onClick={onInfo} />
@@ -81,6 +98,44 @@ export default function SaleScreen() {
     const [query, setQuery] = useState<{skip: number, limit: number}>({skip: 0, limit: 25})
     const [selectSaleArray, setSelectSaleArray] = useState<(string | Types.ObjectId)[]>([])
     const [openMultipleSale, setOpenMultipleSale] = useState(false)
+    const [openConfirmPayment, setOpenConfirmPayment] = useState(false)
+    const [saleToCollect, setSaleToCollect] = useState<Sale | null>(null)
+
+    const markSalePaid = (saleId: string | Types.ObjectId, paidAt: string) => {
+      const patch = (list: Sale[]) =>
+        list.map((s) => (String(s._id) === String(saleId) ? { ...s, paidAt } : s))
+      setData(patch)
+      setDataSearch(patch)
+    }
+
+    const openCollectConfirm = (item: Sale) => {
+      setSaleToCollect(item)
+      setOpenConfirmPayment(true)
+    }
+
+    const closeCollectConfirm = () => {
+      setOpenConfirmPayment(false)
+      setSaleToCollect(null)
+    }
+
+    const handleConfirmPayment = async () => {
+      if (!saleToCollect?._id) return
+      const saleId = String(saleToCollect._id)
+      const businessDate = todayCivilDate()
+      dispatch(setLoading(true))
+      try {
+        await commercialFactService.confirmSalePayment(saleId, {
+          businessDate,
+          idempotencyKey: `sale-payment-${saleId}-${businessDate}`,
+        })
+        markSalePaid(saleId, businessDate)
+        closeCollectConfirm()
+      } catch (e) {
+        console.error('Error confirmando cobro', e)
+      } finally {
+        dispatch(setLoading(false))
+      }
+    }
 
     const addSaleArray = (item: string | Types.ObjectId) => {
       /* setSelectSaleArray(prevData=>{
@@ -263,6 +318,7 @@ export default function SaleScreen() {
                     onEdit={() => router.push(`/sale/editSale/${item._id}`)}
                     onPrint={buildPrintHandler(item)}
                     onInfo={() => { setOpenInfoSale(true); setSaleSelected(item._id) }}
+                    onCollect={isSalePayable(item) ? () => openCollectConfirm(item) : undefined}
                   />
                 ))
                 :
@@ -281,6 +337,7 @@ export default function SaleScreen() {
                     onEdit={() => router.push(`/sale/editSale/${item._id}`)}
                     onPrint={buildPrintHandler(item)}
                     onInfo={() => { setOpenInfoSale(true); setSaleSelected(item._id) }}
+                    onCollect={isSalePayable(item) ? () => openCollectConfirm(item) : undefined}
                   />
                 ))
                 :
@@ -305,6 +362,16 @@ export default function SaleScreen() {
           openInfoSale && 
           <InfoSale open={openInfoSale} handleClose={()=>setOpenInfoSale(false)} id={saleSelected} />
         }
+        <Confirm
+          open={openConfirmPayment}
+          message={
+            saleToCollect
+              ? `¿Confirmar cobro de la venta a ${saleToCollect.cliente} por $${saleToCollect.total}?`
+              : ''
+          }
+          handleClose={closeCollectConfirm}
+          handleConfirm={() => { void handleConfirmPayment() }}
+        />
         {/* {
           openMultipleSale &&
           <PrintMultipleSale open={openMultipleSale} handleClose={()=>setOpenMultipleSale(false)} salesIds={selectSaleArray} />

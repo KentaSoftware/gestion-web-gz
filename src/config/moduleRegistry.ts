@@ -54,7 +54,8 @@ export const MODULE_FLAGS: Readonly<Record<ModuleFlagKey, boolean>> = {
 /** Gate evidence is approved outside the app; every gate starts unmet. */
 export const DEFAULT_MODULE_GATES: Readonly<Record<string, boolean>> = {
   [MODULE_GATE.STOCK]: false,
-  [MODULE_GATE.FINANCE]: false,
+  /** Finance module enabled for this iteration (flag still required via env). */
+  [MODULE_GATE.FINANCE]: true,
   [MODULE_GATE.SIMULATION]: false,
 }
 
@@ -89,7 +90,7 @@ export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
   { id: 'cashflow', href: '/cashflow', label: 'Flujo de caja', icon: LineChart, flag: null, requiredPermissions: [], gate: null },
   { id: 'route', href: '/route', label: 'Rutas', icon: Route, flag: null, requiredPermissions: [], gate: null },
   { id: 'stock', href: '/stock', label: 'Stock', icon: Boxes, flag: MODULE_FLAG.STOCK, requiredPermissions: [Permission.ADJUST_STOCK], gate: MODULE_GATE.STOCK },
-  { id: 'finance', href: '/finance', label: 'Finanzas', icon: Wallet, flag: MODULE_FLAG.FINANCE, requiredPermissions: [Permission.REFUND_SALE], gate: MODULE_GATE.FINANCE },
+  { id: 'finance', href: '/finance', label: 'Finanzas', icon: Wallet, flag: MODULE_FLAG.FINANCE, requiredPermissions: [Permission.READ_CASHFLOW], gate: MODULE_GATE.FINANCE },
   { id: 'simulation', href: '/simulation', label: 'Simulación', icon: FlaskConical, flag: MODULE_FLAG.SIMULATION, requiredPermissions: [], gate: MODULE_GATE.SIMULATION },
 ]
 
