@@ -1,13 +1,13 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect, useState } from 'react'
-import styled, { CSSProperties } from 'styled-components';
-import Table from '../Table';
+import { useEffect, useState } from 'react';
+import DataTable from '../DataTable';
+import type { DataColumn } from '../DataTable';
 import apiClient from '@/utils/client';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import Logo from '../Logo';
 import Modal from '../Modal';
 import { Types } from 'mongoose';
-import { Buy, ItemBuy } from '@/interfaces/buy.interface';
+import { Buy, ExtendItemBuy, ItemBuy } from '@/interfaces/buy.interface';
 import { setLoading } from '@/redux/loadingSlice';
 import { useAppDispatch } from '@/redux/hook';
 
@@ -16,19 +16,10 @@ interface ResponseSale {
   itemsBuy: ItemBuy[]
 }
 
-interface Column {
-  label: string
-  field: string
-  width: string
-  align?: CSSProperties['textAlign']
-  price?: boolean
-  date?: boolean
-}
-
 export default function InfoBuy({open, handleClose, id}:{open:boolean, handleClose: ()=>void , id:Types.ObjectId | undefined | string}) {
 
   const [buy, setBuy] = useState<ResponseSale | undefined>(undefined)
-  const [valueStorage , setValue] = useLocalStorage("user", "")
+  const [valueStorage] = useLocalStorage('user', '');
   const dispatch = useAppDispatch();
 
   const getBuy = () => {
@@ -55,18 +46,16 @@ export default function InfoBuy({open, handleClose, id}:{open:boolean, handleClo
           <>
           <Logo/>
           <div>
-              <Tag>Proveedor : {buy.r.proveedor}</Tag>
-              <Tag>FECHA : {buy.r.createdAt.split("T")[0]}</Tag>
+              <h5 className="my-2.5 px-[15px] text-base font-medium text-text-primary max-md:text-sm">Proveedor : {buy.r.proveedor}</h5>
+              <h5 className="my-2.5 px-[15px] text-base font-medium text-text-primary max-md:text-sm">FECHA : {buy.r.createdAt.split('T')[0]}</h5>
             </div>
             <div>
-              <Table
-                data={buy.itemsBuy}
+              <DataTable
+                data={buy.itemsBuy as ExtendItemBuy[]}
                 columns={columns}
-                maxHeight={false}
-                onClick={() => ''}
               />
             </div>
-            <Tag style={{ textAlign: 'end' }}>TOTAL : $ {buy.r.total}</Tag> 
+            <h5 className="my-2.5 px-[15px] text-right text-base font-medium text-text-primary max-md:text-sm">TOTAL : $ {buy.r.total}</h5>
           </>
         }
         </div>
@@ -75,22 +64,11 @@ export default function InfoBuy({open, handleClose, id}:{open:boolean, handleClo
   );
 }
 
-const columns: Column[] = [
-  { label: 'Producto', field: 'descripcion', width: '40%' },
-  { label: 'Cantidad', field: 'cantidad', width: '20%', align: 'center' },
-  { label: 'Precio', field: 'precio', width: '20%', align: 'center' },
-  { label: 'Total', field: 'total', width: '20%', align: 'center', price: true },
+const formatPrice = (value: unknown): string => `$ ${String(value ?? '')}`
+
+const columns: DataColumn<ExtendItemBuy>[] = [
+  { key: 'descripcion', header: 'Producto', width: '40%' },
+  { key: 'cantidad', header: 'Cantidad', width: '20%', align: 'center' },
+  { key: 'precio', header: 'Precio', width: '20%', align: 'center', render: (v) => formatPrice(v) },
+  { key: 'total', header: 'Total', width: '20%', align: 'center', render: (v) => formatPrice(v) },
 ];
-
-
-
-const Tag = styled.h5`
-  font-size: 16px;
-  padding: 0 15px;
-  font-weight: 500;
-  margin: 10px 0;
-  color: ${process.env.TEXT_COLOR};
-  @media only screen and (max-width: 768px) {
-    font-size: 14px;
-  }
-`;

@@ -1,5 +1,3 @@
-import React from 'react'
-import styled from 'styled-components'
 import FindProductSale from './FindProductSale'
 import { useAppDispatch } from '@/redux/hook';
 import { addItemSale } from '@/redux/saleSlice';
@@ -11,21 +9,13 @@ export default function ContainerSaleWeb({edit}:{edit?: boolean}) {
   const dispatch = useAppDispatch();
 
   return (
-     <div style={{display: 'flex', flex: 1}}>
-      <ContainerListProduct>
+     <div className="flex flex-1">
+      <div className="w-1/2 max-[940px]:w-full">
         <FindProductSale
             onClickItem={(item:Product)=>{dispatch(addItemSale({item}))}}
         />
-      </ContainerListProduct>
+      </div>
       <LineaVenta edit={edit} />
     </div>
   )
 }
-
-
-const ContainerListProduct = styled.div `
-  width: 50%;
-  @media only screen and (max-width: 940px) {
-    width: 100%;
-  }
-`

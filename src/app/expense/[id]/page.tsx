@@ -1,7 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 'use client'
-import React, { useEffect, useState, useRef } from 'react'
-import styled from 'styled-components'
+import { useEffect, useRef, useState } from 'react'
 import { useAppDispatch } from '@/redux/hook'
 import { useSelector } from 'react-redux'
 import { getUser } from '@/redux/userSlice'
@@ -11,12 +10,31 @@ import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.share
 import { setLoading } from '@/redux/loadingSlice'
 import { Expense, ExpenseUser } from '@/interfaces/expense.interface'
 import { expenseService } from '@/services/expense.service'
-import { setAlert } from '@/redux/alertSlice'
-import { MdEdit, MdDelete, MdArrowBack } from 'react-icons/md'
+import { toast } from "sonner";
+import { Pencil, Trash2, ArrowLeft } from 'lucide-react'
 import Confirm from '@/components/Confirm'
 import { trackExpenseDeleted, trackExpenseDetailViewed } from '@/utils/analytics'
 import { removeExpense } from '@/redux/expenseSlice'
 import { usePermission } from '@/hooks/usePermission'
+import { cn } from '@/lib/cn'
+
+const fieldClass = 'flex flex-col gap-1'
+const fullWidthFieldClass = 'col-span-full flex flex-col gap-1'
+const labelClass = 'text-label font-semibold uppercase tracking-[0.5px] text-text-secondary'
+const valueClass = 'text-base text-text-primary'
+
+const getTypeBadgeClass = (type: string) => cn(
+  'inline-block whitespace-nowrap rounded-xl px-3.5 py-1.5 text-label font-semibold',
+  type === 'operativo' && 'bg-state-success/20 text-state-success',
+  type === 'personal' && 'bg-state-warning/20 text-state-warning',
+  type !== 'operativo' && type !== 'personal' && 'bg-state-error/20 text-state-error'
+)
+
+const getExpenseId = (expense: Expense): string => {
+  const id = expense._id || (expense as any).id
+  if (!id) return ''
+  return typeof id === 'object' ? id.toString() : id.toString()
+}
 
 export default function ExpenseDetailScreen() {
   const [valueStorage] = useLocalStorage("user", "")
@@ -45,21 +63,14 @@ export default function ExpenseDetailScreen() {
   const fetchExpense = async (id: string) => {
     try {
       dispatch(setLoading(true))
-      const response = await expenseService.getById(id)
+      const expenseData = await expenseService.getById(id)
       
-      console.log('Response from backend:', response)
-      
-      // El backend puede retornar { expense: {...} } o directamente {...}
-      const expenseData = (response as any).expense || response
-      
-      // Transformar amountCents a amount (pesos)
+      // Normalize amount: use amount if present, else derive from amountCents
       const expenseWithAmount = {
         ...expenseData,
-        // Si ya viene 'amount' del backend, usarlo; sino calcular desde amountCents
-        amount: expenseData.amount || (expenseData.amountCents / 100)
+        amount: expenseData.amount || (expenseData.amountCents / 100),
       }
       
-      console.log('Processed expense:', expenseWithAmount)
       setExpense(expenseWithAmount)
       
       // Analytics EG08: Registrar visualización de detalle
@@ -74,14 +85,17 @@ export default function ExpenseDetailScreen() {
     } catch (error: any) {
       console.error('Error al cargar egreso:', error)
       
-      if (error.response?.status === 404) {
-        dispatch(setAlert({ message: 'El egreso no existe', type: 'error' }))
+      if (error.response?.status === 410) {
+        toast.error('Este egreso fue eliminado')
+        router.push('/expense')
+      } else if (error.response?.status === 404) {
+        toast.error('El egreso no existe')
         router.push('/expense')
       } else if (error.response?.status === 403) {
-        dispatch(setAlert({ message: 'No tiene permisos para ver este egreso', type: 'error' }))
+        toast.error('No tiene permisos para ver este egreso')
         router.push('/expense')
       } else {
-        dispatch(setAlert({ message: 'Error al cargar el egreso', type: 'error' }))
+        toast.error('Error al cargar el egreso')
       }
     } finally {
       dispatch(setLoading(false))
@@ -139,7 +153,7 @@ export default function ExpenseDetailScreen() {
 
     try {
       dispatch(setLoading(true))
-      const expenseId = (expense._id || (expense as any).id)?.toString() || ''
+      const expenseId = getExpenseId(expense)
       await expenseService.delete(expenseId)
       
       dispatch(removeExpense(expenseId))
@@ -147,25 +161,25 @@ export default function ExpenseDetailScreen() {
       trackExpenseDeleted({
         usuario: user.nickname || 'unknown',
         timestamp: Date.now(),
-        id_egreso: (expense._id || (expense as any).id)?.toString() || 'unknown',
+        id_egreso: expenseId || 'unknown',
         monto: expense.amount,
         tipo_egreso: expense.type,
         categoria: expense.category,
         medio_pago: expense.paymentMethod,
       })
       
-      dispatch(setAlert({ message: 'Egreso eliminado exitosamente', type: 'success' }))
+      toast.success('Egreso eliminado exitosamente')
       router.push('/expense')
     } catch (error: any) {
       console.error('Error al eliminar egreso:', error)
       
       if (error.response?.status === 403) {
-        dispatch(setAlert({ message: 'No tiene permisos para eliminar egresos', type: 'error' }))
-      } else if (error.response?.status === 404) {
-        dispatch(setAlert({ message: 'El egreso no existe o ya fue eliminado', type: 'error' }))
+        toast.error('No tiene permisos para eliminar egresos')
+      } else if (error.response?.status === 410 || error.response?.status === 404) {
+        toast.error('El egreso ya fue eliminado')
         router.push('/expense')
       } else {
-        dispatch(setAlert({ message: 'Error al eliminar el egreso', type: 'error' }))
+        toast.error('Error al eliminar el egreso')
       }
     } finally {
       dispatch(setLoading(false))
@@ -174,9 +188,9 @@ export default function ExpenseDetailScreen() {
 
   if (!expense) {
     return (
-      <Container>
-        <EmptyState>Cargando...</EmptyState>
-      </Container>
+      <div className="flex flex-1 flex-col bg-background-canvas p-5">
+        <div className="flex items-center justify-center px-5 py-[60px] text-lg text-text-secondary">Cargando...</div>
+      </div>
     )
   }
 
@@ -184,139 +198,147 @@ export default function ExpenseDetailScreen() {
   const updatedByInfo = getUserInfo(expense.updatedBy)
 
   return (
-    <Container>
-      <Header>
-        <BackButton onClick={() => router.push('/expense')}>
-          <MdArrowBack size={24} />
+    <div className="flex flex-1 flex-col bg-background-canvas p-5">
+      <div className="mb-5 flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
+        <button
+          type="button"
+          onClick={() => router.push('/expense')}
+          className="flex items-center gap-2 rounded-lg border-2 border-brand-primary bg-surface-base px-5 py-2.5 text-label font-semibold text-brand-primary transition-colors hover:bg-brand-primary hover:text-text-inverse"
+        >
+          <ArrowLeft size={24} aria-hidden="true" />
           Volver al listado
-        </BackButton>
-        <Actions>
+        </button>
+        <div className="flex gap-2.5 max-md:flex-col">
           {canUpdateExpense && (
-            <EditButton onClick={() => router.push(`/expense/${expense._id || (expense as any).id}/edit`)}>
-              <MdEdit size={18} />
+            <button
+              type="button"
+              onClick={() => router.push(`/expense/${getExpenseId(expense)}/edit`)}
+              className="flex items-center gap-2 rounded-lg bg-brand-primary px-5 py-2.5 text-label font-semibold text-text-inverse transition-colors hover:bg-brand-primary-hover"
+            >
+              <Pencil size={18} aria-hidden="true" />
               Editar
-            </EditButton>
+            </button>
           )}
           {canDeleteExpense && (
-            <DeleteButton onClick={openDeleteConfirm}>
-              <MdDelete size={18} />
+            <button
+              type="button"
+              onClick={openDeleteConfirm}
+              className="flex items-center gap-2 rounded-lg bg-state-error px-5 py-2.5 text-label font-semibold text-text-inverse transition-opacity hover:opacity-90"
+            >
+              <Trash2 size={18} aria-hidden="true" />
               Eliminar
-            </DeleteButton>
+            </button>
           )}
-        </Actions>
-      </Header>
+        </div>
+      </div>
 
-      <Content>
-        <Title>Detalle del Egreso</Title>
+      <div className="rounded-[10px] border border-border-subtle bg-surface-base p-[30px] shadow-md">
+        <h1 className="mb-[30px] mt-0 text-heading-sm font-bold text-brand-primary">Detalle del Egreso</h1>
         
-        <Section>
-          <SectionTitle>Información General</SectionTitle>
-          <Grid>
-            <Field>
-              <Label>Fecha</Label>
-              <Value>{formatDate(expense.date)}</Value>
-            </Field>
+        <section className="mb-[30px] border-b border-border-subtle pb-[30px]">
+          <h2 className="mb-5 mt-0 text-subheading font-semibold text-brand-primary">Información General</h2>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-5">
+            <div className={fieldClass}>
+              <div className={labelClass}>Fecha</div>
+              <div className={valueClass}>{formatDate(expense.date)}</div>
+            </div>
             
-            <Field>
-              <Label>Categoría</Label>
-              <Value>{expense.category}</Value>
-            </Field>
+            <div className={fieldClass}>
+              <div className={labelClass}>Categoría</div>
+              <div className={valueClass}>{expense.category}</div>
+            </div>
             
-            <Field>
-              <Label>Tipo</Label>
-              <Value>
-                <TypeBadge type={expense.type}>
+            <div className={fieldClass}>
+              <div className={labelClass}>Tipo</div>
+              <div className={valueClass}>
+                <span className={getTypeBadgeClass(expense.type)}>
                   {expense.type === 'operativo' ? 'Operativo' : 
                    expense.type === 'personal' ? 'Personal' : 'Otro Negocio'}
-                </TypeBadge>
-              </Value>
-            </Field>
+                </span>
+              </div>
+            </div>
             
-            <Field>
-              <Label>Monto</Label>
-              <AmountValue>{formatAmount(expense.amount)}</AmountValue>
-            </Field>
+            <div className={fieldClass}>
+              <div className={labelClass}>Monto</div>
+              <div className="text-2xl font-bold text-brand-primary">{formatAmount(expense.amount)}</div>
+            </div>
             
-            <Field>
-              <Label>Medio de Pago</Label>
-              <Value>{expense.paymentMethod}</Value>
-            </Field>
-          </Grid>
+            <div className={fieldClass}>
+              <div className={labelClass}>Medio de Pago</div>
+              <div className={valueClass}>{expense.paymentMethod}</div>
+            </div>
+          </div>
           
-          <FullWidthField>
-            <Label>Descripción</Label>
-            <ValueBlock>{expense.description || 'Sin descripción'}</ValueBlock>
-          </FullWidthField>
-        </Section>
+          <div className="mt-5 flex flex-col gap-1">
+            <div className={labelClass}>Descripción</div>
+            <div className="rounded-md border-l-4 border-brand-primary bg-surface-subtle p-4 text-base text-text-primary">{expense.description || 'Sin descripción'}</div>
+          </div>
+        </section>
 
-        <Section>
-          <SectionTitle>Información de Auditoría</SectionTitle>
-          <Grid>
-            <Field>
-              <Label>Creado por</Label>
-              <Value>
+        <section className="mb-[30px] border-b border-border-subtle pb-[30px]">
+          <h2 className="mb-5 mt-0 text-subheading font-semibold text-brand-primary">Información de Auditoría</h2>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-5">
+            <div className={fieldClass}>
+              <div className={labelClass}>Creado por</div>
+              <div className={valueClass}>
                 {createdByInfo.name}
-                {createdByInfo.email && <Email>{createdByInfo.email}</Email>}
-              </Value>
-            </Field>
+                {createdByInfo.email && <div className="mt-1 text-label italic text-text-muted">{createdByInfo.email}</div>}
+              </div>
+            </div>
             
-            <Field>
-              <Label>Fecha de creación</Label>
-              <Value>{formatDate(expense.createdAt)}</Value>
-            </Field>
+            <div className={fieldClass}>
+              <div className={labelClass}>Fecha de creación</div>
+              <div className={valueClass}>{formatDate(expense.createdAt)}</div>
+            </div>
             
-            <Field>
-              <Label>Modificado por</Label>
-              <Value>
+            <div className={fieldClass}>
+              <div className={labelClass}>Modificado por</div>
+              <div className={valueClass}>
                 {updatedByInfo.name}
-                {updatedByInfo.email && <Email>{updatedByInfo.email}</Email>}
-              </Value>
-            </Field>
+                {updatedByInfo.email && <div className="mt-1 text-label italic text-text-muted">{updatedByInfo.email}</div>}
+              </div>
+            </div>
             
-            <Field>
-              <Label>Última modificación</Label>
-              <Value>{formatDate(expense.updatedAt)}</Value>
-            </Field>
+            <div className={fieldClass}>
+              <div className={labelClass}>Última modificación</div>
+              <div className={valueClass}>{formatDate(expense.updatedAt)}</div>
+            </div>
             
             {expense.deletedBy && (
               <>
-                <Field>
-                  <Label>Eliminado por</Label>
-                  <Value>
-                    <DeletedInfo>
+                <div className={fieldClass}>
+                  <div className={labelClass}>Eliminado por</div>
+                  <div className={valueClass}>
+                    <div className="font-semibold text-state-error">
                       {getUserInfo(expense.deletedBy).name}
-                      {getUserInfo(expense.deletedBy).email && <Email>{getUserInfo(expense.deletedBy).email}</Email>}
-                    </DeletedInfo>
-                  </Value>
-                </Field>
+                      {getUserInfo(expense.deletedBy).email && <div className="mt-1 text-label italic text-text-muted">{getUserInfo(expense.deletedBy).email}</div>}
+                    </div>
+                  </div>
+                </div>
                 
-                <Field>
-                  <Label>Fecha de eliminación</Label>
-                  <Value>
-                    <DeletedInfo>{formatDate(expense.deletedAt)}</DeletedInfo>
-                  </Value>
-                </Field>
+                <div className={fieldClass}>
+                  <div className={labelClass}>Fecha de eliminación</div>
+                  <div className={valueClass}>
+                    <div className="font-semibold text-state-error">{formatDate(expense.deletedAt)}</div>
+                  </div>
+                </div>
               </>
             )}
-          </Grid>
-        </Section>
+          </div>
+        </section>
 
-        <Section>
-          <SectionTitle>Identificadores</SectionTitle>
-          <Grid>
-            <FullWidthField>
-              <Label>ID del Egreso</Label>
-              <MonoValue>
-                {(() => {
-                  const id = expense._id || (expense as any).id
-                  if (!id) return 'N/A'
-                  return typeof id === 'object' ? id.toString() : id.toString()
-                })()}
-              </MonoValue>
-            </FullWidthField>
-          </Grid>
-        </Section>
-      </Content>
+        <section className="mb-0 pb-0">
+          <h2 className="mb-5 mt-0 text-subheading font-semibold text-brand-primary">Identificadores</h2>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-5">
+            <div className={fullWidthFieldClass}>
+              <div className={labelClass}>ID del Egreso</div>
+              <div className="break-all rounded-md bg-surface-subtle p-2.5 font-mono text-code text-text-primary">
+                {getExpenseId(expense) || 'N/A'}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
 
       <Confirm
         open={confirmOpen}
@@ -324,230 +346,6 @@ export default function ExpenseDetailScreen() {
         handleClose={closeDeleteConfirm}
         handleConfirm={handleDeleteExpense}
       />
-    </Container>
+    </div>
   )
 }
-
-// Styled Components
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  padding: 20px;
-  background: #f5f5f5;
-`
-
-const Header = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-
-  @media only screen and (max-width: 768px) {
-    flex-direction: column;
-    gap: 15px;
-    align-items: stretch;
-  }
-`
-
-const BackButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background: white;
-  border: 2px solid #8294C4;
-  border-radius: 8px;
-  color: #8294C4;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-
-  &:hover {
-    background: #8294C4;
-    color: white;
-  }
-`
-
-const Actions = styled.div`
-  display: flex;
-  gap: 10px;
-
-  @media only screen and (max-width: 768px) {
-    flex-direction: column;
-  }
-`
-
-const EditButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background: #8294C4;
-  border: none;
-  border-radius: 8px;
-  color: white;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-
-  &:hover {
-    background: #637195;
-  }
-`
-
-const DeleteButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background: #d32f2f;
-  border: none;
-  border-radius: 8px;
-  color: white;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-
-  &:hover {
-    background: #b71c1c;
-  }
-`
-
-const Content = styled.div`
-  background: white;
-  border-radius: 10px;
-  padding: 30px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-`
-
-const EmptyState = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  font-size: 18px;
-  color: #666;
-`
-
-const Title = styled.h1`
-  color: #3764A0;
-  font-size: 28px;
-  margin: 0 0 30px 0;
-`
-
-const Section = styled.div`
-  margin-bottom: 30px;
-  padding-bottom: 30px;
-  border-bottom: 1px solid #e0e0e0;
-
-  &:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-    padding-bottom: 0;
-  }
-`
-
-const SectionTitle = styled.h2`
-  color: #8294C4;
-  font-size: 20px;
-  margin: 0 0 20px 0;
-`
-
-const Grid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-`
-
-const Field = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-`
-
-const FullWidthField = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  grid-column: 1 / -1;
-`
-
-const Label = styled.div`
-  font-size: 14px;
-  color: #666;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-`
-
-const Value = styled.div`
-  font-size: 16px;
-  color: #333;
-`
-
-const ValueBlock = styled.div`
-  font-size: 16px;
-  color: #333;
-  padding: 15px;
-  background: #f9f9f9;
-  border-radius: 5px;
-  border-left: 3px solid #8294C4;
-`
-
-const AmountValue = styled.div`
-  font-size: 24px;
-  font-weight: bold;
-  color: #8294C4;
-`
-
-const Email = styled.div`
-  font-size: 14px;
-  color: #888;
-  font-style: italic;
-  margin-top: 3px;
-`
-
-const DeletedInfo = styled.div`
-  color: #DC8686;
-  font-weight: 600;
-`
-
-const TypeBadge = styled.span<{ type: string }>`
-  display: inline-block;
-  padding: 6px 14px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
-  background: ${props => 
-    props.type === 'operativo' ? '#B6E2A1' : 
-    props.type === 'personal' ? '#EA906C' : '#F7A4A4'};
-  color: ${props => 
-    props.type === 'operativo' ? '#2d5016' : 
-    props.type === 'personal' ? '#5c2d0f' : '#5c0f0f'};
-`
-
-const NotesBox = styled.div`
-  padding: 20px;
-  background: #fffbf0;
-  border-radius: 8px;
-  border: 1px solid #ffe082;
-  color: #333;
-  font-size: 16px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-`
-
-const MonoValue = styled.div`
-  font-size: 14px;
-  color: #333;
-  font-family: 'Courier New', monospace;
-  background: #f5f5f5;
-  padding: 10px;
-  border-radius: 5px;
-  word-break: break-all;
-`

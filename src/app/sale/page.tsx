@@ -3,11 +3,11 @@
 
 import { AnimatedNumber } from '@/components/AnimatedNumber'
 import Button from '@/components/Button'
-import ButtonUI from '@/components/ButtonUI'
 import InfoSale from '@/components/sale/InfoSale'
 import ModalPrintSale from '@/components/sale/ModalPrintSale'
 import PrintMultipleSale from '@/components/sale/PrintMultipleSale'
 import Search from '@/components/Search'
+import { PageContainer, PageHeader } from '@/components/layout/PageLayout'
 import useLocalStorage from '@/hooks/useLocalStorage'
 import { Sale } from '@/interfaces/sale.interface'
 import { useAppDispatch } from '@/redux/hook'
@@ -17,12 +17,51 @@ import apiClient from '@/utils/client'
 import { Types } from 'mongoose'
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 import { useRouter } from 'next/navigation'
-import React, { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react'
-import { BsPrinterFill } from 'react-icons/bs'
-import { MdClose, MdEdit, MdInfo } from 'react-icons/md'
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 import { useSelector } from 'react-redux'
 import { io } from 'socket.io-client'
-import styled from 'styled-components'
+
+// ─── Local row component (approved in TICKET-07) ─────────────────────────────
+
+interface SaleRowProps {
+  item: Sale
+  isSelected: boolean
+  onSelect: () => void
+  onEdit: () => void
+  onPrint: () => void
+  onInfo: () => void
+}
+
+function SaleRow({ item, isSelected, onSelect, onEdit, onPrint, onInfo }: SaleRowProps) {
+  return (
+    <li
+      className={`my-1.5 flex h-auto min-h-[70px] w-full cursor-pointer list-none items-center justify-center rounded-xl border p-4 font-semibold transition-[background-color,border-color] duration-500 ease-linear hover:border-brand-primary hover:bg-background-subtle max-[500px]:flex-col ${isSelected ? 'border-brand-primary bg-background-subtle' : 'border-border-subtle bg-surface-base'}`}
+    >
+      <div
+        className="mr-4 flex w-full items-center justify-between max-[500px]:mr-0"
+        onClick={onSelect}
+      >
+        <div>
+          <h2 className="text-body text-text-primary max-[500px]:text-label">{item.cliente}</h2>
+          <h2 className="text-label text-text-primary max-[500px]:text-caption">
+            {item.createdAt.split('T')[0]}
+          </h2>
+        </div>
+        <h2 className="text-body font-semibold text-brand-accent max-[500px]:text-label">
+          $ <AnimatedNumber value={item.total} />
+        </h2>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button text='EDITAR'   variant='ghost' onClick={onEdit} />
+        <Button text='IMPRIMIR' variant='ghost' onClick={onPrint} />
+        <Button text='+INFO'    variant='ghost' onClick={onInfo} />
+      </div>
+    </li>
+  )
+}
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function SaleScreen() {
 
@@ -147,150 +186,117 @@ export default function SaleScreen() {
       [loading, data, search, query]
     );
 
+    const buildPrintHandler = (item: Sale) => () => {
+      dispatch(setLoading(true))
+      apiClient.get(`/sale/print/${item._id}`, { responseType: 'blob' })
+        .then(response => {
+          const blob = new Blob([response.data], { type: 'application/pdf' });
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', `venta-${item.cliente}.pdf`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          dispatch(setLoading(false))
+        })
+        .catch(error => {
+          console.error('Error descargando el PDF:', error);
+          dispatch(setLoading(false))
+        });
+    }
+
   return (
-    <main>
-        <ContainerSearch>
-          <Search name='search' placeHolder={'Buscar ventas'} type='text' value={search} onChange={(e:ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} />
-          {
-            selectSaleArray.length === 0 ?
-            <ButtonUI label='Nuevo' onClick={()=>{}} to='/sale/newSale' />:
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0px 15px'}}>
-              <IconWrapper onClick={()=>setSelectSaleArray(prevData=>[])}>
-                <MdClose/>
-              </IconWrapper>
-              <h2 style={{fontSize: 16, color: '#252525'}}>{selectSaleArray.length} Ventas seleccionadas</h2>
-              <ButtonUI label='Imprimir' onClick={()=>{
-                /* setOpenMultipleSale(true) */
-                dispatch(setLoading(true))
-                apiClient.post(`/sale/print`, selectSaleArray, { responseType: 'blob' }) // Importante: usar 'blob' para recibir el PDF
-                          .then(response => {
-                            const blob = new Blob([response.data], { type: 'application/pdf' });
-                            const url = window.URL.createObjectURL(blob);
-                            
-                            // Crear un enlace temporal para descargar el archivo
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.setAttribute('download', `ventas.pdf`); // Nombre del archivo descargado
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                            // Liberar memoria
-                            window.URL.revokeObjectURL(url);
-                            dispatch(setLoading(false))
-                          })
-                          .catch(error => {
-                            console.error('Error descargando el PDF:', error);
-                            dispatch(setLoading(false))
-                          });
-              }}/>
-            </div>
+    <PageContainer>
+        <PageHeader
+          title="Ventas"
+          actions={
+            selectSaleArray.length === 0 ? (
+              <>
+                <Search name='search' placeHolder={'Buscar ventas'} type='text' value={search} onChange={(e:ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} />
+                <Button text='Nuevo' variant='primary' onClick={()=>{}} to='/sale/newSale' />
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div
+                  className="flex cursor-pointer items-center justify-center border-l border-border-subtle p-[5px] text-[25px] text-text-muted hover:rounded-full hover:bg-background-subtle hover:text-brand-primary"
+                  onClick={()=>setSelectSaleArray(prevData=>[])}
+                >
+                  <X aria-hidden="true" />
+                </div>
+                <h2 className="text-base text-text-primary">{selectSaleArray.length} Ventas seleccionadas</h2>
+                <Button text='Imprimir' variant='secondary' className="mx-1 my-1" onClick={()=>{
+                  dispatch(setLoading(true))
+                  apiClient.post(`/sale/print`, selectSaleArray, { responseType: 'blob' })
+                            .then(response => {
+                              const blob = new Blob([response.data], { type: 'application/pdf' });
+                              const url = window.URL.createObjectURL(blob);
+                              const link = document.createElement('a');
+                              link.href = url;
+                              link.setAttribute('download', `ventas.pdf`);
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                              window.URL.revokeObjectURL(url);
+                              dispatch(setLoading(false))
+                            })
+                            .catch(error => {
+                              console.error('Error descargando el PDF:', error);
+                              dispatch(setLoading(false))
+                            });
+                }}/>
+              </div>
+            )
           }
-        </ContainerSearch>
-        <ListSale>
+        />
+        <ul className="flex max-h-[82vh] w-full flex-1 flex-col overflow-scroll max-[500px]:px-0">
             {
                search !== '' ?
                 dataSearch.length !== 0 ?
-                dataSearch.map((item:Sale, index:number)=>{
-                return (<Item key={index}  $isSelect={selectSaleArray.find((elem: (string | Types.ObjectId)) => elem === item._id) ? true : false} >
-                  <ContainerTag onClick={()=>item._id && addSaleArray(item._id)} >
-                    <div>
-                      <Tag>{item.cliente}</Tag>
-                      <TagDate>{item.createdAt.split("T")[0] || 'undefined'}</TagDate>
-                    </div>
-                    <Tag style={{fontWeight: 600, color: '#FA9B50'}}>$ <AnimatedNumber value={item.total}  /></Tag>
-                  </ContainerTag>
-                  <div  style={{display: 'flex'}}>
-                      <ButtonUI label='EDITAR' onClick={()=>{
-                        router.push(`/sale/editSale/${item._id}`);
-                      }}/>
-                      <ButtonUI label='IMPRIMIR' onClick={() => {
-                          dispatch(setLoading(true))
-                          apiClient.get(`/sale/print/${item._id}`, { responseType: 'blob' }) // Importante: usar 'blob' para recibir el PDF
-                            .then(response => {
-                              const blob = new Blob([response.data], { type: 'application/pdf' });
-                              const url = window.URL.createObjectURL(blob);
-                            
-                              // Crear un enlace temporal para descargar el archivo
-                              const link = document.createElement('a');
-                              link.href = url;
-                              link.setAttribute('download', `venta-${item.cliente}.pdf`); // Nombre del archivo descargado
-                              document.body.appendChild(link);
-                              link.click();
-                              document.body.removeChild(link);
-                            
-                              // Liberar memoria
-                              window.URL.revokeObjectURL(url);
-                              dispatch(setLoading(false))
-                            })
-                            .catch(error => {
-                              console.error('Error descargando el PDF:', error);
-                              dispatch(setLoading(false))
-                            });
-                      }} />
-                      <ButtonUI label='+INFO' onClick={()=>{setOpenInfoSale(true);setSaleSelected(item._id)}}/>
-                    </div>
-                </Item>)})
+                dataSearch.map((item: Sale, index: number) => (
+                  <SaleRow
+                    key={index}
+                    item={item}
+                    isSelected={!!selectSaleArray.find(elem => elem === item._id)}
+                    onSelect={() => item._id && addSaleArray(item._id)}
+                    onEdit={() => router.push(`/sale/editSale/${item._id}`)}
+                    onPrint={buildPrintHandler(item)}
+                    onInfo={() => { setOpenInfoSale(true); setSaleSelected(item._id) }}
+                  />
+                ))
                 :
-                'no hay ventas'
+                 <li className="list-none flex flex-col items-center justify-center gap-3 py-16 text-center">
+                  <span className="select-none text-5xl leading-none" aria-hidden="true">🔍</span>
+                  <p className="text-body font-semibold text-text-secondary">No hay ventas</p>
+                </li>
               :
-                data.length !== 0 ? 
-                data.map((item:Sale, index:number)=>
-                  <Item key={index} $isSelect={selectSaleArray.find((elem: (string | Types.ObjectId)) => elem === item._id) ? true : false} >
-                    <ContainerTag onClick={()=>item._id && addSaleArray(item._id)} >
-                      <div>
-                        <Tag>{item.cliente}</Tag>
-                        <TagDate>{item.createdAt.split("T")[0]}</TagDate>
-                      </div>
-                      <Tag style={{fontWeight: 600, color: '#FA9B50'}}>$ <AnimatedNumber value={item.total}  /></Tag>
-                    </ContainerTag>
-                    <div  style={{display: 'flex'}}>
-                      <ButtonUI label='EDITAR' onClick={()=>{
-                        router.push(`/sale/editSale/${item._id}`);
-                      }}/>
-                      <ButtonUI label='IMPRIMIR' onClick={() => {
-                          dispatch(setLoading(true))
-                          apiClient.get(`/sale/print/${item._id}`, { responseType: 'blob' }) // Importante: usar 'blob' para recibir el PDF
-                            .then(response => {
-                              const blob = new Blob([response.data], { type: 'application/pdf' });
-                              const url = window.URL.createObjectURL(blob);
-
-                              // Crear un enlace temporal para descargar el archivo
-                              const link = document.createElement('a');
-                              link.href = url;
-                              link.setAttribute('download', `venta-${item.cliente}.pdf`); // Nombre del archivo descargado
-                              document.body.appendChild(link);
-                              link.click();
-                              document.body.removeChild(link);
-
-                              // Liberar memoria
-                              window.URL.revokeObjectURL(url);
-                              dispatch(setLoading(false))
-                            })
-                            .catch(error => {
-                              console.error('Error descargando el PDF:', error);
-                              dispatch(setLoading(false))
-                            });
-                      }} />
-                      <ButtonUI label='+INFO' onClick={()=>{setOpenInfoSale(true);setSaleSelected(item._id)}}/>
-                    </div>
-                  </Item>)
-                  :
-                  'no hay ventas'
+                data.length !== 0 ?
+                data.map((item: Sale, index: number) => (
+                  <SaleRow
+                    key={index}
+                    item={item}
+                    isSelected={!!selectSaleArray.find(elem => elem === item._id)}
+                    onSelect={() => item._id && addSaleArray(item._id)}
+                    onEdit={() => router.push(`/sale/editSale/${item._id}`)}
+                    onPrint={buildPrintHandler(item)}
+                    onInfo={() => { setOpenInfoSale(true); setSaleSelected(item._id) }}
+                  />
+                ))
+                :
+                <li className="list-none flex flex-col items-center justify-center gap-3 py-16 text-center">
+                  <span className="select-none text-5xl leading-none" aria-hidden="true">📋</span>
+                  <p className="text-body font-semibold text-text-secondary">No hay ventas</p>
+                </li>
             }
             {search === '' && data.length < longArray && (
               <li
-                style={{
-                  listStyle: 'none',
-                  padding: 0,
-                  margin: 15,
-                  minHeight: 5
-                }}
+                className="m-[15px] min-h-[5px] list-none p-0"
                 ref={lastElementRef}
-              >
-                final
-              </li>
+                aria-hidden="true"
+              />
             )}
-        </ListSale>
+        </ul>
         {
           openPrintSale && 
           <ModalPrintSale open={openPrintSale} handleClose={()=>setOpenPrintSale(false)} id={saleSelected} />
@@ -303,107 +309,6 @@ export default function SaleScreen() {
           openMultipleSale &&
           <PrintMultipleSale open={openMultipleSale} handleClose={()=>setOpenMultipleSale(false)} salesIds={selectSaleArray} />
         } */}
-    </main>
+    </PageContainer>
   )
 }
-
-const Item = styled.li<{$isSelect: boolean}> `
-  list-style: none;
-  padding: 15px;
-  font-weight: 600;
-  width: 100%;
-  border:  ${({ $isSelect }) => ($isSelect ? '1px solid #6A5BCD' : '1px solid #fff')};;
-  margin-bottom: 5px;
-  margin-top: 5px;
-  display: flex; 
-  justify-content: center; 
-  align-items: center;
-  border-radius: 10px;
-  min-height: 70px;  
-  height: auto;  
-  cursor: pointer;
-  background-color: ${({ $isSelect }) => ($isSelect ? '#e4e2e2' : '#FFF')};
-  box-shadow: 5px 5px 5px #e0e0e0;
-  transition: background-color .5s linear, border-color .1s ease;
-  &:hover {
-    border: 1px solid #6A5BCD;
-    background-color: rgba(217, 217, 217, 0.3);
-  }
-  @media only screen and (max-width: 500px) {
-    padding: 15px 15px 15px 15px;
-    flex-direction: column;
-  }
-`
-
-const IconWrapper = styled.div`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 25px;
-    color: #716A6A;
-    padding: 5px;
-    margin: 0px 5px;
-    border-left: 1px solid #d9d9d9;
-    cursor: pointer;
-    &:hover {
-      border-radius: 100%;
-      background-color: #d9d9d9;
-      color: #6A5BCD;
-    }
-    @media only screen and (max-width: 500px) {
-      font-size: 20px;
-      padding: 5px 10px;
-      margin: 0px 5px;
-    }
-`
-
-const ListSale = styled.ul `
-  display: flex;
-  flex: 1;
-  width: 100%;
-  flex-direction: column;
-  padding: 0 15px;
-  overflow: scroll;
-  max-height: 82vh;
-  @media only screen and (max-width: 500px) {
-    padding: 0;
-  }
-`
-
-const ContainerTag = styled.div`
-  display: flex; 
-  justify-content: space-between; 
-  width : 100%; 
-  align-items: center;
-  margin-right: 15px;
-  @media only screen and (max-width: 500px) {
-    margin-right: 0px;
-  }
-`
-
-const Tag = styled.h2`
-  font-size: 18px;
-  color: #252525;
-  @media only screen and (max-width: 500px) {
-    font-size: 14px;
-  }
-`
-
-const TagDate = styled.h2`
-  font-size: 14px;
-  color: #252525;
-  @media only screen and (max-width: 500px) {
-    font-size: 12px;
-  }
-`
-
-const ContainerSearch = styled.div `
-  display: flex; 
-  justify-content: space-between; 
-  width: 100%; 
-  padding: 0px 15px; 
-  align-items: center;
-  @media only screen and (max-width: 500px) {
-    flex-direction: column;
-  }
-`

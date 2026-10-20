@@ -1,11 +1,11 @@
-import React, { useState } from 'react'
-import styled from 'styled-components';
+import { useState } from 'react'
 import FindProductSale from '../sale/FindProductSale';
 import { Product } from '@/interfaces/product.interface';
 import { addItemBuy, getBuy } from '@/redux/buySlice';
 import { useAppDispatch, useAppSelector } from '@/redux/hook';
 import LineaCompra from './LineaCompra';
 import { AnimatedNumber } from '../AnimatedNumber';
+import { cn } from '@/lib/cn';
 
 export default function ContainerBuyMobile({edit}:{edit?: boolean}) {
 
@@ -14,45 +14,33 @@ export default function ContainerBuyMobile({edit}:{edit?: boolean}) {
     const buy = useAppSelector(getBuy)
 
   return (
-    <ContainerMobile>
+    <div className="relative flex flex-1 flex-col">
         <FindProductSale
             onClickItem={(item:Product)=>{dispatch(addItemBuy({item}))}}
         />
-        <WrapperLineaVenta $openLVMobile={openLVMobile}>
+        <div
+          className={cn(
+            'absolute flex w-full flex-col overflow-y-scroll rounded-[15px] border border-border-subtle bg-surface-subtle p-[15px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)]',
+            openLVMobile ? 'top-[25px] h-[85%]' : 'top-[90%] h-auto'
+          )}
+        >
             {
               openLVMobile && 
-              <div style={{display: 'flex', flex: 1}} >
+              <div className="flex flex-1">
                 <LineaCompra edit={edit} />
               </div>
             }
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `${!openLVMobile ? '0px' : '15px'}`}} >
-                <h2 style={{fontSize: 18}} > {buy.itemsBuy.length} Productos </h2>
-                <h2 style={{fontSize: 18}} >Total: $ <AnimatedNumber value={buy.total} /> </h2>
-                <h2 style={{fontSize: 18, color: '#3764A0', cursor: 'pointer  '}} onClick={()=>setOpenLVMobile(!openLVMobile)} >{openLVMobile ? 'CERRAR':'ABRIR'}</h2>
+            <div
+              className={cn(
+                'flex items-center justify-between',
+                openLVMobile ? 'p-[15px]' : 'p-0'
+              )}
+            >
+                <h2 className="text-[18px]"> {buy.itemsBuy.length} Productos </h2>
+                <h2 className="text-[18px]">Total: $ <AnimatedNumber value={buy.total} /> </h2>
+                <h2 className="cursor-pointer text-[18px] text-state-info" onClick={()=>setOpenLVMobile(!openLVMobile)}>{openLVMobile ? 'CERRAR':'ABRIR'}</h2>
             </div>
-        </WrapperLineaVenta>
-    </ContainerMobile>
+        </div>
+    </div>
   )
 }
-
-
-const WrapperLineaVenta = styled.div<{$openLVMobile: boolean;}> `
-  position: absolute;
-  top: ${({ $openLVMobile }) => ($openLVMobile ? '25px' : '90%')};
-  width: 100%;
-  background-color: #F7F7F8;
-  border: 1px solid #d9d9d9;
-  border-radius: 15px;
-  padding: 15px;
-  box-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);
-  height: ${({ $openLVMobile }) => ($openLVMobile ? '85%' : 'auto')};
-  display: flex;
-  flex-direction: column;
-  overflow-y: scroll;
-`
-const ContainerMobile = styled.div `
-  position:relative;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-`

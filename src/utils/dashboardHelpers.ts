@@ -1,6 +1,11 @@
 /**
  * Utilidades para manejo de fechas en el Dashboard
  * Convierte intervalos del dashboard a rangos de fechas
+ *
+ * NOTE (P5): Dataset period labels are provided by the backend as `period.label`
+ * in all `/dataset/*` responses. Do NOT add local label generation here for
+ * dataset intervals. `getDateRangeFromInterval` serves only the expense KPI
+ * endpoints that require explicit from/to date parameters.
  */
 
 import { addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths, subYears, format } from 'date-fns'

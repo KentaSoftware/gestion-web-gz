@@ -1,13 +1,31 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useSelector } from 'react-redux';
-import styled from 'styled-components';
 import { useAppDispatch } from '@/redux/hook';
 import { getAnalysis, updateHeaderEdit } from '@/redux/purchaseDocSlice';
-import { TextField } from '@mui/material';
-import { MdEdit, MdSave, MdClose, MdWarning } from 'react-icons/md';
+import { Pencil, Save, X, AlertTriangle } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/utils/validators';
+import { cn } from '@/lib/cn';
+
+// Semantic confidence class — no hex in className
+const confidenceClass = (confidence?: number): string => {
+  if (!confidence) return 'text-text-muted';
+  if (confidence >= 0.9) return 'text-state-success';
+  if (confidence >= 0.7) return 'text-state-warning';
+  return 'text-state-error';
+};
+
+const getConfidenceLabel = (confidence?: number): string => {
+  if (!confidence) return 'Desconocido';
+  if (confidence >= 0.9) return 'Alta';
+  if (confidence >= 0.7) return 'Media';
+  return 'Baja';
+};
+
+// Shared input style for native edit fields
+const inputClass =
+  'h-9 w-full px-3 border border-border-subtle rounded-md text-sm text-text-primary bg-surface-base focus:outline-none focus:border-brand-primary transition-colors';
 
 export default function HeaderCard() {
   const dispatch = useAppDispatch();
@@ -18,11 +36,11 @@ export default function HeaderCard() {
     documentNumber: '',
     total: '',
   });
-  
+
   if (!analysis) return null;
-  
+
   const { header } = analysis;
-  
+
   const handleStartEdit = () => {
     setTempValues({
       date: header.date || '',
@@ -31,278 +49,138 @@ export default function HeaderCard() {
     });
     setEditMode(true);
   };
-  
+
   const handleSave = () => {
-    const edits: any = {};
-    
-    if (tempValues.date !== header.date) {
-      edits.date = tempValues.date;
-    }
-    if (tempValues.documentNumber !== header.documentNumber) {
-      edits.documentNumber = tempValues.documentNumber;
-    }
-    if (parseFloat(tempValues.total) !== header.total) {
-      edits.total = parseFloat(tempValues.total);
-    }
-    
-    if (Object.keys(edits).length > 0) {
-      dispatch(updateHeaderEdit(edits));
-    }
-    
+    const edits: Record<string, string | number> = {};
+    if (tempValues.date !== header.date) edits.date = tempValues.date;
+    if (tempValues.documentNumber !== header.documentNumber) edits.documentNumber = tempValues.documentNumber;
+    if (parseFloat(tempValues.total) !== header.total) edits.total = parseFloat(tempValues.total);
+    if (Object.keys(edits).length > 0) dispatch(updateHeaderEdit(edits));
     setEditMode(false);
   };
-  
+
   const handleCancel = () => {
     setEditMode(false);
   };
-  
-  const getConfidenceColor = (confidence?: number) => {
-    if (!confidence) return '#999';
-    if (confidence >= 0.9) return '#4CAF50';
-    if (confidence >= 0.7) return '#FFA726';
-    return '#FF5722';
-  };
-  
-  const getConfidenceLabel = (confidence?: number) => {
-    if (!confidence) return 'Desconocido';
-    if (confidence >= 0.9) return 'Alta';
-    if (confidence >= 0.7) return 'Media';
-    return 'Baja';
-  };
-  
-  const hasLowConfidence = 
+
+  const hasLowConfidence =
     (header.dateConfidence && header.dateConfidence < 0.7) ||
     (header.documentNumberConfidence && header.documentNumberConfidence < 0.7) ||
     (header.totalConfidence && header.totalConfidence < 0.7);
-  
+
   return (
-    <Card>
-      <Header>
-        <Title>Datos del Comprobante</Title>
+    <div className="bg-surface-base rounded-xl p-6 shadow-md border border-border-subtle">
+
+      {/* Card header */}
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold text-text-primary m-0">Datos del Comprobante</h3>
         {!editMode ? (
-          <EditButton onClick={handleStartEdit}>
-            <MdEdit size={20} />
+          <button
+            onClick={handleStartEdit}
+            className="flex items-center gap-1.5 bg-transparent border border-brand-primary text-brand-primary rounded-lg px-4 py-2 text-sm font-semibold cursor-pointer hover:bg-surface-raised transition-colors"
+          >
+            <Pencil size={20} aria-hidden="true" />
             Editar
-          </EditButton>
+          </button>
         ) : (
-          <ButtonGroup>
-            <SaveButton onClick={handleSave}>
-              <MdSave size={20} />
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              className="flex items-center gap-1.5 bg-state-success border-0 text-text-inverse rounded-lg px-4 py-2 text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90"
+            >
+              <Save size={20} aria-hidden="true" />
               Guardar
-            </SaveButton>
-            <CancelButton onClick={handleCancel}>
-              <MdClose size={20} />
+            </button>
+            <button
+              onClick={handleCancel}
+              className="flex items-center gap-1.5 bg-state-error border-0 text-text-inverse rounded-lg px-4 py-2 text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90"
+            >
+              <X size={20} aria-hidden="true" />
               Cancelar
-            </CancelButton>
-          </ButtonGroup>
+            </button>
+          </div>
         )}
-      </Header>
-      
+      </div>
+
+      {/* Low-confidence warning */}
       {hasLowConfidence && (
-        <WarningBox>
-          <MdWarning size={20} />
-          <WarningText>
+        <div className="bg-surface-raised border border-state-warning rounded-lg p-3 flex items-center gap-2 mb-4">
+          <AlertTriangle size={20} className="text-state-warning shrink-0" aria-hidden="true" />
+          <span className="text-sm text-text-primary">
             Algunos campos tienen baja confianza. Revisa y corrige si es necesario.
-          </WarningText>
-        </WarningBox>
+          </span>
+        </div>
       )}
-      
-      <Grid>
-        <Field>
-          <Label>Fecha</Label>
+
+      {/* Fields grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-6">
+
+        {/* Date */}
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-text-muted">Fecha</label>
           {editMode ? (
-            <TextField
+            <input
               type="date"
               value={tempValues.date}
               onChange={(e) => setTempValues({ ...tempValues, date: e.target.value })}
-              size="small"
-              fullWidth
+              className={inputClass}
             />
           ) : (
             <>
-              <Value>{formatDate(header.date)}</Value>
-              <Confidence color={getConfidenceColor(header.dateConfidence)}>
-                Confianza: {getConfidenceLabel(header.dateConfidence)} 
+              <span className="text-base text-text-primary">{formatDate(header.date)}</span>
+              <span className={cn('text-xs font-semibold', confidenceClass(header.dateConfidence))}>
+                Confianza: {getConfidenceLabel(header.dateConfidence)}
                 {header.dateConfidence && ` (${(header.dateConfidence * 100).toFixed(0)}%)`}
-              </Confidence>
+              </span>
             </>
           )}
-        </Field>
-        
-        <Field>
-          <Label>Número de Comprobante</Label>
+        </div>
+
+        {/* Document number */}
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-text-muted">Número de Comprobante</label>
           {editMode ? (
-            <TextField
+            <input
+              type="text"
               value={tempValues.documentNumber}
               onChange={(e) => setTempValues({ ...tempValues, documentNumber: e.target.value })}
-              size="small"
-              fullWidth
               placeholder="0001-00001234"
+              className={inputClass}
             />
           ) : (
             <>
-              <Value>{header.documentNumber || 'No detectado'}</Value>
-              <Confidence color={getConfidenceColor(header.documentNumberConfidence)}>
+              <span className="text-base text-text-primary">{header.documentNumber || 'No detectado'}</span>
+              <span className={cn('text-xs font-semibold', confidenceClass(header.documentNumberConfidence))}>
                 Confianza: {getConfidenceLabel(header.documentNumberConfidence)}
                 {header.documentNumberConfidence && ` (${(header.documentNumberConfidence * 100).toFixed(0)}%)`}
-              </Confidence>
+              </span>
             </>
           )}
-        </Field>
-        
-        <Field>
-          <Label>Total</Label>
+        </div>
+
+        {/* Total */}
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-text-muted">Total</label>
           {editMode ? (
-            <TextField
+            <input
               type="number"
               value={tempValues.total}
               onChange={(e) => setTempValues({ ...tempValues, total: e.target.value })}
-              size="small"
-              fullWidth
-              inputProps={{ step: '0.01' }}
+              step="0.01"
+              className={inputClass}
             />
           ) : (
             <>
-              <Value>{formatCurrency(header.total)}</Value>
-              <Confidence color={getConfidenceColor(header.totalConfidence)}>
+              <span className="text-base text-text-primary">{formatCurrency(header.total)}</span>
+              <span className={cn('text-xs font-semibold', confidenceClass(header.totalConfidence))}>
                 Confianza: {getConfidenceLabel(header.totalConfidence)}
                 {header.totalConfidence && ` (${(header.totalConfidence * 100).toFixed(0)}%)`}
-              </Confidence>
+              </span>
             </>
           )}
-        </Field>
-      </Grid>
-    </Card>
+        </div>
+
+      </div>
+    </div>
   );
 }
-
-// Styled Components
-const Card = styled.div`
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-`;
-
-const Header = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-`;
-
-const Title = styled.h3`
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
-`;
-
-const EditButton = styled.button`
-  background: none;
-  border: 1px solid #3764A0;
-  color: #3764A0;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  
-  &:hover {
-    background: #f0f7ff;
-  }
-`;
-
-const ButtonGroup = styled.div`
-  display: flex;
-  gap: 8px;
-`;
-
-const SaveButton = styled.button`
-  background: #4CAF50;
-  border: none;
-  color: white;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  
-  &:hover {
-    background: #45a049;
-  }
-`;
-
-const CancelButton = styled.button`
-  background: #f44336;
-  border: none;
-  color: white;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  
-  &:hover {
-    background: #da190b;
-  }
-`;
-
-const WarningBox = styled.div`
-  background: #fff3cd;
-  border: 1px solid #ffc107;
-  border-radius: 8px;
-  padding: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  
-  svg {
-    color: #ff9800;
-    flex-shrink: 0;
-  }
-`;
-
-const WarningText = styled.span`
-  font-size: 14px;
-  color: #333;
-`;
-
-const Grid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 24px;
-`;
-
-const Field = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`;
-
-const Label = styled.label`
-  font-size: 14px;
-  font-weight: 600;
-  color: #666;
-`;
-
-const Value = styled.span`
-  font-size: 16px;
-  color: #333;
-`;
-
-const Confidence = styled.span<{ color: string }>`
-  font-size: 12px;
-  color: ${props => props.color};
-  font-weight: 600;
-`;

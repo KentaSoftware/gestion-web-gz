@@ -1,20 +1,24 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect, useState } from 'react'
-import Modal from '../Modal'
+import { useEffect, useState } from 'react';
 import apiClient from '@/utils/client'
-import styled from 'styled-components'
 import Button from '../Button'
 import { useAppDispatch } from '@/redux/hook'
 import { setLoading } from '@/redux/loadingSlice'
-import SelectBox from '../SelectBox'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface CBP {
-  _id: (string | number) 
+  _id: (string | number)
   descripcion: string
 }
 
 export default function FilterProduct({open, handleClose, activeCategorie, activeBrand, activeProvider, selectCategorie, selectBrand, selectProvider}:
-    {open: boolean, handleClose: ()=>void, activeCategorie: CBP, activeBrand: CBP, activeProvider: CBP, 
+    {open: boolean, handleClose: ()=>void, activeCategorie: CBP, activeBrand: CBP, activeProvider: CBP,
       selectCategorie: (item: CBP)=>void, selectBrand: (item: CBP)=>void, selectProvider: (item: CBP)=>void}) {
 
     const [categorie, setCategorie] = useState<CBP[]>([])
@@ -70,106 +74,55 @@ export default function FilterProduct({open, handleClose, activeCategorie, activ
     }, [open])
 
   return (
-        <Container>
-          <SelectBox text='Categorias' selected={activeCategorie} list={categorie} onClick={(item) => selectCategorie(item)} />
-          <SelectBox text='Marcas' selected={activeBrand} list={brand} onClick={(item) => selectBrand(item)} />
-          <SelectBox text='Proveedores' selected={activeProvider} list={provider} onClick={(item) => selectProvider(item)} />
-          {/* <TitleText>CATEGORIAS</TitleText>
-            <HorizontalList>
-            {categorie.map((item: CBP) => (
-                <ItemListText
-                key={item._id}
-                $isActive={activeCategorie === item._id}
-                onClick={() => selectCategorie(item)}
-                >
-                {item.descripcion}
-                </ItemListText>
-            ))}
-            </HorizontalList>
-
-            <TitleText>MARCAS</TitleText>
-            <HorizontalList>
-            {brand.map((item: CBP) => (
-                <ItemListText
-                key={item._id}
-                $isActive={activeBrand === item._id}
-                onClick={() => selectBrand(item)}
-                >
-                {item.descripcion}
-                </ItemListText>
-            ))}
-            </HorizontalList>
-
-            <TitleText>PROVEEDORES</TitleText>
-            <HorizontalList>
-            {provider.map((item: CBP) => (
-                <ItemListText
-                key={item._id}
-                $isActive={activeProvider === item._id}
-                onClick={() => selectProvider(item)}
-                >
-                {item.descripcion}
-                </ItemListText>
-            ))}
-            </HorizontalList>
-        <ButtonContainer>
-            <Button text={'Cancelar'} onClick={handleClose} />
-            <Button text={'Aceptar'} onClick={handleClose} />
-        </ButtonContainer> */}
-      </Container>
+    <div className="flex w-full mb-2.5 max-sm:flex-wrap">
+      <Select
+        value={String(activeCategorie._id)}
+        onValueChange={(val) => {
+          const item = categorie.find(i => String(i._id) === val);
+          if (item) selectCategorie(item);
+        }}
+      >
+        <SelectTrigger className="mx-1 min-w-[150px] max-w-[315px]">
+          <SelectValue placeholder="Categorias" />
+        </SelectTrigger>
+        <SelectContent>
+          {categorie.map(item => (
+            <SelectItem key={item._id} value={String(item._id)}>{item.descripcion}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select
+        value={String(activeBrand._id)}
+        onValueChange={(val) => {
+          const item = brand.find(i => String(i._id) === val);
+          if (item) selectBrand(item);
+        }}
+      >
+        <SelectTrigger className="mx-1 min-w-[150px] max-w-[315px]">
+          <SelectValue placeholder="Marcas" />
+        </SelectTrigger>
+        <SelectContent>
+          {brand.map(item => (
+            <SelectItem key={item._id} value={String(item._id)}>{item.descripcion}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select
+        value={String(activeProvider._id)}
+        onValueChange={(val) => {
+          const item = provider.find(i => String(i._id) === val);
+          if (item) selectProvider(item);
+        }}
+      >
+        <SelectTrigger className="mx-1 min-w-[150px] max-w-[315px]">
+          <SelectValue placeholder="Proveedores" />
+        </SelectTrigger>
+        <SelectContent>
+          {provider.map(item => (
+            <SelectItem key={item._id} value={String(item._id)}>{item.descripcion}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   )
 }
-
-const Container = styled.div `
-  display: flex; 
-  width: 100%; 
-  margin-bottom: 10px;
-  @media only screen and (max-width: 500px) {
-    flex-wrap: wrap;
-  }
-`
-
-// Estilos para los componentes de texto y listas
-const TitleText = styled.h2`
-  font-size: 16px;
-  font-family: 'Cairo-Bold', sans-serif;
-  color: #716A6A;
-  margin-bottom: 15px;
-`;
-
-const ItemListText = styled.li<{ $isActive: boolean }>`
-  font-size: 14px;
-  font-family: 'Cairo-Bold', sans-serif;
-  color: ${({ $isActive }) => ($isActive ? '#fff' : '#716A6A')};
-  background-color: ${({ $isActive }) => ($isActive ? '#3764A0' : 'none')};
-  border: ${({ $isActive }) => ($isActive ? '1px solid #d9d9d9' : 'none')};
-  border-radius: ${({ $isActive }) => ($isActive ? '15px' : 'none')};
-  margin-right: 10px;
-  padding: 5px 15px;
-  list-style:none;
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  &:hover{
-    border: 1px solid #d9d9d9;
-    border-radius: 15px;
-    background-color: #3764A0;
-    color: white;
-  }
-  @media only screen and (max-width: 500px) {
-    padding: 2px 10px;
-  }
-`;
-
-const HorizontalList = styled.ul`
-  display: flex;
-  overflow-x: scroll;
-  margin-bottom: 15px;
-`;
-
-const ButtonContainer = styled.div`
-  display: flex;
-  justify-content: space-around;
-  margin: 15px 0;
-`;

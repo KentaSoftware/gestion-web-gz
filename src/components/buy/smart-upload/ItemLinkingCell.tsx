@@ -1,13 +1,19 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+// TICKET-03 + EP6-03: MUI Autocomplete replaced with Combobox (DS-native).
+// MUI Autocomplete + TextField removed; debounce now internal to Combobox.
+// slate-* colors replaced with text-text-primary/secondary/muted DS tokens.
+// MUI Chip replaced with inline Badge divs (LINKED + NEW_PRODUCT states).
+// MUI CircularProgress replaced with CSS spinner (animate-spin).
+// Redux dispatch, ProductCreateModal, badge divs unchanged.
+
+import { useState } from 'react';
 import { useSelector } from 'react-redux';
-import styled from 'styled-components';
 import { useAppDispatch } from '@/redux/hook';
 import { getItemLinks, selectProduct, clearItemLink, setNewProduct } from '@/redux/purchaseDocSlice';
 import { AnalyzedItem, LinkingStatus, ProductSuggestion } from '@/interfaces/purchaseDoc.interface';
-import { Autocomplete, TextField, Chip, CircularProgress } from '@mui/material';
-import { MdAdd, MdClose, MdCheckCircle, MdSearch } from 'react-icons/md';
+import Combobox from '@/components/ui/combobox';
+import { Plus, X, CheckCircle, Search } from 'lucide-react';
 import ProductCreateModal from './ProductCreateModal';
 import { productService, Product } from '@/services/product.service';
 
@@ -16,38 +22,16 @@ interface ItemLinkingCellProps {
   item: AnalyzedItem;
 }
 
+
+
 export default function ItemLinkingCell({ lineId, item }: ItemLinkingCellProps) {
   const dispatch = useAppDispatch();
   const itemLinks = useSelector(getItemLinks);
   const link = itemLinks[lineId];
   
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [searching, setSearching] = useState(false);
-  
-  // Debounced search
-  useEffect(() => {
-    if (searchQuery.trim().length < 2) {
-      setSearchResults([]);
-      return;
-    }
-
-    const timeoutId = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const results = await productService.searchProducts(searchQuery, 20);
-        setSearchResults(results);
-      } catch (error) {
-        console.error('Error searching products:', error);
-        setSearchResults([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 300); // 300ms debounce
-
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
   
   if (!link) return <div>Error: no se encontró el link</div>;
   
@@ -80,37 +64,35 @@ export default function ItemLinkingCell({ lineId, item }: ItemLinkingCellProps) 
     setCreateModalOpen(false);
   };
   
-  // ESTADO: PENDING - Mostrar sugerencias o búsqueda
+  // ESTADO: PENDING — show suggestions or search
   if (link.status === LinkingStatus.PENDING) {
     const hasSuggestions = item.suggestions && item.suggestions.length > 0;
     
     if (hasSuggestions) {
       return (
-        <Container>
-          <Autocomplete
+        <div className="flex flex-col gap-2">
+          <Combobox<ProductSuggestion>
             options={item.suggestions || []}
-            getOptionLabel={(option: ProductSuggestion) => option.descripcion}
-            onChange={(_, value) => handleSelectProduct(value?._id || null)}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                placeholder="Selecciona un producto..."
-                size="small"
-              />
+            getOptionLabel={(option) => option.descripcion}
+            getOptionValue={(option) => option._id}
+            onChange={(value) => handleSelectProduct(value?._id || null)}
+            placeholder="Selecciona un producto..."
+            noOptionsText="Sin sugerencias"
+            renderOption={(option) => (
+              <>
+                <span className="text-sm text-text-primary">{option.descripcion}</span>
+                <span className="text-xs font-semibold text-text-secondary">Score: {(option.score * 100).toFixed(0)}%</span>
+              </>
             )}
-            renderOption={(props: any, option: ProductSuggestion) => (
-              <OptionItem {...props} key={option._id}>
-                <OptionName>{option.descripcion}</OptionName>
-                <OptionScore>Score: {(option.score * 100).toFixed(0)}%</OptionScore>
-              </OptionItem>
-            )}
-            fullWidth
           />
           
-          <CreateButton onClick={handleOpenCreateModal}>
-            <MdAdd size={16} />
+          <button
+            onClick={handleOpenCreateModal}
+            className="flex items-center justify-center gap-1 rounded-md border border-border-interactive bg-surface-base px-3 py-2 text-[13px] font-semibold text-brand-primary hover:bg-background-subtle transition-colors"
+          >
+            <Plus size={16} aria-hidden="true" />
             Crear Producto
-          </CreateButton>
+          </button>
           
           <ProductCreateModal
             open={createModalOpen}
@@ -118,60 +100,56 @@ export default function ItemLinkingCell({ lineId, item }: ItemLinkingCellProps) 
             onCreate={handleCreateProduct}
             initialDescription={item.description || item.rawDescription}
           />
-        </Container>
+        </div>
       );
     } else {
-      // Sin sugerencias: mostrar búsqueda con autocompletado
+      // No suggestions: show search autocomplete
       return (
-        <Container>
-          <SearchInfo>
-            <MdSearch size={16} />
-            <span>Busca el producto en el catálogo</span>
-          </SearchInfo>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-1.5 py-1 text-xs text-text-muted">
+            <Search size={16} aria-hidden="true" />
+            <span className="italic">Busca el producto en el catálogo</span>
+          </div>
           
-          <Autocomplete
+          <Combobox<Product>
             options={searchResults}
-            getOptionLabel={(option: Product) => option.descripcion}
-            onChange={(_, value) => handleSelectSearchResult(value)}
-            onInputChange={(_, value) => setSearchQuery(value)}
+            getOptionLabel={(option) => option.descripcion}
+            getOptionValue={(option) => option._id}
+            onChange={(value) => handleSelectSearchResult(value)}
+            onSearch={async (query) => {
+              if (query.trim().length < 2) {
+                setSearchResults([]);
+                return;
+              }
+              setSearching(true);
+              try {
+                const results = await productService.searchProducts(query, 20);
+                setSearchResults(results);
+              } catch (error) {
+                console.error('Error searching products:', error);
+                setSearchResults([]);
+              } finally {
+                setSearching(false);
+              }
+            }}
             loading={searching}
-            noOptionsText={searchQuery.length < 2 ? "Escribe al menos 2 caracteres..." : "No se encontraron productos"}
-            loadingText="Buscando..."
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                placeholder="Buscar producto..."
-                size="small"
-                InputProps={{
-                  ...params.InputProps,
-                  startAdornment: (
-                    <>
-                      <MdSearch style={{ color: '#999', marginLeft: 8 }} />
-                      {params.InputProps.startAdornment}
-                    </>
-                  ),
-                  endAdornment: (
-                    <>
-                      {searching ? <CircularProgress color="inherit" size={20} /> : null}
-                      {params.InputProps.endAdornment}
-                    </>
-                  ),
-                }}
-              />
+            placeholder="Buscar producto..."
+            noOptionsText="No se encontraron productos"
+            renderOption={(option) => (
+              <>
+                <span className="text-sm text-text-primary">{option.descripcion}</span>
+                {option.marca && <span className="ml-2 text-[11px] text-text-muted">Marca: {option.marca}</span>}
+              </>
             )}
-            renderOption={(props: any, option: Product) => (
-              <OptionItem {...props} key={option._id}>
-                <OptionName>{option.descripcion}</OptionName>
-                {option.marca && <OptionMeta>Marca: {option.marca}</OptionMeta>}
-              </OptionItem>
-            )}
-            fullWidth
           />
           
-          <CreateButton onClick={handleOpenCreateModal} primary>
-            <MdAdd size={16} />
+          <button
+            onClick={handleOpenCreateModal}
+            className="flex items-center justify-center gap-1 rounded-md border-0 bg-brand-primary px-3 py-2 text-[13px] font-semibold text-text-inverse hover:bg-brand-primary-hover transition-colors"
+          >
+            <Plus size={16} aria-hidden="true" />
             Crear Producto Nuevo
-          </CreateButton>
+          </button>
           
           <ProductCreateModal
             open={createModalOpen}
@@ -179,108 +157,58 @@ export default function ItemLinkingCell({ lineId, item }: ItemLinkingCellProps) 
             onCreate={handleCreateProduct}
             initialDescription={item.description || item.rawDescription}
           />
-        </Container>
+        </div>
       );
     }
   }
   
-  // ESTADO: LINKED - Mostrar el producto seleccionado
+  // ESTADO: LINKED — show selected product
   if (link.status === LinkingStatus.LINKED && link.chosenProductId) {
-    // Buscar primero en sugerencias, luego en resultados de búsqueda
     const selectedProduct = 
       item.suggestions?.find((s: ProductSuggestion) => s._id === link.chosenProductId) ||
       searchResults.find((p: Product) => p._id === link.chosenProductId);
     
     return (
-      <Container>
-        <Chip
-          icon={<MdCheckCircle />}
-          label={selectedProduct?.descripcion || 'Producto seleccionado'}
-          onDelete={handleClear}
-          color="success"
-          deleteIcon={<MdClose />}
-        />
-      </Container>
+      <div className="flex flex-col gap-2">
+        <div
+          className="inline-flex items-center gap-1.5 rounded-full bg-state-success px-3 py-1 text-[13px] font-medium text-text-inverse"
+        >
+          <CheckCircle size={18} aria-hidden="true" />
+          <span>{selectedProduct?.descripcion || 'Producto seleccionado'}</span>
+          <button
+            onClick={handleClear}
+            className="ml-1 flex items-center justify-center rounded-full p-0.5 opacity-80 transition-opacity hover:opacity-100"
+            aria-label="Eliminar"
+            type="button"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
     );
   }
   
-  // ESTADO: NEW_PRODUCT - Mostrar que se creará un producto nuevo
+  // ESTADO: NEW_PRODUCT — show that a new product will be created
   if (link.status === LinkingStatus.NEW_PRODUCT && link.newProduct) {
     return (
-      <Container>
-        <Chip
-          icon={<MdAdd />}
-          label={`Nuevo: ${link.newProduct.descripcion}`}
-          onDelete={handleClear}
-          color="primary"
-          deleteIcon={<MdClose />}
-        />
-      </Container>
+      <div className="flex flex-col gap-2">
+        <div
+          className="inline-flex items-center gap-1.5 rounded-full bg-brand-primary px-3 py-1 text-[13px] font-medium text-text-inverse"
+        >
+          <Plus size={18} aria-hidden="true" />
+          <span>Nuevo: {link.newProduct.descripcion}</span>
+          <button
+            onClick={handleClear}
+            className="ml-1 flex items-center justify-center rounded-full p-0.5 opacity-80 transition-opacity hover:opacity-100"
+            aria-label="Eliminar"
+            type="button"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
     );
   }
   
   return <div>Estado desconocido</div>;
 }
-
-// Styled Components
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`;
-
-const CreateButton = styled.button<{ primary?: boolean }>`
-  background: ${props => props.primary ? '#2196F3' : 'white'};
-  color: ${props => props.primary ? 'white' : '#2196F3'};
-  border: 1px solid #2196F3;
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  
-  &:hover {
-    background: ${props => props.primary ? '#1976D2' : '#e3f2fd'};
-  }
-`;
-
-const SearchInfo = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #666;
-  padding: 4px 0;
-  
-  span {
-    font-style: italic;
-  }
-`;
-
-const OptionItem = styled.li`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-`;
-
-const OptionName = styled.span`
-  font-size: 14px;
-  color: #333;
-`;
-
-const OptionMeta = styled.span`
-  font-size: 11px;
-  color: #999;
-  margin-left: 8px;
-`;
-
-const OptionScore = styled.span`
-  font-size: 12px;
-  color: #666;
-  font-weight: 600;
-`;

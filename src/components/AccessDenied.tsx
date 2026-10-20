@@ -1,118 +1,7 @@
 'use client';
 
-import styled from 'styled-components';
 import { useRouter } from 'next/navigation';
-import { MdLock, MdArrowBack, MdHome } from 'react-icons/md';
-
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 20px;
-  background-color: #f5f5f5;
-`;
-
-const Card = styled.div`
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  padding: 40px;
-  max-width: 500px;
-  width: 100%;
-  text-align: center;
-`;
-
-const IconWrapper = styled.div`
-  color: #DC8686;
-  font-size: 80px;
-  margin-bottom: 20px;
-  animation: shake 0.5s ease-in-out;
-
-  @keyframes shake {
-    0%, 100% { transform: rotate(0deg); }
-    25% { transform: rotate(-10deg); }
-    75% { transform: rotate(10deg); }
-  }
-`;
-
-const Title = styled.h1`
-  font-size: 28px;
-  font-weight: 700;
-  color: #333;
-  margin-bottom: 12px;
-`;
-
-const Subtitle = styled.p`
-  font-size: 18px;
-  font-weight: 600;
-  color: #DC8686;
-  margin-bottom: 20px;
-`;
-
-const Message = styled.p`
-  font-size: 14px;
-  color: #666;
-  line-height: 1.6;
-  margin-bottom: 30px;
-`;
-
-const ButtonContainer = styled.div`
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  flex-wrap: wrap;
-`;
-
-const Button = styled.button<{ $variant?: 'primary' | 'secondary' }>`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  
-  background-color: ${props => props.$variant === 'primary' ? '#8294C4' : '#E2E8F0'};
-  color: ${props => props.$variant === 'primary' ? 'white' : '#333'};
-
-  &:hover {
-    background-color: ${props => props.$variant === 'primary' ? '#6B7FA8' : '#CBD5E0'};
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
-`;
-
-const InfoBox = styled.div`
-  background-color: #FFF4E6;
-  border-left: 4px solid #EA906C;
-  padding: 16px;
-  margin-top: 24px;
-  text-align: left;
-  border-radius: 4px;
-`;
-
-const InfoTitle = styled.p`
-  font-size: 14px;
-  font-weight: 600;
-  color: #EA906C;
-  margin-bottom: 8px;
-`;
-
-const InfoText = styled.p`
-  font-size: 13px;
-  color: #666;
-  line-height: 1.5;
-  margin: 0;
-`;
+import { Lock, ArrowLeft, Home } from 'lucide-react';
 
 interface AccessDeniedProps {
   /** Mensaje personalizado para mostrar al usuario */
@@ -129,35 +18,35 @@ interface AccessDeniedProps {
 
 /**
  * Componente AccessDenied
- * 
+ *
  * Muestra una pantalla amigable cuando el usuario no tiene permisos para acceder a una página o acción.
  * Se utiliza en dos contextos:
  * 1. Como página completa cuando se detecta 403 en interceptor de Axios
  * 2. Como componente wrapper en ProtectedRoute cuando falta permiso
- * 
+ *
  * @example
  * ```tsx
  * // Como página completa
- * <AccessDenied 
+ * <AccessDenied
  *   message="No tienes permisos para crear egresos"
  *   showBackButton={true}
  * />
- * 
+ *
  * // Personalizado sin botón de volver
- * <AccessDenied 
+ * <AccessDenied
  *   title="Permiso Requerido"
  *   message="Solo administradores pueden acceder aquí"
  *   showBackButton={false}
  * />
  * ```
  */
-export const AccessDenied: React.FC<AccessDeniedProps> = ({
+export const AccessDenied = ({
   message = 'No tienes los permisos necesarios para acceder a esta página o realizar esta acción.',
   title = 'Acceso Denegado',
   showBackButton = true,
   showHomeButton = true,
   showInfo = true,
-}) => {
+}: AccessDeniedProps) => {
   const router = useRouter();
 
   const handleGoBack = () => {
@@ -169,42 +58,58 @@ export const AccessDenied: React.FC<AccessDeniedProps> = ({
   };
 
   return (
-    <Container>
-      <Card>
-        <IconWrapper>
-          <MdLock />
-        </IconWrapper>
-        
-        <Title>{title}</Title>
-        <Subtitle>Error 403 - Forbidden</Subtitle>
-        <Message>{message}</Message>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background-canvas p-5">
+      <div className="w-full max-w-[500px] rounded-lg bg-surface-base p-10 text-center shadow-md">
+        <div className="mb-5 text-[80px] text-state-error animate-[access-denied-shake_0.5s_ease-in-out]">
+          <Lock aria-hidden="true" />
+        </div>
 
-        <ButtonContainer>
+        <h1 className="mb-3 text-[28px] font-bold text-text-primary">
+          {title}
+        </h1>
+        <p className="mb-5 text-lg font-semibold text-state-error">
+          Error 403 - Forbidden
+        </p>
+        <p className="mb-[30px] text-sm leading-[1.6] text-text-secondary">
+          {message}
+        </p>
+
+        <div className="flex flex-wrap justify-center gap-3">
           {showBackButton && (
-            <Button onClick={handleGoBack} $variant="secondary">
-              <MdArrowBack />
+            <button
+              className="flex cursor-pointer items-center gap-2 rounded-md border-0 px-6 py-3 text-sm font-semibold bg-background-subtle text-text-primary transition-all duration-[var(--duration-base)] ease-[var(--ease-standard)] hover:bg-border-subtle hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
+              onClick={handleGoBack}
+              type="button"
+            >
+              <ArrowLeft aria-hidden="true" />
               Volver Atrás
-            </Button>
+            </button>
           )}
           {showHomeButton && (
-            <Button onClick={handleGoHome} $variant="primary">
-              <MdHome />
+            <button
+              className="flex cursor-pointer items-center gap-2 rounded-md border-0 px-6 py-3 text-sm font-semibold bg-brand-primary text-text-inverse transition-all duration-[var(--duration-base)] ease-[var(--ease-standard)] hover:bg-brand-primary-hover hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
+              onClick={handleGoHome}
+              type="button"
+            >
+              <Home aria-hidden="true" />
               Ir al Inicio
-            </Button>
+            </button>
           )}
-        </ButtonContainer>
+        </div>
 
         {showInfo && (
-          <InfoBox>
-            <InfoTitle>¿Necesitas acceso?</InfoTitle>
-            <InfoText>
-              Si crees que deberías tener acceso a esta función, contacta a tu administrador del sistema 
+          <div className="mt-6 rounded-sm border-l-4 border-l-state-warning bg-background-subtle p-4 text-left">
+            <p className="mb-2 text-sm font-semibold text-state-warning">
+              ¿Necesitas acceso?
+            </p>
+            <p className="m-0 text-[13px] leading-[1.5] text-text-secondary">
+              Si crees que deberías tener acceso a esta función, contacta a tu administrador del sistema
               para que actualice tus permisos.
-            </InfoText>
-          </InfoBox>
+            </p>
+          </div>
         )}
-      </Card>
-    </Container>
+      </div>
+    </div>
   );
 };
 

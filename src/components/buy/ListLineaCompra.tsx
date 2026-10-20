@@ -1,7 +1,6 @@
 import { ExtendItemSale, ItemSale } from '@/interfaces/sale.interface'
 import { useAppDispatch, useAppSelector } from '@/redux/hook'
 import React from 'react'
-import styled from 'styled-components'
 import ItemLineaCompra from './ItemLineaCompra'
 import { deleteItemBuy, downQTY10Buy, downQTYBuy, getBuy, getItemBuy, onChangePrecioUnitarioBuy, upQTY10Buy, upQTYBuy } from '@/redux/buySlice'
 import { ExtendItemBuy } from '@/interfaces/buy.interface'
@@ -18,7 +17,7 @@ export default function ListLineaCompra({edit}:{edit?: boolean}) {
     const [valueStorage , setValue] = useLocalStorage("user", "")
 
   return (
-    <ListProduct>
+    <ul className="flex flex-1 w-full flex-col px-4 overflow-y-scroll max-h-[60vh] max-[625px]:px-0 max-[625px]:min-h-[35vh] max-[625px]:max-h-[40vh]">
         { 
             itemBuy.length === 0 ? 'No se selecciono productos' :
             itemBuy.map((item: ExtendItemBuy, index:number)=>{
@@ -52,21 +51,6 @@ export default function ListLineaCompra({edit}:{edit?: boolean}) {
               />
             })
         }
-    </ListProduct> 
+    </ul>
   )
 }
-
-const ListProduct = styled.ul `
-  display: flex;
-  flex: 1;
-  width: 100%;
-  flex-direction: column;
-  padding: 0 15px;
-  overflow-y: scroll;
-  max-height: 60vh;
-  @media only screen and (max-width: 625px) {
-    padding: 0;
-    min-height: 35vh;
-    max-height: 40vh;
-  }
-`

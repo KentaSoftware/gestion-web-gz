@@ -1,8 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 'use client'
 import Button from '@/components/Button';
-import ButtonUI from '@/components/ButtonUI';
-import Loading from '@/components/Loading';
 import FilterProduct from '@/components/products/FilterProduct';
 import ItemsProducts from '@/components/products/ItemsProducts';
 import ModalProduct from '@/components/products/ModalProduct';
@@ -10,19 +8,16 @@ import NewProduct from '@/components/products/NewProduct';
 import PrintProduct from '@/components/products/PrintProduct';
 import UpdatePrice from '@/components/products/UpdatePrice';
 import Search from '@/components/Search';
+import { PageContainer, PageHeader } from '@/components/layout/PageLayout';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import { Product } from '@/interfaces/product.interface';
 import { useAppDispatch } from '@/redux/hook';
 import { getLoading, setLoading } from '@/redux/loadingSlice';
 import { getUser, setUser } from '@/redux/userSlice';
 import apiClient from '@/utils/client';
-import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import { useRouter } from 'next/navigation';
-import React, { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react'
-import { MdEdit, MdInfo } from 'react-icons/md';
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useSelector } from 'react-redux';
 import { io } from 'socket.io-client';
-import styled from 'styled-components';
 
 interface CBP {
   _id: (string | number)
@@ -33,16 +28,15 @@ interface CBP {
 export default function ProductScreen() {
 
   const [search, setSearch] = useState<string>('')
-  const [data, setData] = useState<Product[] | []>([])
-  const [valueStorage, setValue] = useLocalStorage("user", "")
-  const [dataSearch, setDataSearch] = useState<Product[] | []>([])
+  const [data, setData] = useState<Product[]>([])
+  const [valueStorage] = useLocalStorage("user", "")
+  const [dataSearch, setDataSearch] = useState<Product[]>([])
   const [query, setQuery] = useState<{ skip: number, limit: number }>({ skip: 0, limit: 25 })
   const [selectProduct, setSelectProduct] = useState<Product | undefined>(undefined)
   const [openModalProduct, setOpenModalProduct] = useState<boolean>(false)
   const observer = useRef<IntersectionObserver | null>(null);
   const { open: loading } = useSelector(getLoading)
   const [openNewProduct, setOpenNewProduct] = useState<boolean>(false)
-  const router: AppRouterInstance = useRouter()
   const [longArray, setLongArray] = useState<number>(0)
   const [openUpdatePrice, setOpenUpdatePrice] = useState<boolean>(false)
   const [openPrintProduct, setOpenPrintProduct] = useState<boolean>(false)
@@ -61,7 +55,7 @@ export default function ProductScreen() {
   }, [valueStorage, user, dispatch])
 
   const searchProduct = (e: ChangeEvent<HTMLInputElement>) => {
-    setSearch(prevData => e.target.value)
+    setSearch(e.target.value)
   }
 
   useEffect(() => {
@@ -86,7 +80,7 @@ export default function ProductScreen() {
 
           return [...prevData, ...newData];
         })
-        setLongArray(prevData => response.data.longitud)
+        setLongArray(response.data.longitud)
         dispatch(setLoading(false));
       } catch (e) {
         console.log("error", e);
@@ -134,7 +128,7 @@ export default function ProductScreen() {
     }
     const socket = io(process.env.NEXT_PUBLIC_DB_HOST)
     socket.on(`product`, (socket) => {
-      setSearch(prevData => '')
+      setSearch('')
       setData((prevData: Product[]) => {
         const exist = prevData.find((elem: Product) => elem._id === socket.data._id)
         if (exist) {
@@ -172,99 +166,70 @@ export default function ProductScreen() {
   );
 
   return (
-    <main style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-      {
-        <>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }} >
-            <WrapperSearch>
-              <Search name='search' placeHolder={'Buscar productos'} type='text' value={search} onChange={searchProduct}/*  onClickFilter={()=>setOpenModalFilter(true)} */ />
-              <WrapperButtons>
-                <ButtonUI label='IMPRIMIR' onClick={() => {
-                  setOpenPrintProduct(true)
-                }} />
-                <ButtonUI label='ACTUALIZAR' onClick={() => setOpenUpdatePrice(true)} />
-                <ButtonUI label='NUEVO' onClick={() => setOpenNewProduct(true)} />
-              </WrapperButtons>
-            </WrapperSearch>
-            <FilterProduct open={openModalFilter} handleClose={() => setOpenModalFilter(false)}
-              activeBrand={activeBrand} activeCategorie={activeCategorie} activeProvider={activeProvider}
-              selectCategorie={(item: CBP) => setActiveCategorie(prevData => item)}
-              selectBrand={(item: CBP) => setActiveBrand(prevData => item)}
-              selectProvider={(item: CBP) => setActiveProvider(prevData => item)}
-            />
-            <ListProduct >
-              {
-                search !== '' || activeBrand._id !== 1 || activeCategorie._id !== 1 || activeProvider._id !== 1 ?
-                  dataSearch.length !== 0 ?
-                    dataSearch.map((item: Product, index: number) => {
-                      return <ItemsProducts key={index} item={item} onClick={() => { setSelectProduct(prevData => item); setOpenModalProduct(true) }} />
-                    })
-                    : 'NO HAY PRODUCTOS'
-                  :
-                  data.length !== 0 ?
-                    data.map((item: Product, index: number) => {
-                      return <ItemsProducts key={index} item={item} onClick={() => { setSelectProduct(prevData => item); setOpenModalProduct(true) }} />
-                    })
-                    : 'NO HAY PRODUCTOS'
-              }
-              {
-                search !== '' || activeBrand._id !== 1 || activeCategorie._id !== 1 || activeProvider._id !== 1 ?
-                  <></> :
-                  <li style={{ listStyle: 'none', padding: 0, margin: 0, minHeight: '1px' }} ref={lastElementRef}></li>
-              }
-            </ListProduct>
+    <PageContainer>
+      <PageHeader
+        title="Productos"
+        actions={
+          <div className="flex items-center gap-2">
+            <Button text='IMPRIMIR' variant='ghost' onClick={() => {
+              setOpenPrintProduct(true)
+            }} />
+            <Button text='ACTUALIZAR' variant='ghost' onClick={() => setOpenUpdatePrice(true)} />
+            <Button text='NUEVO' variant='primary' onClick={() => setOpenNewProduct(true)} />
           </div>
+        }
+      >
+        <Search name='search' placeHolder={'Buscar productos'} type='text' value={search} onChange={searchProduct} />
+      </PageHeader>
+        <FilterProduct open={openModalFilter} handleClose={() => setOpenModalFilter(false)}
+          activeBrand={activeBrand} activeCategorie={activeCategorie} activeProvider={activeProvider}
+          selectCategorie={(item: CBP) => setActiveCategorie(item)}
+          selectBrand={(item: CBP) => setActiveBrand(item)}
+          selectProvider={(item: CBP) => setActiveProvider(item)}
+        />
+        <ul className="flex flex-1 w-full flex-col overflow-scroll max-h-[82vh]">
           {
-            (selectProduct !== undefined) &&
-            <ModalProduct open={openModalProduct} handleClose={() => setOpenModalProduct(false)} product={selectProduct} ></ModalProduct>
+            search !== '' || activeBrand._id !== 1 || activeCategorie._id !== 1 || activeProvider._id !== 1 ?
+              dataSearch.length !== 0 ?
+                dataSearch.map((item: Product, index: number) => {
+                  return <ItemsProducts key={index} item={item} onClick={() => { setSelectProduct(item); setOpenModalProduct(true) }} />
+                })
+                : <li className="list-none flex flex-col items-center justify-center gap-3 py-16 text-center">
+                    <span className="select-none text-5xl leading-none" aria-hidden="true">🔍</span>
+                    <p className="text-body font-semibold text-text-secondary">No hay productos</p>
+                  </li>
+              :
+              data.length !== 0 ?
+                data.map((item: Product, index: number) => {
+                  return <ItemsProducts key={index} item={item} onClick={() => { setSelectProduct(item); setOpenModalProduct(true) }} />
+                })
+                : <li className="list-none flex flex-col items-center justify-center gap-3 py-16 text-center">
+                    <span className="select-none text-5xl leading-none" aria-hidden="true">📋</span>
+                    <p className="text-body font-semibold text-text-secondary">No hay productos</p>
+                  </li>
           }
           {
-            openNewProduct &&
-            <NewProduct open={openNewProduct} handleClose={() => setOpenNewProduct(false)} ></NewProduct>
+            search !== '' || activeBrand._id !== 1 || activeCategorie._id !== 1 || activeProvider._id !== 1 ?
+              null :
+              <li className="list-none p-0 m-0 min-h-px" ref={lastElementRef}></li>
           }
-          {
-            openUpdatePrice &&
-            <UpdatePrice open={openUpdatePrice} handleClose={() => setOpenUpdatePrice(false)} />
-          }
-          {
-            openPrintProduct &&
-            <PrintProduct open={openPrintProduct} handleClose={() => setOpenPrintProduct(false)} />
-          }
-        </>
+        </ul>
+      {
+        (selectProduct !== undefined) &&
+        <ModalProduct open={openModalProduct} handleClose={() => setOpenModalProduct(false)} product={selectProduct} ></ModalProduct>
       }
-    </main>
+      {
+        openNewProduct &&
+        <NewProduct open={openNewProduct} handleClose={() => setOpenNewProduct(false)} ></NewProduct>
+      }
+      {
+        openUpdatePrice &&
+        <UpdatePrice open={openUpdatePrice} handleClose={() => setOpenUpdatePrice(false)} />
+      }
+      {
+        openPrintProduct &&
+        <PrintProduct open={openPrintProduct} handleClose={() => setOpenPrintProduct(false)} />
+      }
+    </PageContainer>
   )
 }
-
-const WrapperSearch = styled.div`
-  display: flex; 
-  width: 100%; 
-  padding: 0px 15px; 
-  align-items: center;
-  @media only screen and (max-width: 500px) {
-    flex-direction: column
-  }
-`
-
-const WrapperButtons = styled.div`
-  display: flex; 
-  padding: 0px 15px; 
-  align-items: center;
-  
-  @media only screen and (max-width: 500px) {
-    width: 100%; 
-    justify-content: center;
-    margin: 5px 0;
-  }
-`
-
-const ListProduct = styled.ul`
-  display: flex;
-  flex: 1;
-  width: 100%;
-  flex-direction: column;
-  padding: 0 15px;
-  overflow: scroll;
-  max-height: 82vh;
-`
-

@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type DragEvent, type ChangeEvent } from 'react';
 import { useSelector } from 'react-redux';
-import styled from 'styled-components';
 import { useAppDispatch } from '@/redux/hook';
 import {
   setFile,
@@ -16,10 +15,12 @@ import {
 import { SourceType, Provider, Analysis } from '@/interfaces/purchaseDoc.interface';
 import { providerService } from '@/services/provider.service';
 import { purchaseDocService } from '@/services/purchaseDoc.service';
-import { setAlert } from '@/redux/alertSlice';
-import { Autocomplete, TextField, FormControl, RadioGroup, FormControlLabel, Radio } from '@mui/material';
-import { MdUploadFile, MdCheck } from 'react-icons/md';
-import Loading from '@/components/Loading';
+import { toast } from "sonner";
+import Combobox from '@/components/ui/combobox';
+import { Upload, Check } from 'lucide-react';
+import { Spinner } from '@/components/ui/spinner';
+import Button from '@/components/Button';
+import { cn } from '@/lib/cn';
 
 export default function UploadStep() {
   const dispatch = useAppDispatch();
@@ -28,7 +29,8 @@ export default function UploadStep() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
-  const [dragActive, setDragActive] = useState(false);  const [pollingDraftId, setPollingDraftId] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [pollingDraftId, setPollingDraftId] = useState<string | null>(null);
   const [pollingMessage, setPollingMessage] = useState('Analizando comprobante...');  
   // Cargar proveedores al montar
   useEffect(() => {
@@ -47,18 +49,12 @@ export default function UploadStep() {
       } else {
         console.error('getProviders no devolvió un array:', data);
         setProviders([]);
-        dispatch(setAlert({
-          message: 'Formato de datos de proveedores inválido',
-          type: 'error',
-        }));
+        toast.error('Formato de datos de proveedores inválido');
       }
     } catch (error: any) {
       console.error('Error al cargar proveedores:', error);
       setProviders([]);
-      dispatch(setAlert({
-        message: 'Error al cargar proveedores: ' + (error.response?.data?.message || error.message || 'Error desconocido'),
-        type: 'error',
-      }));
+      toast.error('Error al cargar proveedores: ' + (error.response?.data?.message || error.message || 'Error desconocido'));
     } finally {
       setLoadingProviders(false);
     }
@@ -73,27 +69,21 @@ export default function UploadStep() {
     // Validar tipo
     const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
     if (!validTypes.includes(file.type)) {
-      dispatch(setAlert({
-        message: 'Tipo de archivo no válido. Solo se permiten PDF, JPG o PNG.',
-        type: 'error',
-      }));
+      toast.error('Tipo de archivo no válido. Solo se permiten PDF, JPG o PNG.');
       return;
     }
     
     // Validar tamaño (10MB)
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
-      dispatch(setAlert({
-        message: 'El archivo es demasiado grande. Máximo 10MB.',
-        type: 'error',
-      }));
+      toast.error('El archivo es demasiado grande. Máximo 10MB.');
       return;
     }
     
     dispatch(setFile(file));
   };
   
-  const handleDrag = useCallback((e: React.DragEvent) => {
+  const handleDrag = useCallback((e: DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === 'dragenter' || e.type === 'dragover') {
@@ -103,7 +93,7 @@ export default function UploadStep() {
     }
   }, []);
   
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback((e: DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
@@ -121,7 +111,7 @@ export default function UploadStep() {
     }
   };
   
-  const handleSourceTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSourceTypeChange = (event: ChangeEvent<HTMLInputElement>) => {
     dispatch(setSourceType(event.target.value as SourceType));
   };
   
@@ -203,10 +193,7 @@ export default function UploadStep() {
             analysis,
           }));
           
-          dispatch(setAlert({
-            message: 'Comprobante analizado exitosamente',
-            type: 'success',
-          }));
+          toast.success('Comprobante analizado exitosamente');
           
           setPollingDraftId(null);
           return;
@@ -215,10 +202,7 @@ export default function UploadStep() {
         if (draft.status === 'FAILED') {
           const errorMsg = draft.error?.message || 'Error al analizar el comprobante';
           dispatch(uploadFailure(errorMsg));
-          dispatch(setAlert({
-            message: errorMsg,
-            type: 'error',
-          }));
+          toast.error(errorMsg);
           setPollingDraftId(null);
           return;
         }
@@ -229,20 +213,14 @@ export default function UploadStep() {
         } else {
           // Timeout
           dispatch(uploadFailure('El análisis está tardando demasiado. Por favor, intenta nuevamente.'));
-          dispatch(setAlert({
-            message: 'Timeout: El análisis no se completó en el tiempo esperado',
-            type: 'error',
-          }));
+          toast.error('Timeout: El análisis no se completó en el tiempo esperado');
           setPollingDraftId(null);
         }
       } catch (error: any) {
         console.error('Error en polling:', error);
         const errorMsg = error.response?.data?.message || error.message || 'Error al consultar el estado';
         dispatch(uploadFailure(errorMsg));
-        dispatch(setAlert({
-          message: errorMsg,
-          type: 'error',
-        }));
+        toast.error(errorMsg);
         setPollingDraftId(null);
       }
     };
@@ -272,266 +250,127 @@ export default function UploadStep() {
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Error al procesar el comprobante';
       dispatch(uploadFailure(errorMessage));
-      dispatch(setAlert({
-        message: errorMessage,
-        type: 'error',
-      }));
+      toast.error(errorMessage);
     }
   };
   
   if (uploadLoading || pollingDraftId) {
     return (
-      <LoadingContainer>
-        <Loading />
-        <LoadingText>{pollingMessage}</LoadingText>
-        <LoadingSubtext>Esto puede tardar hasta 2 minutos</LoadingSubtext>
-      </LoadingContainer>
+      <div className="flex min-h-[400px] flex-col items-center justify-center gap-4">
+        <Spinner className="size-12 text-brand-primary" />
+        <p className="m-0 text-lg font-semibold text-text-primary">{pollingMessage}</p>
+        <p className="m-0 text-sm text-text-muted">Esto puede tardar hasta 2 minutos</p>
+      </div>
     );
   }
   
   return (
-    <Card>
-      <Section>
-        <SectionTitle>1. Seleccionar Proveedor</SectionTitle>
-        <Autocomplete
+    <div className="rounded-xl border border-border-subtle bg-surface-base p-8 shadow-md">
+      <div className="mb-8">
+        <h3 className="mb-4 text-lg font-semibold text-text-primary">1. Seleccionar Proveedor</h3>
+        <Combobox<Provider>
           options={providers}
           getOptionLabel={(option) => option.name}
+          getOptionValue={(option) => option._id}
           value={selectedProvider}
-          onChange={(_, value) => handleProviderChange(value)}
+          onChange={(value) => handleProviderChange(value)}
           loading={loadingProviders}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label="Proveedor"
-              placeholder="Buscar proveedor..."
-              required
-            />
-          )}
-          fullWidth
+          placeholder="Buscar proveedor..."
+          noOptionsText="No se encontraron proveedores"
         />
-      </Section>
+      </div>
       
-      <Section>
-        <SectionTitle>2. Tipo de Comprobante</SectionTitle>
-        <FormControl component="fieldset">
-          <RadioGroup
-            row
-            value={uploadForm.sourceType}
-            onChange={handleSourceTypeChange}
-          >
-            <FormControlLabel value={SourceType.INVOICE} control={<Radio />} label="Factura" />
-            <FormControlLabel value={SourceType.RECEIPT} control={<Radio />} label="Remito" />
-            <FormControlLabel value={SourceType.BUDGET} control={<Radio />} label="Presupuesto" />
-          </RadioGroup>
-        </FormControl>
-      </Section>
+      <div className="mb-8">
+        <h3 className="mb-4 text-lg font-semibold text-text-primary">2. Tipo de Comprobante</h3>
+        <fieldset className="flex flex-row gap-4 border-0 p-0 m-0">
+          <legend className="sr-only">Tipo de Comprobante</legend>
+          {[
+            { value: SourceType.INVOICE, label: 'Factura' },
+            { value: SourceType.RECEIPT, label: 'Remito' },
+            { value: SourceType.BUDGET, label: 'Presupuesto' },
+          ].map((opt) => (
+            <label
+              key={opt.value}
+              className="flex cursor-pointer items-center gap-2"
+            >
+              <input
+                type="radio"
+                name="sourceType"
+                value={opt.value}
+                checked={uploadForm.sourceType === opt.value}
+                onChange={handleSourceTypeChange}
+                className="h-4 w-4 border-border-subtle text-brand-primary accent-brand-primary focus:ring-state-focus"
+              />
+              <span className="text-label text-text-primary">{opt.label}</span>
+            </label>
+          ))}
+        </fieldset>
+      </div>
       
-      <Section>
-        <SectionTitle>3. Subir Archivo</SectionTitle>
-        <DropZone
+      <div className="mb-8">
+        <h3 className="mb-4 text-lg font-semibold text-text-primary">3. Subir Archivo</h3>
+        <div
           onDragEnter={handleDrag}
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
-          active={dragActive}
+          className={cn(
+            'cursor-pointer rounded-xl border-2 border-dashed px-6 py-12 text-center transition-all',
+            'hover:border-brand-primary hover:bg-surface-raised',
+            dragActive ? 'border-brand-primary bg-surface-raised' : 'border-border-subtle bg-surface-raised'
+          )}
         >
           <input
             type="file"
             id="file-upload"
             accept=".pdf,.jpg,.jpeg,.png"
             onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
-            style={{ display: 'none' }}
+            className="hidden"
           />
           
           {uploadForm.file ? (
-            <FileSelected>
-              <MdCheck size={48} color="#4CAF50" />
-              <FileName>{uploadForm.file.name}</FileName>
-              <FileSize>{(uploadForm.file.size / 1024 / 1024).toFixed(2)} MB</FileSize>
-              <ChangeFileButton as="label" htmlFor="file-upload">
+            <div className="flex flex-col items-center gap-3">
+              <Check size={48} className="text-state-success" aria-hidden="true" />
+              <span className="text-base font-semibold text-text-primary">{uploadForm.file.name}</span>
+              <span className="text-sm text-text-muted">{(uploadForm.file.size / 1024 / 1024).toFixed(2)} MB</span>
+              <label
+                htmlFor="file-upload"
+                className="inline-block cursor-pointer rounded-lg border border-brand-primary bg-transparent px-4 py-2 text-sm text-brand-primary hover:bg-surface-raised"
+              >
                 Cambiar archivo
-              </ChangeFileButton>
-            </FileSelected>
+              </label>
+            </div>
           ) : (
-            <DropZoneContent>
-              <MdUploadFile size={64} color="#999" />
-              <DropZoneText>Arrastra tu archivo aquí o</DropZoneText>
-              <UploadButton as="label" htmlFor="file-upload">
+            <div className="flex flex-col items-center gap-4">
+              <Upload size={64} className="text-text-muted" aria-hidden="true" />
+              <p className="m-0 text-base text-text-muted">Arrastra tu archivo aquí o</p>
+              <label
+                htmlFor="file-upload"
+                className="inline-block cursor-pointer rounded-lg border-0 bg-brand-primary px-6 py-3 text-sm font-semibold text-text-inverse hover:opacity-90"
+              >
                 Seleccionar archivo
-              </UploadButton>
-              <DropZoneHint>PDF, JPG o PNG - Máximo 10MB</DropZoneHint>
-            </DropZoneContent>
+              </label>
+              <span className="text-xs text-text-muted">PDF, JPG o PNG - Máximo 10MB</span>
+            </div>
           )}
-        </DropZone>
-      </Section>
+        </div>
+      </div>
       
       {uploadError && (
-        <ErrorMessage>{uploadError}</ErrorMessage>
+        <div className="mt-4 rounded-lg border border-state-error bg-state-error/10 px-4 py-3 text-sm text-state-error">
+          {uploadError}
+        </div>
       )}
       
-      <Actions>
-        <AnalyzeButton onClick={handleSubmit} disabled={!canSubmit}>
-          Analizar Comprobante
-        </AnalyzeButton>
-      </Actions>
-    </Card>
+      <div className="mt-8 flex justify-end gap-4">
+        <Button
+          text="Analizar Comprobante"
+          variant="primary"
+          size="lg"
+          disabled={!canSubmit}
+          onClick={handleSubmit}
+        />
+      </div>
+    </div>
   );
 }
-
-// Styled Components
-const Card = styled.div`
-  background: white;
-  border-radius: 12px;
-  padding: 32px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-`;
-
-const Section = styled.div`
-  margin-bottom: 32px;
-`;
-
-const SectionTitle = styled.h3`
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 16px;
-`;
-
-const DropZone = styled.div<{ active: boolean }>`
-  border: 2px dashed ${props => props.active ? '#3764A0' : '#ddd'};
-  border-radius: 12px;
-  padding: 48px 24px;
-  text-align: center;
-  background: ${props => props.active ? '#f0f7ff' : '#fafafa'};
-  transition: all 0.3s;
-  cursor: pointer;
-  
-  &:hover {
-    border-color: #3764A0;
-    background: #f0f7ff;
-  }
-`;
-
-const DropZoneContent = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-`;
-
-const DropZoneText = styled.p`
-  font-size: 16px;
-  color: #666;
-  margin: 0;
-`;
-
-const UploadButton = styled.button`
-  background: #3764A0;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 12px 24px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  
-  &:hover {
-    background: #2a4d7c;
-  }
-`;
-
-const DropZoneHint = styled.span`
-  font-size: 12px;
-  color: #999;
-`;
-
-const FileSelected = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-`;
-
-const FileName = styled.span`
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
-`;
-
-const FileSize = styled.span`
-  font-size: 14px;
-  color: #666;
-`;
-
-const ChangeFileButton = styled.button`
-  background: none;
-  border: 1px solid #3764A0;
-  color: #3764A0;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 14px;
-  cursor: pointer;
-  
-  &:hover {
-    background: #f0f7ff;
-  }
-`;
-
-const Actions = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  gap: 16px;
-  margin-top: 32px;
-`;
-
-const AnalyzeButton = styled.button`
-  background: #FA9B50;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 14px 32px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  
-  &:hover:not(:disabled) {
-    background: #e8893e;
-  }
-  
-  &:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-  }
-`;
-
-const ErrorMessage = styled.div`
-  background: #ffebee;
-  border: 1px solid #f44336;
-  border-radius: 8px;
-  padding: 12px 16px;
-  color: #c62828;
-  font-size: 14px;
-  margin-top: 16px;
-`;
-
-const LoadingContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 400px;
-  gap: 16px;
-`;
-
-const LoadingText = styled.p`
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
-`;
-
-const LoadingSubtext = styled.p`
-  font-size: 14px;
-  color: #666;
-  margin: 0;
-`;

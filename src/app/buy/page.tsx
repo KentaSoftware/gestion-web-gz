@@ -2,25 +2,54 @@
 
 import { AnimatedNumber } from '@/components/AnimatedNumber'
 import Button from '@/components/Button'
-import ButtonUI from '@/components/ButtonUI'
 import InfoBuy from '@/components/buy/InfoBuy'
-import InfoSale from '@/components/sale/InfoSale'
-import ModalPrintSale from '@/components/sale/ModalPrintSale'
 import Search from '@/components/Search'
+import { PageContainer, PageHeader } from '@/components/layout/PageLayout'
 import useLocalStorage from '@/hooks/useLocalStorage'
 import { Buy } from '@/interfaces/buy.interface'
 import { useAppDispatch } from '@/redux/hook'
 import { getLoading, setLoading } from '@/redux/loadingSlice'
-import { getUser, setUser } from '@/redux/userSlice'
 import apiClient from '@/utils/client'
 import { Types } from 'mongoose'
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 import { useRouter } from 'next/navigation'
-import React, { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react'
-import { BsPrinterFill } from 'react-icons/bs'
-import { MdEdit, MdInfo } from 'react-icons/md'
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useSelector } from 'react-redux'
-import styled from 'styled-components'
+
+const listItemClass = 'my-1.5 flex h-auto min-h-[70px] w-full cursor-pointer list-none items-center justify-center rounded-xl border border-border-subtle bg-surface-base p-4 font-semibold shadow-sm transition-[background-color,border-color] duration-500 ease-linear hover:border-brand-primary hover:bg-background-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-state-focus max-[500px]:flex-col'
+
+interface BuyRowProps {
+  item: Buy
+  onSelect: (id: Types.ObjectId | string | undefined) => void
+  onEdit: () => void
+  onInfo: () => void
+  showControlButton?: boolean
+}
+
+function BuyRow({ item, onSelect, onEdit, onInfo, showControlButton }: BuyRowProps) {
+  return (
+    <li
+      className={listItemClass}
+      tabIndex={0}
+      onClick={() => onSelect(item._id)}
+    >
+      <div className="mr-4 flex w-full items-center justify-between max-[500px]:mr-0">
+        <div>
+          <h2 className="text-body text-text-primary max-[500px]:text-label">{item.proveedor}</h2>
+          <h2 className="text-label text-text-primary max-[500px]:text-caption">{item.createdAt.split("T")[0]}</h2>
+        </div>
+        <h2 className="text-body font-semibold text-brand-accent">$ <AnimatedNumber value={item.total} /></h2>
+      </div>
+      <div className="flex items-center gap-2">
+        {showControlButton && (
+          <Button text='CONTROL' variant='ghost' onClick={onEdit} />
+        )}
+        <Button text='EDITAR' variant='ghost' onClick={onEdit} />
+        <Button text='+INFO' variant='ghost' onClick={onInfo} />
+      </div>
+    </li>
+  )
+}
 
 export default function BuyScreen() {
 
@@ -28,8 +57,7 @@ export default function BuyScreen() {
     const [data, setData] = useState<Buy[]>([])
     const [longArray, setLongArray] = useState<number>(0)
     const [dataSearch, setDataSearch] = useState<Buy[]>([])
-    const user = useSelector(getUser)
-    const [valueStorage , setValue] = useLocalStorage("user", "")
+    const [valueStorage] = useLocalStorage("user", "")
     const dispatch = useAppDispatch();
     const router: AppRouterInstance = useRouter()
     const {open: loading} = useSelector(getLoading)
@@ -112,165 +140,62 @@ export default function BuyScreen() {
   );
 
   return (
-    <main>
-        <ContainerSearch>
-          <Search name='search' placeHolder={'Buscar compras'} type='text' value={search} onChange={(e:ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} />
-          <ButtonUI label='NUEVO'  onClick={()=>{}} to='/buy/newBuy'/>
-        </ContainerSearch>
-        <ListSale>
+    <PageContainer>
+        <PageHeader
+          title="Compras"
+          actions={
+            <>
+              <Search name='search' placeHolder={'Buscar compras'} type='text' value={search} onChange={(e:ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} />
+              <Button text='NUEVO' variant='primary' onClick={()=>{}} to='/buy/newBuy'/>
+            </>
+          }
+        />
+        <ul className="flex max-h-[82vh] w-full flex-1 flex-col overflow-scroll">
             {
               search !== '' ?
                 dataSearch.length !== 0 ?
-                dataSearch.map((item:Buy, index:number)=>
-                <Item key={index} onClick={()=>setBuySelected(item._id)} >
-                  <ContainerTag >
-                    <div>
-                      <Tag>{item.proveedor}</Tag>
-                      <TagDate>{item.createdAt.split("T")[0]}</TagDate>
-                    </div>
-                    <Tag style={{fontWeight: 600, color: '#FA9B50'}}>$ <AnimatedNumber value={item.total}  /></Tag>
-                  </ContainerTag>
-                  <div  style={{display: 'flex'}}>
-                    <ButtonUI label='CONTROL' onClick={()=>{
-                        router.push(`/buy/editBuy/${item._id}`);
-                      }}/>
-                    <ButtonUI label='EDITAR' onClick={()=>{
-                        router.push(`/buy/editBuy/${item._id}`);
-                      }}/>
-                    <ButtonUI label='+INFO'  onClick={()=>setOpenInfoBuy(true)}/>
-                  </div>  
-                </Item>)
+                dataSearch.map((item: Buy, index: number) =>
+                  <BuyRow
+                    key={index}
+                    item={item}
+                    onSelect={setBuySelected}
+                    onEdit={() => router.push(`/buy/editBuy/${item._id}`)}
+                    onInfo={() => setOpenInfoBuy(true)}
+                    showControlButton
+                  />)
                 :
-                'no hay compras'
+                <li className="list-none flex flex-col items-center justify-center gap-3 py-16 text-center">
+                  <span className="select-none text-5xl leading-none" aria-hidden="true">🔍</span>
+                  <p className="text-body font-semibold text-text-secondary">No hay compras</p>
+                </li>
               :
                 data.length !== 0 ?
-                data.map((item:Buy, index:number)=>
-                <Item key={index} onClick={()=>setBuySelected(item._id)} >
-                  <ContainerTag >
-                    <div>
-                      <Tag>{item.proveedor}</Tag>
-                      <TagDate>{item.createdAt.split("T")[0]}</TagDate>
-                    </div>
-                    <Tag style={{fontWeight: 600, color: '#FA9B50'}}>$ <AnimatedNumber value={item.total}  /></Tag>
-                  </ContainerTag>
-                  <div  style={{display: 'flex'}}>
-                    <ButtonUI label='EDITAR' onClick={()=>{
-                        router.push(`/buy/editBuy/${item._id}`);
-                      }}/>
-                    <ButtonUI label='+INFO'  onClick={()=>setOpenInfoBuy(true)}/>
-                  </div>
-                </Item>)
+                data.map((item: Buy, index: number) =>
+                  <BuyRow
+                    key={index}
+                    item={item}
+                    onSelect={setBuySelected}
+                    onEdit={() => router.push(`/buy/editBuy/${item._id}`)}
+                    onInfo={() => setOpenInfoBuy(true)}
+                  />)
                 :
-                'no hay compras'
+                <li className="list-none flex flex-col items-center justify-center gap-3 py-16 text-center">
+                  <span className="select-none text-5xl leading-none" aria-hidden="true">📋</span>
+                  <p className="text-body font-semibold text-text-secondary">No hay compras</p>
+                </li>
             }
             {search === '' && data.length < longArray && (
               <li
-                style={{
-                  listStyle: 'none',
-                  padding: 0,
-                  margin: 15,
-                  minHeight: 5
-                }}
+                className="m-[15px] min-h-[5px] list-none p-0"
                 ref={lastElementRef}
-              >
-                final
-              </li>
+                aria-hidden="true"
+              />
             )}
-        </ListSale>
+        </ul>
         {
           openInfoBuy && 
           <InfoBuy open={openInfoBuy} handleClose={()=>setOpenInfoBuy(false)} id={buySelected} />
         }
-    </main>
+    </PageContainer>
   )
 }
-
-const ContainerSearch = styled.div `
-  display: flex; 
-  justify-content: space-between; 
-  width: 100%; 
-  padding: 0px 15px; 
-  align-items: center;
-  @media only screen and (max-width: 500px) {
-    flex-direction: column;
-  }
-`
-
-const Item = styled.li `
-  list-style: none;
-  padding: 15px;
-  font-weight: 600;
-  width: 100%;
-  margin-bottom: 5px;
-  margin-top: 5px;
-  display: flex; 
-  justify-content: center; 
-  align-items: center;
-  border-radius: 10px;
-  min-height: 70px;  
-  height: auto;  
-  cursor: pointer;
-  background-color: #FFF;
-  box-shadow: 5px 5px 5px #e0e0e0;
-  transition: background-color .5s linear, border-color .1s ease;
-  &:hover {
-    border: 1px solid #6A5BCD;
-    background-color: rgba(217, 217, 217, 0.3);
-  }
-  @media only screen and (max-width: 500px) {
-    padding: 15px 15px 15px 15px;
-    flex-direction: column;
-  }
-`
-
-const IconWrapper = styled.div`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 25px;
-    color: #716A6A;
-    padding: 5px 15px;
-    margin: 0px 5px;
-    border-left: 1px solid #d9d9d9;
-    cursor: pointer;
-    &:hover {
-        background-color: #d9d9d9;
-    }
-`
-
-const ListSale = styled.ul `
-  display: flex;
-  flex: 1;
-  width: 100%;
-  flex-direction: column;
-  padding: 0 15px;
-  overflow: scroll;
-  max-height: 82vh;
-`
-
-const ContainerTag = styled.div`
-  display: flex; 
-  justify-content: space-between; 
-  width : 100%; 
-  align-items: center;
-  margin-right: 15px;
-  @media only screen and (max-width: 500px) {
-    margin-right: 0px;
-  }
-`
-
-const Tag = styled.h2`
-  font-size: 18px;
-  color: #252525;
-  @media only screen and (max-width: 500px) {
-    font-size: 14px;
-  }
-`
-
-const TagDate = styled.h2`
-  font-size: 14px;
-  color: #252525;
-  @media only screen and (max-width: 500px) {
-    font-size: 12px;
-  }
-`

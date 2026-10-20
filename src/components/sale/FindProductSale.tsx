@@ -1,7 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 'use client'
 import Button from '@/components/Button';
-import Loading from '@/components/Loading';
 import FilterProduct from '@/components/products/FilterProduct';
 import ItemsProducts from '@/components/products/ItemsProducts';
 import ModalProduct from '@/components/products/ModalProduct';
@@ -15,13 +14,9 @@ import { useAppDispatch } from '@/redux/hook';
 import { getLoading, setLoading } from '@/redux/loadingSlice';
 import { getUser, setUser } from '@/redux/userSlice';
 import apiClient from '@/utils/client';
-import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import { useRouter } from 'next/navigation';
-import React, { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react'
-import { MdEdit, MdInfo } from 'react-icons/md';
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useSelector } from 'react-redux';
 import { io } from 'socket.io-client';
-import styled from 'styled-components';
 
 interface CBP {
   _id: (string | number)
@@ -40,7 +35,6 @@ export default function FindProductSale({ onClickItem }: { onClickItem: (item: P
   const observer = useRef<IntersectionObserver | null>(null);
   const { open: loading } = useSelector(getLoading)
   const [openNewProduct, setOpenNewProduct] = useState<boolean>(false)
-  const router: AppRouterInstance = useRouter()
   const [longArray, setLongArray] = useState<number>(0)
   const [openUpdatePrice, setOpenUpdatePrice] = useState<boolean>(false)
   const [openPrintProduct, setOpenPrintProduct] = useState<boolean>(false)
@@ -170,11 +164,11 @@ export default function FindProductSale({ onClickItem }: { onClickItem: (item: P
   );
 
   return (
-    <main style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+    <main className='flex flex-1 flex-col'>
       {
         <>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }} >
-            <div style={{ display: 'flex', width: '100%', padding: '0px 15px', alignItems: 'center' }}>
+          <div className='flex flex-1 flex-col items-center'>
+            <div className='flex w-full items-center px-[15px]'>
               <Search name='search' placeHolder={'Buscar productos'} type='text' value={search} onChange={searchProduct} /* onClickFilter={()=>setOpenModalFilter(true)} */ />
             </div>
             <FilterProduct open={openModalFilter} handleClose={() => setOpenModalFilter(false)}
@@ -183,7 +177,7 @@ export default function FindProductSale({ onClickItem }: { onClickItem: (item: P
               selectBrand={(item: CBP) => setActiveBrand(prevData => item)}
               selectProvider={(item: CBP) => setActiveProvider(prevData => item)}
             />
-            <ListProduct>
+            <ul className='flex max-h-[75vh] w-full flex-1 flex-col overflow-scroll px-[15px]'>
               {
                 search !== '' || activeBrand._id !== 1 || activeCategorie._id !== 1 || activeProvider._id !== 1 ?
                   dataSearch.length !== 0 ?
@@ -204,9 +198,9 @@ export default function FindProductSale({ onClickItem }: { onClickItem: (item: P
               {
                 search !== '' || activeBrand._id !== 1 || activeCategorie._id !== 1 || activeProvider._id !== 1 ?
                   <></> :
-                  <li style={{ listStyle: 'none', padding: 0, margin: 0, minHeight: '1px' }} ref={lastElementRef}></li>
+                  <li className="list-none p-0 m-0 min-h-[1px]" ref={lastElementRef}></li>
               }
-            </ListProduct>
+            </ul>
           </div>
           {
             (openModalProduct && selectProduct) &&
@@ -238,14 +232,3 @@ export default function FindProductSale({ onClickItem }: { onClickItem: (item: P
     </main>
   )
 }
-
-const ListProduct = styled.ul`
-  display: flex;
-  flex: 1;
-  width: 100%;
-  flex-direction: column;
-  padding: 0 15px;
-  overflow: scroll;
-  max-height: 75vh;
-`
-

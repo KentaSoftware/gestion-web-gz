@@ -1,11 +1,9 @@
 'use client';
 
-import React from 'react';
 import { useSelector } from 'react-redux';
-import styled from 'styled-components';
 import { getItemLinks } from '@/redux/purchaseDocSlice';
 import { LinkingStatus } from '@/interfaces/purchaseDoc.interface';
-import { MdCheckCircle, MdRadioButtonUnchecked } from 'react-icons/md';
+import { CheckCircle, Circle } from 'lucide-react';
 
 export default function ProgressIndicator() {
   const itemLinks = useSelector(getItemLinks);
@@ -20,100 +18,51 @@ export default function ProgressIndicator() {
   const isComplete = resolvedItems === totalItems && totalItems > 0;
   
   return (
-    <Card>
-      <Header>
-        <Title>
-          {isComplete ? <MdCheckCircle size={24} color="#4CAF50" /> : <MdRadioButtonUnchecked size={24} color="#999" />}
+    <div className='rounded-xl bg-surface-base p-6 shadow-sm'>
+      <div className='mb-4 flex flex-col items-start gap-2 md:flex-row md:items-center md:justify-between md:gap-0'>
+        <h3
+          className='m-0 flex items-center gap-2 text-lg font-semibold text-text-primary'
+        >
+          {isComplete ? (
+            <CheckCircle size={24} className="text-state-success" aria-hidden="true" />
+          ) : (
+            <Circle size={24} className="text-text-muted" aria-hidden="true" />
+          )}
           Progreso de Vinculación
-        </Title>
-        <Stats>
-          <Stat complete={isComplete}>
+        </h3>
+        <div className='flex gap-4'>
+          <span
+            className='text-base font-semibold'
+            style={{ color: isComplete ? 'var(--color-state-success)' : 'var(--color-text-secondary)' }}
+          >
             {resolvedItems} / {totalItems} ítems vinculados
-          </Stat>
-        </Stats>
-      </Header>
+          </span>
+        </div>
+      </div>
       
-      <ProgressBar>
-        <ProgressFill width={percentage} complete={isComplete} />
-      </ProgressBar>
+      <div
+        className='h-3 w-full overflow-hidden rounded-md bg-background-subtle'
+      >
+        <div
+          className='h-full transition-[width,background] duration-300 ease-in-out'
+          style={{
+            width: `${percentage}%`,
+            backgroundColor: isComplete ? 'var(--color-state-success)' : 'var(--color-brand-accent)',
+          }}
+        />
+      </div>
       
       {!isComplete && totalItems > 0 && (
-        <Hint>Vincula todos los ítems para poder confirmar la compra</Hint>
+        <p className='mb-0 mt-3 text-sm text-text-secondary'>
+          Vincula todos los ítems para poder confirmar la compra
+        </p>
       )}
       
       {isComplete && (
-        <SuccessMessage>¡Todos los ítems están vinculados!</SuccessMessage>
+        <p className='mb-0 mt-3 text-sm font-semibold text-state-success'>
+          ¡Todos los ítems están vinculados!
+        </p>
       )}
-    </Card>
+    </div>
   );
 }
-
-// Styled Components
-const Card = styled.div`
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-`;
-
-const Header = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  
-  @media (max-width: 768px) {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-`;
-
-const Title = styled.h3`
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`;
-
-const Stats = styled.div`
-  display: flex;
-  gap: 16px;
-`;
-
-const Stat = styled.span<{ complete?: boolean }>`
-  font-size: 16px;
-  font-weight: 600;
-  color: ${props => props.complete ? '#4CAF50' : '#666'};
-`;
-
-const ProgressBar = styled.div`
-  width: 100%;
-  height: 12px;
-  background: #e0e0e0;
-  border-radius: 6px;
-  overflow: hidden;
-`;
-
-const ProgressFill = styled.div<{ width: number; complete: boolean }>`
-  height: 100%;
-  width: ${props => props.width}%;
-  background: ${props => props.complete ? '#4CAF50' : '#FA9B50'};
-  transition: width 0.3s ease, background 0.3s ease;
-`;
-
-const Hint = styled.p`
-  font-size: 14px;
-  color: #666;
-  margin: 12px 0 0;
-`;
-
-const SuccessMessage = styled.p`
-  font-size: 14px;
-  color: #4CAF50;
-  font-weight: 600;
-  margin: 12px 0 0;
-`;

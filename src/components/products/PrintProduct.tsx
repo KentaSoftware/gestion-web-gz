@@ -1,20 +1,13 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect, useState } from 'react'
-import styled from 'styled-components';
+import { useEffect, useState } from 'react'
 import apiClient from '@/utils/client';
 import useLocalStorage from '@/hooks/useLocalStorage';
-import Button from '../Button';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import Modal from '../Modal';
-import ItemsProducts from './ItemsProducts';
-import Logo from '../Logo';
-import { getLoading, setLoading } from '@/redux/loadingSlice';
-import { useSelector } from 'react-redux';
+import { setLoading } from '@/redux/loadingSlice';
 import { useAppDispatch } from '@/redux/hook';
-import { Product } from '@/interfaces/product.interface';
-import ButtonUI from '../ButtonUI';
-import SimpleCheckbox from '../SimpleCheckbox';
+import Button from '../Button';
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 interface CBP {
   _id: (string | number) 
@@ -57,32 +50,42 @@ export default function PrintProduct({open, handleClose}:{open: boolean, handleC
 
   return (
     <Modal open={open} eClose={handleClose} title='Imprimir productos' width='60%' height='auto' >
-        <Title>Categorias :</Title>
-        <div style={{display: 'flex', overflowX: 'scroll'}} >
+        <h2 className="font-body text-lg font-semibold text-text-primary max-[500px]:text-body">Categorias :</h2>
+        <div className="flex overflow-x-scroll" >
           {
-            categorie.map((item: CBP, index: number)=><ItemCategorie key={index} $active={selectCategorie.find(elem=>elem._id === item._id) ? true : false} 
-              onClick={()=>{
-                setSelectCategorie((prevData: CBP[])=>{
-                  if (item._id !== 0) {
-                    let clearPrev = prevData.filter((itemPrev)=>itemPrev._id !== 0 && itemPrev._id !== item._id)
+            categorie.map((item: CBP, index: number) => {
+              const isActive = selectCategorie.some(elem => elem._id === item._id)
+
+              return <button key={index} type="button" className={`m-[15px] cursor-pointer rounded-md border-2 px-[15px] py-[5px] font-body text-sm transition-colors ${isActive ? 'border-brand-primary bg-brand-primary text-text-inverse' : 'border-border-subtle bg-surface-base text-text-primary hover:border-brand-primary hover:bg-brand-primary hover:text-text-inverse'}`}
+               onClick={()=>{
+                 setSelectCategorie((prevData: CBP[])=>{
+                   if (item._id !== 0) {
+                     let clearPrev = prevData.filter((itemPrev)=>itemPrev._id !== 0 && itemPrev._id !== item._id)
                     return [...clearPrev, item]
                   }
                   return [item]
                   
-                })
-              }}
-            >
-              {item.descripcion}
-            </ItemCategorie>)
+                 })
+               }}
+             >
+               {item.descripcion}
+            </button>
+            })
           }
         </div>
-        <Title>Tipo de precio :</Title>
-        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'start', marginLeft: 15}}>
-          <SimpleCheckbox text='Precio unitario' isChecked={isPrecioUnitario} toggleCheckbox={()=>setIsPrecioUnitario(!isPrecioUnitario)} />
-          <SimpleCheckbox text='Precio descuento' isChecked={!isPrecioUnitario} toggleCheckbox={()=>setIsPrecioUnitario(!isPrecioUnitario)} />
+        <h2 className="font-body text-lg font-semibold text-text-primary max-[500px]:text-body">Tipo de precio :</h2>
+        <div className="ml-[15px] flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Checkbox id="precio-unitario" checked={isPrecioUnitario} onCheckedChange={()=>setIsPrecioUnitario(!isPrecioUnitario)} />
+            <Label htmlFor="precio-unitario" className="cursor-pointer">Precio unitario</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="precio-descuento" checked={!isPrecioUnitario} onCheckedChange={()=>setIsPrecioUnitario(!isPrecioUnitario)} />
+            <Label htmlFor="precio-descuento" className="cursor-pointer">Precio descuento</Label>
+          </div>
         </div>
-        <div style={{display: 'flex', justifyContent: 'center', marginBottom: 15}} >
-          <ButtonUI label='Imprimir' onClick={()=>{
+        <div className="mb-[15px] flex justify-center" >
+          <Button text='Imprimir' onClick={()=>{
             dispatch(setLoading(true))
             let filterCategorie = selectCategorie.map(item=>item._id !== 0 && item.descripcion)
             apiClient.post(`/product/print/print`, {categories: filterCategorie[0] !== false ? filterCategorie : undefined, isPrecioUnitario: isPrecioUnitario}, { responseType: 'blob',
@@ -115,27 +118,3 @@ export default function PrintProduct({open, handleClose}:{open: boolean, handleC
     </Modal>
   );
 }
-
-const ItemCategorie = styled.div <{$active: boolean}>`
-  cursor: pointer;
-  padding: 5px 15px;
-  border: 1px solid #d9d9d9;
-  margin: 15px;
-  border-radius: 5px;
-  color: ${({ $active }) => ($active ? '#fff' : '#black')};
-  background-color: ${({ $active }) => ($active ? '#3764A0' : '#fff')};
-  border: ${({ $active }) => ($active ? '2px solid #fff' : '2px solid #d9d9d9')};
-  &:hover {
-    color: ${({ $active }) => (!$active ? '#fff' : 'none')};
-    background-color: ${({ $active }) => (!$active ? '#3764A0' : 'none')};
-    border: ${({ $active }) => (!$active ? '2px solid #fff ' : 'none')};
-  }
-`
-
-const Title = styled.h2`
-  font-size: 18px;
-  color: #252525;
-  @media only screen and (max-width: 500px) {
-    font-size: 16px;
-  }
-`;

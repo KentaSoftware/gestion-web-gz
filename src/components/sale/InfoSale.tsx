@@ -1,28 +1,19 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect, useState } from 'react'
-import styled, { CSSProperties } from 'styled-components';
-import Table from '../Table';
+import { useEffect, useState } from 'react';
+import DataTable from '../DataTable';
+import type { DataColumn } from '../DataTable';
 import apiClient from '@/utils/client';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import Logo from '../Logo';
 import Modal from '../Modal';
 import { Types } from 'mongoose';
-import { ItemSale, Sale } from '@/interfaces/sale.interface';
+import { ExtendItemSale, ItemSale, Sale } from '@/interfaces/sale.interface';
 import { useDispatch } from 'react-redux';
 import { setLoading } from '@/redux/loadingSlice';
 
 interface ResponseSale {
   r: Sale
   itemsSale: ItemSale[]
-}
-
-interface Column {
-  label: string
-  field: string
-  width: string
-  align?: CSSProperties['textAlign']
-  price?: boolean
-  date?: boolean
 }
 
 export default function InfoSale({open, handleClose, id}:{open:boolean, handleClose: ()=>void, id:string | Types.ObjectId | undefined}) {
@@ -53,20 +44,18 @@ export default function InfoSale({open, handleClose, id}:{open:boolean, handleCl
         {
           sale && 
           <>
-          <Logo/>
-          <div>
-              <Tag>CLIENTE : {sale.r.cliente}</Tag>
-              <Tag>FECHA : {sale.r.createdAt.split("T")[0]}</Tag>
+            <Logo/>
+            <div>
+              <h5 className="my-2.5 px-[15px] text-base font-medium text-text-primary max-md:text-sm">CLIENTE : {sale.r.cliente}</h5>
+              <h5 className="my-2.5 px-[15px] text-base font-medium text-text-primary max-md:text-sm">FECHA : {sale.r.createdAt.split("T")[0]}</h5>
             </div>
             <div>
-              <Table
-                data={sale.itemsSale}
+              <DataTable
+                data={sale.itemsSale as ExtendItemSale[]}
                 columns={columns}
-                maxHeight={false}
-                onClick={() => ''}
               />
             </div>
-            <Tag style={{ textAlign: 'end' }}>TOTAL : $ {sale.r.total}</Tag> 
+            <h5 className="my-2.5 px-[15px] text-right text-base font-medium text-text-primary max-md:text-sm">TOTAL : $ {sale.r.total}</h5>
           </>
         }
         </div>
@@ -75,21 +64,10 @@ export default function InfoSale({open, handleClose, id}:{open:boolean, handleCl
   );
 }
 
-const columns: Column[] = [
-  { label: 'Producto', field: 'descripcion', width: '50%' },
-  { label: 'Cantidad', field: 'cantidad', width: '20%', align: 'center' },
-  { label: 'Total', field: 'total', width: '30%', align: 'center', price: true },
+const formatPrice = (value: unknown): string => `$ ${String(value ?? '')}`
+
+const columns: DataColumn<ExtendItemSale>[] = [
+  { key: 'descripcion', header: 'Producto', width: '50%' },
+  { key: 'cantidad', header: 'Cantidad', width: '20%', align: 'center' },
+  { key: 'total', header: 'Total', width: '30%', align: 'center', render: (v) => formatPrice(v) },
 ];
-
-
-
-const Tag = styled.h5`
-  font-size: 16px;
-  padding: 0 15px;
-  font-weight: 500;
-  margin: 10px 0;
-  color: ${process.env.TEXT_COLOR};
-  @media only screen and (max-width: 768px) {
-    font-size: 14px;
-  }
-`;
