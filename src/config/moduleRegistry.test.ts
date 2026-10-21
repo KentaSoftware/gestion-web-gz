@@ -31,6 +31,15 @@ describe('MODULE_REGISTRY', () => {
     })
   })
 
+  it('registers Finanzas with the current refund permission contract', () => {
+    const finance = MODULE_REGISTRY.find((entry) => entry.id === 'finance')
+    expect(finance).toMatchObject({
+      href: '/finance',
+      requiredPermissions: [Permission.REFUND_SALE],
+      gate: 'finance',
+    })
+  })
+
   it('keeps a Repartidor read-only while allowing legacy read navigation', () => {
     const home = MODULE_REGISTRY.find((entry) => entry.id === 'home')
     const stock = MODULE_REGISTRY.find((entry) => entry.id === 'stock')
