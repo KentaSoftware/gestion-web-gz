@@ -8,7 +8,7 @@ const { useAppSelector } = vi.hoisted(() => ({
 
 vi.mock('@/redux/hook', () => ({ useAppSelector }))
 vi.mock('@/config/moduleRegistry', () => ({
-  DEFAULT_MODULE_GATES: { stock: false, finance: true, simulation: false },
+  DEFAULT_MODULE_GATES: { stock: false, finance: false, simulation: false },
 }))
 
 import { useSessionAccess } from './useSessionAccess'
