@@ -26,9 +26,9 @@ GitHub reports PR #5 as conflicting because `main` advanced after the finance br
 
 ## Checklist
 
-- [ ] PR-5-1 — Reproduce the merge against current `origin/main` and resolve all six conflicts.
-- [ ] PR-5-2 — Run focused frontend checks, inspect the final diff, and confirm no conflict markers remain.
-- [ ] PR-5-3 — Create a conventional conflict-resolution commit and push `feat/finance-module`.
+- [x] PR-5-1 — Reproduce the merge against current `origin/main` and resolve all six conflicts.
+- [x] PR-5-2 — Run focused frontend checks, inspect the final diff, and confirm no conflict markers remain.
+- [x] PR-5-3 — Create a conventional conflict-resolution commit and push `feat/finance-module`.
 
 ## Acceptance criteria
 
@@ -53,6 +53,17 @@ GitHub reports PR #5 as conflicting because `main` advanced after the finance br
 
 ## Progress
 
-Status: in progress
+Status: complete with verification blockers recorded
 
-Next step: resolve PR #5 merge conflicts in the isolated worktree.
+## Verification evidence
+
+- Merge commit: `dd098b8f22a59bcce4898794d8c86c9a49330666` (`chore(frontend): resolve PR 5 merge conflicts`).
+- `npm install --package-lock-only --ignore-scripts --offline`: passed.
+- `git diff --check`: passed.
+- Tracked conflict-marker scan: passed.
+- `git ls-files -u`: no unmerged paths.
+- `npm run lint`, `npm test`, `npm run tsc`, and `npm run build`: unavailable because `next`, `vitest`, and `tsc` executables are missing from the worktree.
+- Independent verification: partial; Finance navigation uses `REFUND_SALE` while `src/app/finance/page.tsx` still guards direct access with `READ_CASHFLOW`. This is a separate authorization-contract issue, not an automatic scope expansion.
+- GitHub PR #5: head `dd098b8f22a59bcce4898794d8c86c9a49330666`, `mergeable: MERGEABLE`, `mergeStateStatus: UNSTABLE`, Vercel pending.
+
+Next step: install dependencies and align the Finance permission contract as a separately authorized fix before treating the PR as fully functionally verified.
