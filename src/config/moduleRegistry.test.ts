@@ -18,24 +18,23 @@ const repartidorAccess: SessionAccess = {
 }
 
 describe('MODULE_REGISTRY', () => {
-  it('keeps Phase 0 module flags and gates disabled by default', () => {
-    expect(MODULE_FLAGS).toEqual({
-      stock: false,
-      finance: false,
-      simulation: false,
-    })
+  it('keeps Phase 0 stock/simulation gated off; finance gate open for this iteration', () => {
+    expect(MODULE_FLAGS.stock).toBe(false)
+    expect(MODULE_FLAGS.simulation).toBe(false)
+    // finance flag still comes from NEXT_PUBLIC_FINANCE_ENABLED (false in unit tests unless set)
+    expect(typeof MODULE_FLAGS.finance).toBe('boolean')
     expect(DEFAULT_MODULE_GATES).toEqual({
       stock: false,
-      finance: false,
+      finance: true,
       simulation: false,
     })
   })
 
-  it('registers Finanzas with the current refund permission contract', () => {
+  it('registers Finanzas with read_cashflow (RBAC fino diferido)', () => {
     const finance = MODULE_REGISTRY.find((entry) => entry.id === 'finance')
     expect(finance).toMatchObject({
       href: '/finance',
-      requiredPermissions: [Permission.REFUND_SALE],
+      requiredPermissions: [Permission.READ_CASHFLOW],
       gate: 'finance',
     })
   })
