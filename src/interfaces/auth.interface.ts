@@ -28,6 +28,11 @@ export enum Permission {
   // Flujo de Caja
   READ_CASHFLOW = 'read_cashflow',
   CONFIGURE_CASHFLOW = 'configure_cashflow',
+
+  // Compras
+  READ_BUY = 'read_buy',
+  CREATE_BUY = 'create_buy',
+  UPDATE_BUY = 'update_buy',
   
   // Usuarios (para futuras expansiones)
   CREATE_USER = 'create_user',
