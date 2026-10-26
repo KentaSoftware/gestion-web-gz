@@ -24,6 +24,10 @@ export enum Permission {
   READ_EXPENSE = 'read_expense',
   UPDATE_EXPENSE = 'update_expense',
   DELETE_EXPENSE = 'delete_expense',
+
+  // Flujo de Caja
+  READ_CASHFLOW = 'read_cashflow',
+  CONFIGURE_CASHFLOW = 'configure_cashflow',
   
   // Usuarios (para futuras expansiones)
   CREATE_USER = 'create_user',
