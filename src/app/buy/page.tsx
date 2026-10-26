@@ -8,7 +8,9 @@ import InfoSale from '@/components/sale/InfoSale'
 import ModalPrintSale from '@/components/sale/ModalPrintSale'
 import Search from '@/components/Search'
 import useLocalStorage from '@/hooks/useLocalStorage'
+import { usePermission } from '@/hooks/usePermission'
 import { Buy } from '@/interfaces/buy.interface'
+import { Permission } from '@/interfaces/auth.interface'
 import { useAppDispatch } from '@/redux/hook'
 import { getLoading, setLoading } from '@/redux/loadingSlice'
 import { getUser, setUser } from '@/redux/userSlice'
@@ -29,6 +31,8 @@ export default function BuyScreen() {
     const [longArray, setLongArray] = useState<number>(0)
     const [dataSearch, setDataSearch] = useState<Buy[]>([])
     const user = useSelector(getUser)
+    const { hasPermission } = usePermission()
+    const canCreateBuy = hasPermission(Permission.CREATE_BUY)
     const [valueStorage , setValue] = useLocalStorage("user", "")
     const dispatch = useAppDispatch();
     const router: AppRouterInstance = useRouter()
@@ -116,6 +120,7 @@ export default function BuyScreen() {
         <ContainerSearch>
           <Search name='search' placeHolder={'Buscar compras'} type='text' value={search} onChange={(e:ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} />
           <ButtonUI label='NUEVO'  onClick={()=>{}} to='/buy/newBuy'/>
+          {canCreateBuy && <ButtonUI label='CARGA INTELIGENTE' onClick={()=>{}} to='/buy/smart-upload'/>}
         </ContainerSearch>
         <ListSale>
             {

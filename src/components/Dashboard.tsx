@@ -12,6 +12,8 @@ import { BiMenu } from 'react-icons/bi';
 import { MdMenuOpen } from 'react-icons/md';
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { UserWithToken } from '@/interfaces/auth.interface';
+import { Permission } from '@/interfaces/auth.interface';
+import { usePermission } from '@/hooks/usePermission';
 import { setLoading } from '@/redux/loadingSlice';
 import { MdExitToApp } from "react-icons/md";
 import { RandomAvatar } from "react-random-avatars";
@@ -23,15 +25,26 @@ import Burger from './Burger';
 
 export default function Dashboard({children}: {children: ReactNode} ) {
 
-    const itemsLi = [
+    const { hasPermission } = usePermission()
+
+    interface MenuItem {
+        path: string
+        name: string
+        icon: ReactNode
+        permission?: Permission
+    }
+
+    const itemsLi: MenuItem[] = [
         {path: 'HOME', name: 'INICIO', icon: <GoHome /> },
         {path: 'PRODUCT', name: 'PRODUCTOS', icon: <GoPackage />},
         {path: 'SALE', name: 'VENTAS', icon: <AiOutlineDollar />},
         {path: 'BUY', name: 'COMPRAS', icon: <LiaClipboardListSolid />},
-        {path: 'BUY/SMART-UPLOAD', name: 'CARGA INTELIGENTE', icon: <MdUploadFile />},
+        {path: 'BUY/SMART-UPLOAD', name: 'CARGA INTELIGENTE', icon: <MdUploadFile />, permission: Permission.CREATE_BUY},
         {path: 'EXPENSE', name: 'EGRESOS', icon: <MdOutlineMoneyOff />},
         {path: 'CASHFLOW', name: 'FLUJO DE CAJA', icon: <MdShowChart />}
     ]
+
+    const visibleItems = itemsLi.filter(item => !item.permission || hasPermission(item.permission))
     const pathname = usePathname()
     let {ancho, alto} = useResize()
 
@@ -122,7 +135,7 @@ export default function Dashboard({children}: {children: ReactNode} ) {
                         </WrapperUserContainer>
                         <ul>
                             {
-                                itemsLi.map((item, index)=>{
+                                visibleItems.map((item, index)=>{
                                     return(
                                     <Link href={"/"+(item.path.toLowerCase().split(' ').join(''))} style={{textDecoration: 'none'}}  key={index}> 
                                         <ItemLi $isSelect={pathname === "/"+(item.path.toLowerCase().split(' ').join(''))}>
@@ -178,7 +191,7 @@ export default function Dashboard({children}: {children: ReactNode} ) {
                     </WrapperUserContainer>
                     <ul>
                         {
-                            itemsLi.map((item, index)=>{
+                            visibleItems.map((item, index)=>{
                                 return(
                                 <Link href={"/"+(item.path.toLowerCase().split(' ').join(''))} style={{textDecoration: 'none'}}  key={index} onClick={()=>setOpenMenu(false)}> 
                                     <ItemLi $isSelect={pathname === "/"+(item.path.toLowerCase().split(' ').join(''))}>
