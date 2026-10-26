@@ -14,14 +14,17 @@ import {
   getCashflowError,
   getCashflowLoading,
   getCashflowSummary,
+  getCashflowTimeline,
   setCashflowError,
   setCashflowLoading,
   setConfig,
   setSummary,
+  setTimeline,
 } from '@/redux/cashflowSlice';
 import PeriodSelector from '@/components/cashflow/PeriodSelector';
 import SummaryCards from '@/components/cashflow/SummaryCards';
 import ConfigPanel from '@/components/cashflow/ConfigPanel';
+import CashflowTimeline from '@/components/cashflow/CashflowTimeline';
 
 const toInputDate = (date: Date): string => format(date, 'yyyy-MM-dd');
 
@@ -31,6 +34,7 @@ function CashflowScreen() {
 
   const summary = useSelector(getCashflowSummary);
   const config = useSelector(getCashflowConfig);
+  const timeline = useSelector(getCashflowTimeline);
   const loading = useSelector(getCashflowLoading);
   const error = useSelector(getCashflowError);
 
@@ -55,8 +59,13 @@ function CashflowScreen() {
     dispatch(setCashflowError(null));
 
     try {
-      const data = await cashflowService.getSummary({ startDate, endDate });
-      dispatch(setSummary(data));
+      const [summaryData, timelineData] = await Promise.all([
+        cashflowService.getSummary({ startDate, endDate }),
+        cashflowService.getTimeline({ startDate, endDate }),
+      ]);
+
+      dispatch(setSummary(summaryData));
+      dispatch(setTimeline(timelineData));
     } catch (requestError: unknown) {
       dispatch(setCashflowError(resolveErrorMessage(requestError)));
     } finally {
@@ -143,6 +152,11 @@ function CashflowScreen() {
         saving={savingConfig}
         error={configError}
         onSave={handleSaveConfig}
+      />
+
+      <CashflowTimeline
+        timeline={timeline}
+        openingBalance={config?.openingBalance ?? summary?.openingBalance ?? 0}
       />
 
       {periodWithoutMovements && (
