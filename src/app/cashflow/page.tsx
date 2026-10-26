@@ -8,29 +8,39 @@ import { useAppDispatch } from '@/redux/hook';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Permission } from '@/interfaces/auth.interface';
 import { cashflowService } from '@/services/cashflow.service';
+import { usePermission } from '@/hooks/usePermission';
 import {
+  getCashflowConfig,
   getCashflowError,
   getCashflowLoading,
   getCashflowSummary,
   setCashflowError,
   setCashflowLoading,
+  setConfig,
   setSummary,
 } from '@/redux/cashflowSlice';
 import PeriodSelector from '@/components/cashflow/PeriodSelector';
 import SummaryCards from '@/components/cashflow/SummaryCards';
+import ConfigPanel from '@/components/cashflow/ConfigPanel';
 
 const toInputDate = (date: Date): string => format(date, 'yyyy-MM-dd');
 
 function CashflowScreen() {
   const dispatch = useAppDispatch();
+  const { hasPermission } = usePermission();
 
   const summary = useSelector(getCashflowSummary);
+  const config = useSelector(getCashflowConfig);
   const loading = useSelector(getCashflowLoading);
   const error = useSelector(getCashflowError);
+
+  const canConfigure = hasPermission(Permission.CONFIGURE_CASHFLOW);
 
   const [startDate, setStartDate] = useState<string>(() => toInputDate(startOfMonth(new Date())));
   const [endDate, setEndDate] = useState<string>(() => toInputDate(endOfMonth(new Date())));
   const [periodError, setPeriodError] = useState<string | null>(null);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   const isValidPeriod = Boolean(startDate) && Boolean(endDate) && startDate <= endDate;
 
@@ -57,6 +67,34 @@ function CashflowScreen() {
   useEffect(() => {
     void loadSummary();
   }, [loadSummary]);
+
+  const loadConfig = useCallback(async () => {
+    try {
+      const data = await cashflowService.getConfig();
+      dispatch(setConfig(data));
+    } catch (requestError: unknown) {
+      setConfigError(resolveErrorMessage(requestError));
+    }
+  }, [dispatch]);
+
+  useEffect(() => {
+    void loadConfig();
+  }, [loadConfig]);
+
+  const handleSaveConfig = async (openingBalance: number) => {
+    setConfigError(null);
+    setSavingConfig(true);
+
+    try {
+      const updated = await cashflowService.updateConfig(openingBalance);
+      dispatch(setConfig(updated));
+      await loadSummary();
+    } catch (requestError: unknown) {
+      setConfigError(resolveErrorMessage(requestError));
+    } finally {
+      setSavingConfig(false);
+    }
+  };
 
   const handlePeriodChange = (nextStart: string, nextEnd: string) => {
     setStartDate(nextStart);
@@ -98,6 +136,14 @@ function CashflowScreen() {
       )}
 
       <SummaryCards summary={summary} loading={loading} />
+
+      <ConfigPanel
+        openingBalance={config ? config.openingBalance : null}
+        canEdit={canConfigure}
+        saving={savingConfig}
+        error={configError}
+        onSave={handleSaveConfig}
+      />
 
       {periodWithoutMovements && (
         <EmptyNotice>No hay movimientos registrados en el período seleccionado.</EmptyNotice>
