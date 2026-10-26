@@ -9,6 +9,7 @@ import {
   getPurchaseDocState,
   getAnalysis,
   getItemLinks,
+  getItemEdits,
   startConfirm,
   confirmSuccess,
   confirmFailure,
@@ -17,6 +18,8 @@ import {
 import { purchaseDocService } from '@/services/purchaseDoc.service';
 import { setAlert } from '@/redux/alertSlice';
 import { LinkingStatus, DuplicateDecision } from '@/interfaces/purchaseDoc.interface';
+import { resolveItemValues, sumSubtasks, validateItemValues } from '@/utils/purchaseDocItems';
+import { formatCurrency } from '@/utils/validators';
 import ProgressIndicator from './ProgressIndicator';
 import HeaderCard from './HeaderCard';
 import ItemsReviewTable from './ItemsReviewTable';
@@ -30,6 +33,7 @@ export default function ReviewStep() {
   const { draftId, headerEdits, confirmLoading, duplicateCheck, duplicateDecision } = useSelector(getPurchaseDocState);
   const analysis = useSelector(getAnalysis);
   const itemLinks = useSelector(getItemLinks);
+  const itemEdits = useSelector(getItemEdits);
   
   if (!analysis) {
     return <ErrorContainer>No hay datos de análisis</ErrorContainer>;
@@ -43,8 +47,28 @@ export default function ReviewStep() {
   
   const allItemsResolved = pendingItems.length === 0;
   const hasDuplicateWarning = duplicateCheck && duplicateCheck.isDuplicate;
-  
-  const canConfirm = allItemsResolved && (!hasDuplicateWarning || duplicateDecision !== null);
+
+  const invalidItems = analysis.items
+    .map((item, index) => ({
+      index: index + 1,
+      lineId: item.lineId,
+      error: validateItemValues(item, itemEdits[item.lineId]),
+    }))
+    .filter(entry => entry.error !== null);
+
+  const itemsSubtotal = sumSubtasks(analysis.items, itemEdits);
+  const headerTotal =
+    headerEdits.total !== undefined && headerEdits.total !== null
+      ? Number(headerEdits.total)
+      : Number(analysis.header.total);
+  const totalMismatch =
+    Number.isFinite(headerTotal) && Math.abs(itemsSubtotal - headerTotal) > 0.01;
+
+  const canConfirm =
+    allItemsResolved &&
+    invalidItems.length === 0 &&
+    Number.isFinite(itemsSubtotal) &&
+    (!hasDuplicateWarning || duplicateDecision !== null);
   
   const handleConfirm = async () => {
     if (!canConfirm || !draftId) return;
@@ -60,15 +84,26 @@ export default function ReviewStep() {
     try {
       // Construir el payload de confirmación
       const items = Object.entries(itemLinks).map(([lineId, link]) => {
+        const analysisItem = analysis.items.find(item => item.lineId === lineId);
+        const values = analysisItem
+          ? resolveItemValues(analysisItem, itemEdits[lineId])
+          : { quantity: 0, unitPrice: 0, subtotal: 0 };
+
         if (link.status === LinkingStatus.LINKED && link.chosenProductId) {
           return {
             lineId,
             chosenProductId: link.chosenProductId,
+            quantity: values.quantity,
+            unitPrice: values.unitPrice,
+            subtotal: values.subtotal,
           };
         } else if (link.status === LinkingStatus.NEW_PRODUCT && link.newProduct) {
           return {
             lineId,
             newProduct: link.newProduct,
+            quantity: values.quantity,
+            unitPrice: values.unitPrice,
+            subtotal: values.subtotal,
           };
         }
         throw new Error(`Item ${lineId} no tiene vinculación válida`);
@@ -122,6 +157,28 @@ export default function ReviewStep() {
           <MdWarning size={24} />
           <WarningText>
             Se detectó un posible duplicado. Revisa la advertencia antes de confirmar.
+          </WarningText>
+        </WarningBox>
+      )}
+
+      {invalidItems.length > 0 && (
+        <WarningBox>
+          <MdWarning size={24} />
+          <WarningText>
+            {invalidItems.length === 1
+              ? `Línea ${invalidItems[0].index}: ${invalidItems[0].error}.`
+              : `Hay ${invalidItems.length} ítems con valores inválidos (línea ${invalidItems[0].index}: ${invalidItems[0].error}).`}
+          </WarningText>
+        </WarningBox>
+      )}
+
+      {totalMismatch && (
+        <WarningBox warning>
+          <MdWarning size={24} />
+          <WarningText>
+            La suma de los ítems ({formatCurrency(itemsSubtotal)}) no coincide con el total del
+            comprobante ({formatCurrency(headerTotal)}). Diferencia:{' '}
+            {formatCurrency(Math.abs(itemsSubtotal - headerTotal))}. Podés continuar.
           </WarningText>
         </WarningBox>
       )}

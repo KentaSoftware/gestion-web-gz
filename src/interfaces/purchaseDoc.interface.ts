@@ -252,6 +252,20 @@ export interface ConfirmItem {
   lineId: string;
   chosenProductId?: string;  // Producto existente seleccionado
   newProduct?: NewProductData; // Producto a crear
+  quantity?: number;         // Cantidad corregida por el usuario
+  unitPrice?: number;        // Precio unitario corregido por el usuario
+  subtotal?: number;         // quantity * unitPrice, recalculado en el cliente
+}
+
+/**
+ * Ediciones del usuario sobre un ítem detectado por OCR.
+ * Los valores numéricos se guardan como texto para respetar lo que tipea el usuario;
+ * se parsean con `resolveItemValues` antes de enviarlos.
+ */
+export interface ItemEdit {
+  description?: string;  // Solo para re-buscar el producto; no se persiste
+  quantity?: string;
+  unitPrice?: string;
 }
 
 export interface NewProductData {
@@ -309,6 +323,7 @@ export interface PurchaseDocWizardState {
   // User edits
   headerEdits: Partial<HeaderEdits>;
   itemLinks: Record<string, ItemLink>; // lineId -> ItemLink
+  itemEdits: Record<string, ItemEdit>; // lineId -> ItemEdit
   
   // Duplicate handling
   duplicateCheck: DuplicateCheck | null;

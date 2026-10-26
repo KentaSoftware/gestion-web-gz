@@ -8,6 +8,7 @@ import {
   HeaderEdits,
   DuplicateDecision,
   NewProductData,
+  ItemEdit,
 } from '@/interfaces/purchaseDoc.interface';
 
 const initialState: PurchaseDocWizardState = {
@@ -24,6 +25,7 @@ const initialState: PurchaseDocWizardState = {
   
   headerEdits: {},
   itemLinks: {},
+  itemEdits: {},
   
   duplicateCheck: null,
   duplicateModalOpen: false,
@@ -78,6 +80,7 @@ const purchaseDocSlice = createSlice({
         };
       });
       state.itemLinks = itemLinks;
+      state.itemEdits = {};
       
       // Abrir modal de duplicado si aplica
       if (action.payload.analysis.possibleDuplicate.isDuplicate) {
@@ -123,6 +126,11 @@ const purchaseDocSlice = createSlice({
         status: LinkingStatus.PENDING,
       };
     },
+
+    setItemEdit: (state, action: PayloadAction<{ lineId: string; edit: ItemEdit }>) => {
+      const { lineId, edit } = action.payload;
+      state.itemEdits[lineId] = { ...state.itemEdits[lineId], ...edit };
+    },
     
     // ========== DUPLICATE MODAL ==========
     
@@ -162,6 +170,7 @@ const purchaseDocSlice = createSlice({
       state.draftId = null;
       state.analysis = null;
       state.itemLinks = {};
+      state.itemEdits = {};
       state.headerEdits = {};
       state.duplicateDecision = null;
       state.uploadError = null;
@@ -181,6 +190,7 @@ export const {
   selectProduct,
   setNewProduct,
   clearItemLink,
+  setItemEdit,
   setDuplicateModalOpen,
   setDuplicateDecision,
   startConfirm,
@@ -197,3 +207,4 @@ export const getPurchaseDocState = (state: { purchaseDoc: PurchaseDocWizardState
 export const getCurrentStep = (state: { purchaseDoc: PurchaseDocWizardState }) => state.purchaseDoc.currentStep;
 export const getAnalysis = (state: { purchaseDoc: PurchaseDocWizardState }) => state.purchaseDoc.analysis;
 export const getItemLinks = (state: { purchaseDoc: PurchaseDocWizardState }) => state.purchaseDoc.itemLinks;
+export const getItemEdits = (state: { purchaseDoc: PurchaseDocWizardState }) => state.purchaseDoc.itemEdits;

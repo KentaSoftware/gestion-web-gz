@@ -3,24 +3,38 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
 import styled from 'styled-components';
-import { getAnalysis, getItemLinks } from '@/redux/purchaseDocSlice';
+import { useAppDispatch } from '@/redux/hook';
+import {
+  getAnalysis,
+  getItemEdits,
+  getItemLinks,
+  setItemEdit,
+} from '@/redux/purchaseDocSlice';
 import { LinkingStatus } from '@/interfaces/purchaseDoc.interface';
 import ItemLinkingCell from './ItemLinkingCell';
 import { formatCurrency } from '@/utils/validators';
+import {
+  getRawQuantity,
+  getRawUnitPrice,
+  resolveItemValues,
+  validateItemValues,
+} from '@/utils/purchaseDocItems';
 import { MdCheckCircle, MdAddCircle, MdRadioButtonUnchecked } from 'react-icons/md';
 
 export default function ItemsReviewTable() {
+  const dispatch = useAppDispatch();
   const analysis = useSelector(getAnalysis);
   const itemLinks = useSelector(getItemLinks);
-  
+  const itemEdits = useSelector(getItemEdits);
+
   if (!analysis) return null;
-  
+
   const { items } = analysis;
-  
+
   const getStatusIcon = (lineId: string) => {
     const link = itemLinks[lineId];
     if (!link) return <MdRadioButtonUnchecked size={20} color="#999" />;
-    
+
     switch (link.status) {
       case LinkingStatus.LINKED:
         return <MdCheckCircle size={20} color="#4CAF50" />;
@@ -30,56 +44,110 @@ export default function ItemsReviewTable() {
         return <MdRadioButtonUnchecked size={20} color="#999" />;
     }
   };
-  
-  const calculateTotal = () => {
-    return items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
-  };
-  
+
+  const total = items.reduce(
+    (sum, item) => sum + resolveItemValues(item, itemEdits[item.lineId]).subtotal,
+    0
+  );
+
   return (
     <Card>
       <Header>
         <Title>Ítems del Comprobante</Title>
+        <Hint>Podés corregir cantidad y precio unitario detectados por el OCR.</Hint>
       </Header>
-      
+
       <TableContainer>
         <Table>
           <thead>
             <tr>
               <Th style={{ width: '40px' }}>Estado</Th>
-              <Th style={{ width: '60px' }}>#</Th>
-              <Th>Descripción Detectada</Th>
-              <Th style={{ width: '100px' }}>Cantidad</Th>
-              <Th style={{ width: '120px' }}>Precio Unit.</Th>
+              <Th style={{ width: '50px' }}>#</Th>
+              <Th>Descripción</Th>
+              <Th style={{ width: '110px' }}>Cantidad</Th>
+              <Th style={{ width: '140px' }}>Precio Unit.</Th>
               <Th style={{ width: '120px' }}>Subtotal</Th>
               <Th style={{ width: '300px' }}>Vinculación</Th>
             </tr>
           </thead>
           <tbody>
-            {items.map((item, index) => (
-              <Tr key={item.lineId}>
-                <Td center>
-                  {getStatusIcon(item.lineId)}
-                </Td>
-                <Td center>{index + 1}</Td>
-                <Td>
-                  <Description>{item.description || item.rawDescription}</Description>
-                  {item.descriptionConfidence && item.descriptionConfidence < 0.7 && (
-                    <LowConfidence>Baja confianza ({(item.descriptionConfidence * 100).toFixed(0)}%)</LowConfidence>
-                  )}
-                </Td>
-                <Td right>{item.quantity?.toFixed(2) || '-'}</Td>
-                <Td right>{item.unitPrice ? formatCurrency(item.unitPrice) : '-'}</Td>
-                <Td right bold>{item.subtotal ? formatCurrency(item.subtotal) : '-'}</Td>
-                <Td>
-                  <ItemLinkingCell lineId={item.lineId} item={item} />
-                </Td>
-              </Tr>
-            ))}
+            {items.map((item, index) => {
+              const edit = itemEdits[item.lineId];
+              const values = resolveItemValues(item, edit);
+              const rowError = validateItemValues(item, edit);
+              const description = edit?.description ?? item.description ?? item.rawDescription;
+
+              return (
+                <Tr key={item.lineId}>
+                  <Td center>{getStatusIcon(item.lineId)}</Td>
+                  <Td center>{index + 1}</Td>
+                  <Td>
+                    <TextInput
+                      value={description}
+                      aria-label={`Descripción del ítem ${index + 1}`}
+                      onChange={event =>
+                        dispatch(
+                          setItemEdit({
+                            lineId: item.lineId,
+                            edit: { description: event.target.value },
+                          })
+                        )
+                      }
+                    />
+                    {item.descriptionConfidence !== undefined && item.descriptionConfidence < 0.7 && (
+                      <LowConfidence>
+                        Baja confianza ({(item.descriptionConfidence * 100).toFixed(0)}%)
+                      </LowConfidence>
+                    )}
+                  </Td>
+                  <Td>
+                    <NumberInput
+                      inputMode="decimal"
+                      value={getRawQuantity(item, edit)}
+                      aria-label={`Cantidad del ítem ${index + 1}`}
+                      onChange={event =>
+                        dispatch(
+                          setItemEdit({
+                            lineId: item.lineId,
+                            edit: { quantity: event.target.value },
+                          })
+                        )
+                      }
+                    />
+                  </Td>
+                  <Td>
+                    <NumberInput
+                      inputMode="decimal"
+                      value={getRawUnitPrice(item, edit)}
+                      aria-label={`Precio unitario del ítem ${index + 1}`}
+                      onChange={event =>
+                        dispatch(
+                          setItemEdit({
+                            lineId: item.lineId,
+                            edit: { unitPrice: event.target.value },
+                          })
+                        )
+                      }
+                    />
+                  </Td>
+                  <Td right bold>{formatCurrency(values.subtotal)}</Td>
+                  <Td>
+                    <ItemLinkingCell
+                      lineId={item.lineId}
+                      item={{ ...item, description, rawDescription: description }}
+                    />
+                    {rowError && <RowError>{rowError}</RowError>}
+                  </Td>
+                </Tr>
+              );
+            })}
           </tbody>
           <tfoot>
             <tr>
-              <Th colSpan={5} style={{ textAlign: 'right' }}>Total</Th>
-              <Th style={{ textAlign: 'right' }}>{formatCurrency(calculateTotal())}</Th>
+              <Th colSpan={5} style={{ textAlign: 'right' }}>
+                Total
+              </Th>
+              <Th style={{ textAlign: 'right' }}>{formatCurrency(total)}</Th>
               <Th></Th>
             </tr>
           </tfoot>
@@ -99,6 +167,9 @@ const Card = styled.div`
 
 const Header = styled.div`
   margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 `;
 
 const Title = styled.h3`
@@ -106,6 +177,11 @@ const Title = styled.h3`
   font-weight: 600;
   color: #333;
   margin: 0;
+`;
+
+const Hint = styled.span`
+  font-size: 12px;
+  color: #888;
 `;
 
 const TableContainer = styled.div`
@@ -141,13 +217,46 @@ const Td = styled.td<{ center?: boolean; right?: boolean; bold?: boolean }>`
   vertical-align: top;
 `;
 
-const Description = styled.div`
+const TextInput = styled.input`
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
   color: #333;
-  margin-bottom: 4px;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: #2196f3;
+  }
+`;
+
+const NumberInput = styled.input`
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #333;
+  text-align: right;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: #2196f3;
+  }
 `;
 
 const LowConfidence = styled.div`
   font-size: 12px;
   color: #ff9800;
   font-style: italic;
+  margin-top: 4px;
+`;
+
+const RowError = styled.div`
+  font-size: 12px;
+  color: #c62828;
+  margin-top: 6px;
 `;
