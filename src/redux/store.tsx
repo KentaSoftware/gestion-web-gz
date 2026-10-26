@@ -6,6 +6,7 @@ import saleSlice from './saleSlice'
 import buySlice from './buySlice'
 import expenseSlice from './expenseSlice'
 import purchaseDocSlice from './purchaseDocSlice'
+import cashflowSlice from './cashflowSlice'
 
 export const store = configureStore({
     reducer: {
@@ -16,6 +17,7 @@ export const store = configureStore({
         buy: buySlice,
         expense: expenseSlice,
         purchaseDoc: purchaseDocSlice,
+        cashflow: cashflowSlice,
     },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware({
