@@ -18,7 +18,7 @@ import { RandomAvatar } from "react-random-avatars";
 import { GoHome, GoPackage } from "react-icons/go";
 import { AiOutlineDollar } from 'react-icons/ai';
 import { LiaClipboardListSolid } from "react-icons/lia";
-import { MdOutlineMoneyOff, MdUploadFile } from "react-icons/md";
+import { MdOutlineMoneyOff, MdUploadFile, MdShowChart } from "react-icons/md";
 import Burger from './Burger';
 
 export default function Dashboard({children}: {children: ReactNode} ) {
@@ -29,7 +29,8 @@ export default function Dashboard({children}: {children: ReactNode} ) {
         {path: 'SALE', name: 'VENTAS', icon: <AiOutlineDollar />},
         {path: 'BUY', name: 'COMPRAS', icon: <LiaClipboardListSolid />},
         {path: 'BUY/SMART-UPLOAD', name: 'CARGA INTELIGENTE', icon: <MdUploadFile />},
-        {path: 'EXPENSE', name: 'EGRESOS', icon: <MdOutlineMoneyOff />}
+        {path: 'EXPENSE', name: 'EGRESOS', icon: <MdOutlineMoneyOff />},
+        {path: 'CASHFLOW', name: 'FLUJO DE CAJA', icon: <MdShowChart />}
     ]
     const pathname = usePathname()
     let {ancho, alto} = useResize()

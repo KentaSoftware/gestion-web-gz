@@ -13,11 +13,13 @@ import {
   getCashflowConfig,
   getCashflowError,
   getCashflowLoading,
+  getCashflowMovements,
   getCashflowSummary,
   getCashflowTimeline,
   setCashflowError,
   setCashflowLoading,
   setConfig,
+  setMovements,
   setSummary,
   setTimeline,
 } from '@/redux/cashflowSlice';
@@ -25,6 +27,7 @@ import PeriodSelector from '@/components/cashflow/PeriodSelector';
 import SummaryCards from '@/components/cashflow/SummaryCards';
 import ConfigPanel from '@/components/cashflow/ConfigPanel';
 import CashflowTimeline from '@/components/cashflow/CashflowTimeline';
+import MovementsTable from '@/components/cashflow/MovementsTable';
 
 const toInputDate = (date: Date): string => format(date, 'yyyy-MM-dd');
 
@@ -35,6 +38,7 @@ function CashflowScreen() {
   const summary = useSelector(getCashflowSummary);
   const config = useSelector(getCashflowConfig);
   const timeline = useSelector(getCashflowTimeline);
+  const movements = useSelector(getCashflowMovements);
   const loading = useSelector(getCashflowLoading);
   const error = useSelector(getCashflowError);
 
@@ -59,13 +63,15 @@ function CashflowScreen() {
     dispatch(setCashflowError(null));
 
     try {
-      const [summaryData, timelineData] = await Promise.all([
+      const [summaryData, timelineData, movementsData] = await Promise.all([
         cashflowService.getSummary({ startDate, endDate }),
         cashflowService.getTimeline({ startDate, endDate }),
+        cashflowService.getMovements({ startDate, endDate }),
       ]);
 
       dispatch(setSummary(summaryData));
       dispatch(setTimeline(timelineData));
+      dispatch(setMovements(movementsData));
     } catch (requestError: unknown) {
       dispatch(setCashflowError(resolveErrorMessage(requestError)));
     } finally {
@@ -158,6 +164,8 @@ function CashflowScreen() {
         timeline={timeline}
         openingBalance={config?.openingBalance ?? summary?.openingBalance ?? 0}
       />
+
+      <MovementsTable movements={movements} />
 
       {periodWithoutMovements && (
         <EmptyNotice>No hay movimientos registrados en el período seleccionado.</EmptyNotice>
