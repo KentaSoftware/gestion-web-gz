@@ -36,12 +36,12 @@ export default function Dashboard({children}: {children: ReactNode} ) {
 
     const itemsLi: MenuItem[] = [
         {path: 'HOME', name: 'INICIO', icon: <GoHome /> },
-        {path: 'PRODUCT', name: 'PRODUCTOS', icon: <GoPackage />},
-        {path: 'SALE', name: 'VENTAS', icon: <AiOutlineDollar />},
-        {path: 'BUY', name: 'COMPRAS', icon: <LiaClipboardListSolid />},
+        {path: 'PRODUCT', name: 'PRODUCTOS', icon: <GoPackage />, permission: Permission.READ_PRODUCT},
+        {path: 'SALE', name: 'VENTAS', icon: <AiOutlineDollar />, permission: Permission.READ_SALE},
+        {path: 'BUY', name: 'COMPRAS', icon: <LiaClipboardListSolid />, permission: Permission.READ_BUY},
         {path: 'BUY/SMART-UPLOAD', name: 'CARGA INTELIGENTE', icon: <MdUploadFile />, permission: Permission.CREATE_BUY},
-        {path: 'EXPENSE', name: 'EGRESOS', icon: <MdOutlineMoneyOff />},
-        {path: 'CASHFLOW', name: 'FLUJO DE CAJA', icon: <MdShowChart />}
+        {path: 'EXPENSE', name: 'EGRESOS', icon: <MdOutlineMoneyOff />, permission: Permission.READ_EXPENSE},
+        {path: 'CASHFLOW', name: 'FLUJO DE CAJA', icon: <MdShowChart />, permission: Permission.READ_CASHFLOW}
     ]
 
     const visibleItems = itemsLi.filter(item => !item.permission || hasPermission(item.permission))

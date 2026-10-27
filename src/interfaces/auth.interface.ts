@@ -19,6 +19,12 @@ export interface UserWithToken {
 
 // Permisos disponibles en el sistema (según backend)
 export enum Permission {
+  // Productos
+  READ_PRODUCT = 'read_product',
+
+  // Ventas
+  READ_SALE = 'read_sale',
+
   // Egresos
   CREATE_EXPENSE = 'create_expense',
   READ_EXPENSE = 'read_expense',
