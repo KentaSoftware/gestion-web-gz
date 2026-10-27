@@ -69,7 +69,7 @@ export const expenseService = {
     const data = response.data.expense || response.data;
     return {
       total: data.total || (data.totalCents ? data.totalCents / 100 : 0),
-      count: data.count || 0,
+      count: typeof data.count === 'number' ? data.count : undefined,
       totalCents: data.totalCents,
       currency: data.currency || 'ARS',
       period: data.period,

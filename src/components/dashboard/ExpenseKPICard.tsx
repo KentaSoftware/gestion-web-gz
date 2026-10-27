@@ -51,7 +51,7 @@ export default function ExpenseKPICard({ period }: Props) {
 
       // Conversión si viene en centavos
       const total = kpiData.total || (kpiData.totalCents ? kpiData.totalCents / 100 : 0)
-      const count = kpiData.count || 0
+      const count = typeof kpiData.count === 'number' ? kpiData.count : undefined
 
       setData({ total, count })
 
