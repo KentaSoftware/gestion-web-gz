@@ -28,7 +28,7 @@ export default function ProgressIndicator() {
         </Title>
         <Stats>
           <Stat complete={isComplete}>
-            {resolvedItems} / {totalItems} ítems vinculados
+            {resolvedItems} / {totalItems} {totalItems === 1 ? 'ítem vinculado' : 'ítems vinculados'}
           </Stat>
         </Stats>
       </Header>

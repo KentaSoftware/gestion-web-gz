@@ -147,7 +147,9 @@ export default function ReviewStep() {
         <WarningBox>
           <MdWarning size={24} />
           <WarningText>
-            Hay {pendingItems.length} ítems sin vincular. Debes vincular todos los ítems antes de confirmar.
+            Hay {pendingItems.length}{' '}
+            {pendingItems.length === 1 ? 'ítem sin vincular' : 'ítems sin vincular'}. Debes vincular
+            todos los ítems antes de confirmar.
           </WarningText>
         </WarningBox>
       )}
