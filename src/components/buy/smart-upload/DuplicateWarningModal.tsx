@@ -36,7 +36,14 @@ export default function DuplicateWarningModal() {
     dispatch(setDuplicateDecision(DuplicateDecision.PROCEED));
     dispatch(setDuplicateModalOpen(false));
   };
-  
+  const handleNotDuplicate = () => {
+    dispatch(setDuplicateDecision(DuplicateDecision.NOT_DUPLICATE));
+    dispatch(setDuplicateModalOpen(false));
+    dispatch(setAlert({
+      message: 'Se registra como compra distinta: la advertencia de duplicado quedó descartada.',
+      type: 'success',
+    }));
+  };  
   return (
     <StyledDialog open={duplicateModalOpen} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>
@@ -102,6 +109,11 @@ export default function DuplicateWarningModal() {
         <Question>
           ¿Estás seguro de que deseas continuar con el registro de este comprobante?
         </Question>
+
+        <Hint>
+          Si el análisis leyó mal el comprobante y en realidad es otra compra, elegí{' '}
+          <strong>No es duplicado</strong>: se registra como compra distinta y sin marca.
+        </Hint>
       </DialogContent>
       
       <DialogActions>
@@ -109,6 +121,9 @@ export default function DuplicateWarningModal() {
           <MdClose size={20} />
           Cancelar Registro
         </CancelButton>
+        <NotDuplicateButton onClick={handleNotDuplicate}>
+          No es duplicado
+        </NotDuplicateButton>
         <ProceedButton onClick={handleProceed}>
           Continuar de Todas Formas
         </ProceedButton>
@@ -264,6 +279,14 @@ const Question = styled.p`
   text-align: center;
 `;
 
+const Hint = styled.p`
+  font-size: 12px;
+  color: #777;
+  margin: 8px 0 0;
+  text-align: center;
+  line-height: 1.5;
+`;
+
 const CancelButton = styled.button`
   background: #f44336;
   border: none;
@@ -279,6 +302,21 @@ const CancelButton = styled.button`
   
   &:hover {
     background: #da190b;
+  }
+`;
+
+const NotDuplicateButton = styled.button`
+  background: white;
+  border: 1px solid #3764a0;
+  color: #3764a0;
+  border-radius: 8px;
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: #eef3fb;
   }
 `;
 

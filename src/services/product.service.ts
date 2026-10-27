@@ -33,7 +33,7 @@ export const productService = {
     }
 
     try {
-      const response = await apiClient.post('/product/buscar', {
+      const response = await apiClient.post('/product/search', {
         input: query.trim(),
         skip: 0,
         limit

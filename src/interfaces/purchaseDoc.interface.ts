@@ -19,6 +19,7 @@ export enum SourceType {
 export enum DuplicateDecision {
   CANCEL = 'CANCEL',
   PROCEED = 'PROCEED',
+  NOT_DUPLICATE = 'NOT_DUPLICATE',
 }
 
 export enum LinkingStatus {

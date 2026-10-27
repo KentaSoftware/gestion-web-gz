@@ -21,6 +21,7 @@ interface BuyHeader {
   createdAt?: string;
   docNumber?: string;
   duplicateOf?: string;
+  duplicateDismissed?: boolean;
 }
 
 interface BuyItem {
@@ -213,6 +214,12 @@ function BuyDetailScreen({ id }: { id: string }) {
           </DuplicateLink>
           .
         </DuplicateBox>
+      )}
+
+      {buy.duplicateDismissed && !buy.duplicateOf && (
+        <DismissedBox role="status">
+          Se revisó una advertencia de duplicado al cargarla y se registró como compra distinta.
+        </DismissedBox>
       )}
 
       {totalMismatch && (
@@ -440,6 +447,16 @@ const DuplicateLink = styled.button`
   color: #a33a33;
   text-decoration: underline;
   cursor: pointer;
+`;
+
+const DismissedBox = styled.div`
+  background: #eef3fb;
+  border: 1px solid #c9d8ef;
+  border-left: 4px solid #3764a0;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #33507d;
 `;
 
 const PrimaryButton = styled.button`
