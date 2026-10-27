@@ -20,11 +20,13 @@ import { setAlert } from '@/redux/alertSlice';
 import { LinkingStatus, DuplicateDecision } from '@/interfaces/purchaseDoc.interface';
 import { resolveItemValues, sumSubtasks, validateItemValues } from '@/utils/purchaseDocItems';
 import { apiErrorMessage } from '@/utils/apiError';
+import { nextConfirmGate } from '@/utils/confirmGate';
 import { formatCurrency } from '@/utils/validators';
 import ProgressIndicator from './ProgressIndicator';
 import HeaderCard from './HeaderCard';
 import ItemsReviewTable from './ItemsReviewTable';
 import DuplicateWarningModal from './DuplicateWarningModal';
+import TotalMismatchModal from './TotalMismatchModal';
 import Loading from '@/components/Loading';
 import { MdWarning } from 'react-icons/md';
 
@@ -71,15 +73,29 @@ export default function ReviewStep() {
     Number.isFinite(itemsSubtotal) &&
     (!hasDuplicateWarning || duplicateDecision !== null);
   
-  const handleConfirm = async () => {
+  const [mismatchModalOpen, setMismatchModalOpen] = useState(false);
+  const [mismatchAcknowledged, setMismatchAcknowledged] = useState(false);
+
+  const handleConfirm = async (options: { acknowledgedMismatch?: boolean } = {}) => {
     if (!canConfirm || !draftId) return;
-    
-    // Si hay duplicado y no se ha decidido, mostrar modal
-    if (hasDuplicateWarning && duplicateDecision === null) {
+
+    const gate = nextConfirmGate({
+      duplicatePending: Boolean(hasDuplicateWarning) && duplicateDecision === null,
+      totalMismatch,
+      mismatchAcknowledged: mismatchAcknowledged || options.acknowledgedMismatch === true,
+    });
+
+    if (gate === 'duplicate') {
       dispatch(setDuplicateModalOpen(true));
       return;
     }
-    
+
+    if (gate === 'totalMismatch') {
+      setMismatchModalOpen(true);
+      return;
+    }
+
+    setMismatchModalOpen(false);
     dispatch(startConfirm());
     
     try {
@@ -189,12 +205,24 @@ export default function ReviewStep() {
       <ItemsReviewTable />
       
       <Actions>
-        <ConfirmButton onClick={handleConfirm} disabled={!canConfirm || confirmLoading}>
+        <ConfirmButton onClick={() => void handleConfirm()} disabled={!canConfirm || confirmLoading}>
           {confirmLoading ? 'Confirmando...' : 'Confirmar y Crear Compra'}
         </ConfirmButton>
       </Actions>
       
       <DuplicateWarningModal />
+
+      <TotalMismatchModal
+        open={mismatchModalOpen}
+        itemsSubtotal={itemsSubtotal}
+        headerTotal={headerTotal}
+        onCancel={() => setMismatchModalOpen(false)}
+        onConfirm={() => {
+          setMismatchAcknowledged(true);
+          setMismatchModalOpen(false);
+          void handleConfirm({ acknowledgedMismatch: true });
+        }}
+      />
     </Container>
   );
 }
