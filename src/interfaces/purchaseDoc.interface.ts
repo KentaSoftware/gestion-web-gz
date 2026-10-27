@@ -222,10 +222,11 @@ export interface DuplicateCandidate {
   buyId: string;             // ID de la compra
   purchaseId: string;
   documentNumber: string;
-  date: string;
+  date?: string;             // Puede venir vacío; el backend a veces envía documentDate
+  documentDate?: string;
   total: number;
   provider: string;
-  score: number;
+  score: number;             // Puede venir como fracción (0..1) o porcentaje (0..100)
   matchReasons: string[];    // Ej: ['Same document number', 'Similar total']
 }
 

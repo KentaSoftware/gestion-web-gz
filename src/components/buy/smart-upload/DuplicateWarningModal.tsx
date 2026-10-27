@@ -9,6 +9,7 @@ import { getPurchaseDocState, setDuplicateModalOpen, setDuplicateDecision } from
 import { DuplicateDecision } from '@/interfaces/purchaseDoc.interface';
 import { MdWarning, MdClose } from 'react-icons/md';
 import { formatDate, formatCurrency } from '@/utils/validators';
+import { normalizePercent, safeDateLabel } from '@/utils/duplicateDisplay';
 
 export default function DuplicateWarningModal() {
   const dispatch = useAppDispatch();
@@ -54,15 +55,17 @@ export default function DuplicateWarningModal() {
             <CandidateCard key={index}>
               <CandidateHeader>
                 <CandidateTitle>Compra #{candidate.buyId}</CandidateTitle>
-                <ScoreBadge score={candidate.score}>
-                  {(candidate.score * 100).toFixed(0)}% similitud
+                <ScoreBadge score={normalizePercent(candidate.score)}>
+                  {normalizePercent(candidate.score)}% similitud
                 </ScoreBadge>
               </CandidateHeader>
               
               <CandidateDetails>
                 <Detail>
                   <Label>Fecha:</Label>
-                  <Value>{formatDate(candidate.date)}</Value>
+                  <Value>
+                    {safeDateLabel(candidate.date ?? candidate.documentDate, date => formatDate(date.toISOString()))}
+                  </Value>
                 </Detail>
                 
                 <Detail>
@@ -184,8 +187,8 @@ const CandidateTitle = styled.h3`
 
 const ScoreBadge = styled.div<{ score: number }>`
   background: ${props => {
-    if (props.score >= 0.9) return '#f44336';
-    if (props.score >= 0.7) return '#ff9800';
+    if (props.score >= 90) return '#f44336';
+    if (props.score >= 70) return '#ff9800';
     return '#ffa726';
   }};
   color: white;
