@@ -7,6 +7,9 @@ export interface Buy {
   proveedor: string
   total: number
   createdAt: string
+  docNumber?: string
+  /** Compra principal cuando esta se registró aceptando un duplicado. */
+  duplicateOf?: string
   itemsBuy: ItemBuy[]
 }
 

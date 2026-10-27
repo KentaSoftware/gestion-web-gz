@@ -20,6 +20,7 @@ interface BuyHeader {
   total?: number;
   createdAt?: string;
   docNumber?: string;
+  duplicateOf?: string;
 }
 
 interface BuyItem {
@@ -199,6 +200,20 @@ function BuyDetailScreen({ id }: { id: string }) {
           <InfoValue>{formatCurrency(headerTotal)}</InfoValue>
         </InfoCard>
       </InfoGrid>
+
+      {buy.duplicateOf && (
+        <DuplicateBox role="status">
+          <strong>Compra duplicada.</strong> Se registró aceptando un comprobante que ya existía; la
+          compra principal es{' '}
+          <DuplicateLink
+            type="button"
+            onClick={() => router.push(`/buy/${buy.duplicateOf}`)}
+          >
+            #{buy.duplicateOf}
+          </DuplicateLink>
+          .
+        </DuplicateBox>
+      )}
 
       {totalMismatch && (
         <WarningBox>
@@ -404,6 +419,27 @@ const WarningBox = styled.div`
   padding: 12px 16px;
   font-size: 13px;
   color: #8a6d3b;
+`;
+
+const DuplicateBox = styled.div`
+  background: #fdecea;
+  border: 1px solid #f5c2c0;
+  border-left: 4px solid #e57373;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #a33a33;
+`;
+
+const DuplicateLink = styled.button`
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #a33a33;
+  text-decoration: underline;
+  cursor: pointer;
 `;
 
 const PrimaryButton = styled.button`

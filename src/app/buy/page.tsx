@@ -146,6 +146,7 @@ export default function BuyScreen() {
                     <div>
                       <Tag>{providerLabel(providers, item.proveedor)}</Tag>
                       <TagDate>{item.createdAt.split("T")[0]}</TagDate>
+                      {item.duplicateOf && <DuplicateTag>DUPLICADO</DuplicateTag>}
                     </div>
                     <Tag style={{fontWeight: 600, color: '#FA9B50'}}>$ <AnimatedNumber value={item.total}  /></Tag>
                   </ContainerTag>
@@ -169,6 +170,7 @@ export default function BuyScreen() {
                     <div>
                       <Tag>{providerLabel(providers, item.proveedor)}</Tag>
                       <TagDate>{item.createdAt.split("T")[0]}</TagDate>
+                      {item.duplicateOf && <DuplicateTag>DUPLICADO</DuplicateTag>}
                     </div>
                     <Tag style={{fontWeight: 600, color: '#FA9B50'}}>$ <AnimatedNumber value={item.total}  /></Tag>
                   </ContainerTag>
@@ -292,4 +294,18 @@ const TagDate = styled.h2`
   @media only screen and (max-width: 500px) {
     font-size: 12px;
   }
+`
+
+const DuplicateTag = styled.span`
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fdecea;
+  border: 1px solid #f5c2c0;
+  color: #a33a33;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  vertical-align: middle;
 `
