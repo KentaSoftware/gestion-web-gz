@@ -10,6 +10,11 @@ import { Types } from 'mongoose';
 import { Buy, ItemBuy } from '@/interfaces/buy.interface';
 import { setLoading } from '@/redux/loadingSlice';
 import { useAppDispatch } from '@/redux/hook';
+import { providerLabel } from '@/utils/providerLabel';
+import { providerService } from '@/services/provider.service';
+import { Provider } from '@/interfaces/purchaseDoc.interface';
+import { formatCurrency } from '@/utils/validators';
+import { formatCalendarDate } from '@/utils/dates';
 
 interface ResponseSale {
   r: Buy
@@ -28,6 +33,7 @@ interface Column {
 export default function InfoBuy({open, handleClose, id}:{open:boolean, handleClose: ()=>void , id:Types.ObjectId | undefined | string}) {
 
   const [buy, setBuy] = useState<ResponseSale | undefined>(undefined)
+  const [providers, setProviders] = useState<Provider[]>([])
   const [valueStorage , setValue] = useLocalStorage("user", "")
   const dispatch = useAppDispatch();
 
@@ -46,6 +52,16 @@ export default function InfoBuy({open, handleClose, id}:{open:boolean, handleClo
     getBuy()
   },[id])
 
+  useEffect(() => {
+    let cancelled = false;
+    providerService
+      .getProviders()
+      .then((list) => { if (!cancelled) setProviders(list); })
+      .catch(() => { if (!cancelled) setProviders([]); });
+
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <Modal open={open} title={'Info de la compra'} eClose={handleClose} height='auto' width='60%' >
       <div>
@@ -55,8 +71,8 @@ export default function InfoBuy({open, handleClose, id}:{open:boolean, handleClo
           <>
           <Logo/>
           <div>
-              <Tag>Proveedor : {buy.r.proveedor}</Tag>
-              <Tag>FECHA : {buy.r.createdAt.split("T")[0]}</Tag>
+              <Tag>Proveedor : {providerLabel(providers, buy.r.proveedor)}</Tag>
+              <Tag>FECHA : {formatCalendarDate(buy.r.createdAt)}</Tag>
             </div>
             <div>
               <Table
@@ -66,7 +82,7 @@ export default function InfoBuy({open, handleClose, id}:{open:boolean, handleClo
                 onClick={() => ''}
               />
             </div>
-            <Tag style={{ textAlign: 'end' }}>TOTAL : $ {buy.r.total}</Tag> 
+            <Tag style={{ textAlign: 'end' }}>TOTAL : {formatCurrency(Number(buy.r.total) || 0)}</Tag> 
           </>
         }
         </div>
@@ -78,7 +94,7 @@ export default function InfoBuy({open, handleClose, id}:{open:boolean, handleClo
 const columns: Column[] = [
   { label: 'Producto', field: 'descripcion', width: '40%' },
   { label: 'Cantidad', field: 'cantidad', width: '20%', align: 'center' },
-  { label: 'Precio', field: 'precio', width: '20%', align: 'center' },
+  { label: 'Precio', field: 'precio', width: '20%', align: 'center', price: true },
   { label: 'Total', field: 'total', width: '20%', align: 'center', price: true },
 ];
 

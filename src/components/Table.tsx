@@ -1,6 +1,7 @@
 import { useDate } from '@/hooks/useDate'
 import React from 'react'
 import styled, { CSSProperties } from 'styled-components'
+import { formatCurrency } from '@/utils/validators'
 
 interface Column {
   label: string
@@ -47,7 +48,7 @@ export default function Table({data = [], columns, onClick, date=false, maxHeigh
                               fecha
                               :
                               (column.price ? 
-                                `$ ${item[column.field]?.toString()}` 
+                                formatCurrency(Number(item[column.field]) || 0)
                                 : 
                                 item[column.field]?.toString())
                             }
