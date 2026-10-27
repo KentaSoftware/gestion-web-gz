@@ -6,6 +6,7 @@ import styled from 'styled-components';
 import { Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { useAppDispatch } from '@/redux/hook';
 import { getPurchaseDocState, setDuplicateModalOpen, setDuplicateDecision } from '@/redux/purchaseDocSlice';
+import { setAlert } from '@/redux/alertSlice';
 import { DuplicateDecision } from '@/interfaces/purchaseDoc.interface';
 import { MdWarning, MdClose } from 'react-icons/md';
 import { formatDate, formatCurrency } from '@/utils/validators';
@@ -24,6 +25,10 @@ export default function DuplicateWarningModal() {
   const handleCancel = () => {
     dispatch(setDuplicateDecision(DuplicateDecision.CANCEL));
     dispatch(setDuplicateModalOpen(false));
+    dispatch(setAlert({
+      message: 'Registro cancelado: no se creó la compra porque el comprobante ya estaba registrado.',
+      type: 'warning',
+    }));
   };
   
   const handleProceed = () => {

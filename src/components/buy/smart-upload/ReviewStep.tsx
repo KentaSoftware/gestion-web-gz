@@ -19,6 +19,7 @@ import { purchaseDocService } from '@/services/purchaseDoc.service';
 import { setAlert } from '@/redux/alertSlice';
 import { LinkingStatus, DuplicateDecision } from '@/interfaces/purchaseDoc.interface';
 import { resolveItemValues, sumSubtasks, validateItemValues } from '@/utils/purchaseDocItems';
+import { apiErrorMessage } from '@/utils/apiError';
 import { formatCurrency } from '@/utils/validators';
 import ProgressIndicator from './ProgressIndicator';
 import HeaderCard from './HeaderCard';
@@ -128,7 +129,7 @@ export default function ReviewStep() {
       // Redirigir al detalle de la compra
       router.push(`/buy/${result.buyId}`);
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Error al confirmar la compra';
+      const errorMessage = apiErrorMessage(error, 'Error al confirmar la compra');
       dispatch(confirmFailure(errorMessage));
       dispatch(setAlert({
         message: errorMessage,
