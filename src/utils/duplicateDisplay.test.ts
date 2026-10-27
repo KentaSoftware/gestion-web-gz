@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { format } from 'date-fns';
-import { normalizePercent, safeDateLabel, scoreTone } from './duplicateDisplay';
+import { normalizePercent, safeDateLabel, scoreTone, candidateRef } from './duplicateDisplay';
 
 describe('normalizePercent', () => {
   it('interpreta como fracción los valores entre 0 y 1', () => {
@@ -40,5 +40,20 @@ describe('safeDateLabel', () => {
     expect(safeDateLabel(undefined, fmt)).toBe('—');
     expect(safeDateLabel('', fmt)).toBe('—');
     expect(safeDateLabel('no-es-fecha', fmt)).toBe('—');
+  });
+});
+
+describe('candidateRef', () => {
+  it('usa purchaseId cuando el backend no envía buyId', () => {
+    expect(candidateRef({ purchaseId: '6ae0fe02be5f25ce55fb15f6' })).toBe('6ae0fe02be5f25ce55fb15f6');
+  });
+
+  it('prefiere buyId cuando está presente', () => {
+    expect(candidateRef({ buyId: 'aaa', purchaseId: 'bbb' })).toBe('aaa');
+  });
+
+  it('devuelve N/A cuando el candidato no trae ningún identificador', () => {
+    expect(candidateRef({})).toBe('N/A');
+    expect(candidateRef({ buyId: '', purchaseId: '   ' })).toBe('N/A');
   });
 });

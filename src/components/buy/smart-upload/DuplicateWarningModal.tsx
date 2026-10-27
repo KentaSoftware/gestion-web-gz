@@ -9,7 +9,7 @@ import { getPurchaseDocState, setDuplicateModalOpen, setDuplicateDecision } from
 import { DuplicateDecision } from '@/interfaces/purchaseDoc.interface';
 import { MdWarning, MdClose } from 'react-icons/md';
 import { formatDate, formatCurrency } from '@/utils/validators';
-import { normalizePercent, safeDateLabel } from '@/utils/duplicateDisplay';
+import { candidateRef, normalizePercent, safeDateLabel } from '@/utils/duplicateDisplay';
 
 export default function DuplicateWarningModal() {
   const dispatch = useAppDispatch();
@@ -54,7 +54,7 @@ export default function DuplicateWarningModal() {
           {duplicateCheck.candidates.map((candidate, index) => (
             <CandidateCard key={index}>
               <CandidateHeader>
-                <CandidateTitle>Compra #{candidate.buyId}</CandidateTitle>
+                <CandidateTitle>Compra #{candidateRef(candidate)}</CandidateTitle>
                 <ScoreBadge score={normalizePercent(candidate.score)}>
                   {normalizePercent(candidate.score)}% similitud
                 </ScoreBadge>

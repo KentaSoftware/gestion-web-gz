@@ -29,3 +29,13 @@ export const safeDateLabel = (
 
   return formatter(date);
 };
+
+/**
+ * Referencia de la compra existente que disparó la advertencia de duplicado.
+ * El backend envía `purchaseId`; versiones anteriores usaban `buyId`. Se acepta
+ * cualquiera de los dos para que el modal nunca muestre "Compra #" vacío.
+ */
+export const candidateRef = (candidate: {
+  buyId?: string | null;
+  purchaseId?: string | null;
+}): string => candidate.buyId?.trim() || candidate.purchaseId?.trim() || 'N/A';
