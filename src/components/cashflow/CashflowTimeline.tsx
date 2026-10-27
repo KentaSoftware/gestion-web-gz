@@ -2,7 +2,6 @@
 
 import React, { useMemo } from 'react';
 import styled from 'styled-components';
-import { format } from 'date-fns';
 import {
   Bar,
   CartesianGrid,
@@ -14,11 +13,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import {
-  CASHFLOW_SOURCE_LABELS,
-  CASHFLOW_TYPE_LABELS,
-  CashflowMovement,
-} from '@/interfaces/cashflow.interface';
+import { CashflowMovement } from '@/interfaces/cashflow.interface';
+import { aggregateByDay, DailyCashflowPoint } from '@/utils/cashflowAggregation';
 import { formatCurrency } from '@/utils/validators';
 
 interface CashflowTimelineProps {
@@ -26,49 +22,15 @@ interface CashflowTimelineProps {
   openingBalance: number;
 }
 
-interface TimelinePoint {
-  label: string;
-  fullDate: string;
-  inflow: number;
-  outflow: number;
-  balance: number;
-  amount: number;
-  typeLabel: string;
-  sourceLabel: string;
-  description: string;
-}
-
 /**
- * Cumulative cash balance plus per-movement inflow/outflow bars (PS-T04).
- * Points keep the backend ascending order by cash date; nothing is reordered by amount.
+ * Cumulative cash balance plus per-day inflow/outflow bars (PS-T25).
+ * One point per day with the day's totals, never one point per movement.
  */
 export default function CashflowTimeline({ timeline, openingBalance }: CashflowTimelineProps) {
-  const data = useMemo<TimelinePoint[]>(() => {
-    const ascending = [...timeline].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-
-    let running = openingBalance;
-
-    return ascending.map(movement => {
-      const signed = movement.type === 'inflow' ? movement.amount : -movement.amount;
-      running += signed;
-
-      const parsedDate = new Date(movement.date);
-
-      return {
-        label: format(parsedDate, 'dd/MM'),
-        fullDate: format(parsedDate, 'dd/MM/yyyy'),
-        inflow: movement.type === 'inflow' ? movement.amount : 0,
-        outflow: movement.type === 'outflow' ? -movement.amount : 0,
-        balance: running,
-        amount: movement.amount,
-        typeLabel: CASHFLOW_TYPE_LABELS[movement.type],
-        sourceLabel: CASHFLOW_SOURCE_LABELS[movement.source],
-        description: movement.description,
-      };
-    });
-  }, [openingBalance, timeline]);
+  const data = useMemo<DailyCashflowPoint[]>(
+    () => aggregateByDay(timeline, openingBalance),
+    [openingBalance, timeline]
+  );
 
   if (data.length === 0) {
     return (
@@ -125,7 +87,7 @@ function compactCurrency(value: number): string {
 }
 
 interface TooltipPayloadEntry {
-  payload: TimelinePoint;
+  payload: DailyCashflowPoint;
 }
 
 function CashflowTooltip({
@@ -142,13 +104,9 @@ function CashflowTooltip({
   return (
     <TooltipBox>
       <TooltipDate>{point.fullDate}</TooltipDate>
-      <TooltipRow>
-        <strong>
-          {point.typeLabel} · {point.sourceLabel}
-        </strong>
-      </TooltipRow>
-      {point.description && <TooltipRow>{point.description}</TooltipRow>}
-      <TooltipRow>Importe: {formatCurrency(point.amount)}</TooltipRow>
+      <TooltipRow>({point.movements} movimientos)</TooltipRow>
+      <TooltipRow>Ingresos del día: {formatCurrency(point.inflow)}</TooltipRow>
+      <TooltipRow>Egresos del día: {formatCurrency(Math.abs(point.outflow))}</TooltipRow>
       <TooltipRow>Saldo acumulado: {formatCurrency(point.balance)}</TooltipRow>
     </TooltipBox>
   );
