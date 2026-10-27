@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { CashflowMovement } from '@/interfaces/cashflow.interface';
+import { toCalendarDate } from './dates';
 
 export interface DailyCashflowPoint {
   /** Clave de orden: yyyy-MM-dd */
@@ -34,7 +35,9 @@ export const aggregateByDay = (
   const days = new Map<string, { inflow: number; outflow: number; movements: number; date: Date }>();
 
   for (const movement of movements) {
-    const date = new Date(movement.date);
+    const date = toCalendarDate(movement.date);
+    if (!date) continue;
+
     const key = dayKey(date);
     const current = days.get(key) ?? { inflow: 0, outflow: 0, movements: 0, date };
 

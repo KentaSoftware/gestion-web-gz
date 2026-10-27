@@ -9,8 +9,9 @@ import { getPurchaseDocState, setDuplicateModalOpen, setDuplicateDecision } from
 import { setAlert } from '@/redux/alertSlice';
 import { DuplicateDecision } from '@/interfaces/purchaseDoc.interface';
 import { MdWarning, MdClose } from 'react-icons/md';
-import { formatDate, formatCurrency } from '@/utils/validators';
-import { candidateRef, normalizePercent, safeDateLabel } from '@/utils/duplicateDisplay';
+import { formatCurrency } from '@/utils/validators';
+import { formatCalendarDate } from '@/utils/dates';
+import { candidateRef, normalizePercent } from '@/utils/duplicateDisplay';
 
 export default function DuplicateWarningModal() {
   const dispatch = useAppDispatch();
@@ -69,7 +70,7 @@ export default function DuplicateWarningModal() {
                 <Detail>
                   <Label>Fecha:</Label>
                   <Value>
-                    {safeDateLabel(candidate.date ?? candidate.documentDate, date => formatDate(date.toISOString()))}
+                    {formatCalendarDate(candidate.date ?? candidate.documentDate)}
                   </Value>
                 </Detail>
                 

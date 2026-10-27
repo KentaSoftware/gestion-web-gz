@@ -9,6 +9,7 @@ import useLocalStorage from '@/hooks/useLocalStorage'
 import { useRouter, useParams } from 'next/navigation'
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 import { setLoading } from '@/redux/loadingSlice'
+import { formatCalendarDate } from '@/utils/dates'
 import { Expense, ExpenseUser } from '@/interfaces/expense.interface'
 import { expenseService } from '@/services/expense.service'
 import { setAlert } from '@/redux/alertSlice'
@@ -88,7 +89,7 @@ export default function ExpenseDetailScreen() {
     }
   }
 
-  const formatDate = (dateString: string | undefined) => {
+  const formatDateTime = (dateString: string | undefined) => {
     if (!dateString) return 'N/A'
     try {
       const date = new Date(dateString)
@@ -214,7 +215,7 @@ export default function ExpenseDetailScreen() {
           <Grid>
             <Field>
               <Label>Fecha</Label>
-              <Value>{formatDate(expense.date)}</Value>
+              <Value>{formatCalendarDate(expense.date)}</Value>
             </Field>
             
             <Field>
@@ -262,7 +263,7 @@ export default function ExpenseDetailScreen() {
             
             <Field>
               <Label>Fecha de creación</Label>
-              <Value>{formatDate(expense.createdAt)}</Value>
+              <Value>{formatDateTime(expense.createdAt)}</Value>
             </Field>
             
             <Field>
@@ -275,7 +276,7 @@ export default function ExpenseDetailScreen() {
             
             <Field>
               <Label>Última modificación</Label>
-              <Value>{formatDate(expense.updatedAt)}</Value>
+              <Value>{formatDateTime(expense.updatedAt)}</Value>
             </Field>
             
             {expense.deletedBy && (
@@ -293,7 +294,7 @@ export default function ExpenseDetailScreen() {
                 <Field>
                   <Label>Fecha de eliminación</Label>
                   <Value>
-                    <DeletedInfo>{formatDate(expense.deletedAt)}</DeletedInfo>
+                    <DeletedInfo>{formatDateTime(expense.deletedAt)}</DeletedInfo>
                   </Value>
                 </Field>
               </>

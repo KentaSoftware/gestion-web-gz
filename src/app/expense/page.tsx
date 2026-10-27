@@ -10,6 +10,7 @@ import useLocalStorage from '@/hooks/useLocalStorage'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 import { setLoading } from '@/redux/loadingSlice'
+import { formatCalendarDate } from '@/utils/dates'
 import { Expense, ExpenseType, PaymentMethod, PaginationMetadata, ExpensePermissions, ExpenseUser } from '@/interfaces/expense.interface'
 import { expenseService } from '@/services/expense.service'
 import { setExpenses, removeExpense } from '@/redux/expenseSlice'
@@ -187,10 +188,7 @@ function ExpenseScreenContent() {
     }
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  }
+  const formatDate = (dateString: string) => formatCalendarDate(dateString)
 
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount)

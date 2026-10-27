@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { format } from 'date-fns';
+import { formatCalendarDate } from '@/utils/dates';
 import {
   CASHFLOW_SOURCE_LABELS,
   CASHFLOW_TYPE_LABELS,
@@ -166,7 +166,7 @@ export default function MovementsTable({
               <tbody>
                 {visibleRows.map(movement => (
                   <Tr key={`${movement.source}-${movement.sourceId}-${movement.date}`}>
-                    <Td>{format(new Date(movement.date), 'dd/MM/yyyy')}</Td>
+                    <Td>{formatCalendarDate(movement.date)}</Td>
                     <Td>
                       <TypeBadge $type={movement.type}>
                         {CASHFLOW_TYPE_LABELS[movement.type]}

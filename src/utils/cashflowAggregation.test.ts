@@ -57,4 +57,26 @@ describe('aggregateByDay', () => {
   it('devuelve una lista vacía sin movimientos', () => {
     expect(aggregateByDay([], 1000)).toEqual([]);
   });
+
+  it('rotula el día de calendario del backend y no el anterior por el huso', () => {
+    const points = aggregateByDay([movement('2026-10-27T00:00:00.000Z', 'outflow', 500)], 50000);
+
+    expect(points[0].key).toBe('2026-10-27');
+    expect(points[0].label).toBe('27/10');
+    expect(points[0].fullDate).toBe('27/10/2026');
+  });
+
+  it('no separa en dos días un egreso de medianoche y una venta del mismo día', () => {
+    const points = aggregateByDay(
+      [
+        movement('2026-10-27T00:00:00.000Z', 'outflow', 500),
+        movement('2026-10-27T15:00:00.000Z', 'inflow', 300),
+      ],
+      0
+    );
+
+    expect(points).toHaveLength(1);
+    expect(points[0].movements).toBe(2);
+    expect(points[0].balance).toBe(-200);
+  });
 });

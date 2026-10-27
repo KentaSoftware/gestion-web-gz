@@ -1,4 +1,5 @@
 import { WizardValidation, ItemLink, LinkingStatus } from '@/interfaces/purchaseDoc.interface';
+import { calendarParts } from './dates';
 
 /**
  * Validador de archivos para upload
@@ -179,14 +180,19 @@ export const formatHelpers = {
    */
   formatDate(dateStr: string): string {
     try {
-      // Si es formato ISO (YYYY-MM-DD), hacer split manual para evitar zona horaria
-      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-        const [year, month, day] = dateStr.split('-');
-        return `${day}/${month}/${year}`;
+      if (!dateStr) return dateStr;
+
+      // Día de calendario (sin hora, o ISO a medianoche UTC): formatear por partes
+      // para no restar el huso y mostrar el día anterior.
+      const parts = calendarParts(dateStr);
+      if (parts) {
+        const day = String(parts.day).padStart(2, '0');
+        const month = String(parts.month).padStart(2, '0');
+        return `${day}/${month}/${parts.year}`;
       }
-      
-      // Para otros formatos, usar Date
+
       const date = new Date(dateStr);
+      if (Number.isNaN(date.getTime())) return dateStr;
       return date.toLocaleDateString('es-AR');
     } catch {
       return dateStr;
