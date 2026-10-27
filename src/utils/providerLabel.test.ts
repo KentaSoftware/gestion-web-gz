@@ -27,4 +27,13 @@ describe('providerLabel', () => {
   it('devuelve el texto por defecto cuando el catálogo todavía está vacío', () => {
     expect(providerLabel([], '63a746bb2592ff7d6101630d')).toBe('Proveedor sin identificar');
   });
+
+  it('muestra tal cual el nombre heredado que guardan las compras viejas', () => {
+    expect(providerLabel(providers, 'Efey')).toBe('Efey');
+    expect(providerLabel(providers, 'LA TRANQUERA')).toBe('LA TRANQUERA');
+  });
+
+  it('nunca muestra un ObjectId crudo aunque no esté en el catálogo', () => {
+    expect(providerLabel([], '6ae0fe02be5f25ce55fb15f6')).toBe('Proveedor sin identificar');
+  });
 });

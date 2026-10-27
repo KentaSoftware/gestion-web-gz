@@ -15,6 +15,9 @@ import { useAppDispatch } from '@/redux/hook'
 import { getLoading, setLoading } from '@/redux/loadingSlice'
 import { getUser, setUser } from '@/redux/userSlice'
 import apiClient from '@/utils/client'
+import { providerLabel } from '@/utils/providerLabel'
+import { providerService } from '@/services/provider.service'
+import { Provider } from '@/interfaces/purchaseDoc.interface'
 import { Types } from 'mongoose'
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 import { useRouter } from 'next/navigation'
@@ -40,7 +43,18 @@ export default function BuyScreen() {
     const [buySelected, setBuySelected] = useState< Types.ObjectId | undefined | string>(undefined)
     const [openInfoBuy, setOpenInfoBuy] = useState<boolean>(false)
     const [query, setQuery] = useState<{skip: number, limit: number}>({skip: 0, limit: 25})
+    const [providers, setProviders] = useState<Provider[]>([])
     const observer = useRef<IntersectionObserver | null>(null);
+
+    useEffect(() => {
+      let cancelled = false
+      providerService
+        .getProviders()
+        .then((list) => { if (!cancelled) setProviders(list) })
+        .catch(() => { if (!cancelled) setProviders([]) })
+
+      return () => { cancelled = true }
+    }, [])
 
     useEffect(()=>{
 
@@ -130,7 +144,7 @@ export default function BuyScreen() {
                 <Item key={index} onClick={()=>setBuySelected(item._id)} >
                   <ContainerTag >
                     <div>
-                      <Tag>{item.proveedor}</Tag>
+                      <Tag>{providerLabel(providers, item.proveedor)}</Tag>
                       <TagDate>{item.createdAt.split("T")[0]}</TagDate>
                     </div>
                     <Tag style={{fontWeight: 600, color: '#FA9B50'}}>$ <AnimatedNumber value={item.total}  /></Tag>
@@ -153,7 +167,7 @@ export default function BuyScreen() {
                 <Item key={index} onClick={()=>setBuySelected(item._id)} >
                   <ContainerTag >
                     <div>
-                      <Tag>{item.proveedor}</Tag>
+                      <Tag>{providerLabel(providers, item.proveedor)}</Tag>
                       <TagDate>{item.createdAt.split("T")[0]}</TagDate>
                     </div>
                     <Tag style={{fontWeight: 600, color: '#FA9B50'}}>$ <AnimatedNumber value={item.total}  /></Tag>

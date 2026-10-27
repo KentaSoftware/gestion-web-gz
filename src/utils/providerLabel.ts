@@ -4,22 +4,27 @@ export interface ProviderLike {
 }
 
 const UNKNOWN_PROVIDER = 'Proveedor sin identificar';
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
 
 /**
- * Resuelve el nombre visible de un proveedor a partir de su id.
+ * Resuelve el nombre visible de un proveedor.
  *
- * El detalle de compra recibe `proveedor` como ObjectId crudo; mostrar ese hex
- * no le dice nada al usuario. Cuando el id no está en el catálogo (todavía
- * cargando, borrado o respuesta incompleta) se devuelve un texto legible y
- * nunca el id.
+ * `buy.proveedor` es mixto: las compras viejas guardan el nombre ("Efey") y las
+ * creadas por Carga Inteligente guardan el ObjectId. Cuando llega un id se
+ * resuelve contra el catálogo; cuando no está en el catálogo (todavía cargando o
+ * borrado) se devuelve un texto legible, nunca el id crudo.
  */
 export function providerLabel(
   providers: ProviderLike[],
-  providerId?: string | null
+  value?: string | null
 ): string {
-  if (!providerId) return UNKNOWN_PROVIDER;
+  const raw = value?.trim();
+  if (!raw) return UNKNOWN_PROVIDER;
 
-  const match = providers.find((provider) => provider._id === providerId);
+  // Nombre heredado: se muestra tal cual.
+  if (!OBJECT_ID.test(raw)) return raw;
+
+  const match = providers.find((provider) => provider._id === raw);
 
   return match?.name?.trim() || UNKNOWN_PROVIDER;
 }
