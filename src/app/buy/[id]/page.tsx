@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import apiClient from '@/utils/client';
 import { formatCurrency } from '@/utils/validators';
+import { providerLabel } from '@/utils/providerLabel';
+import { providerService } from '@/services/provider.service';
+import { Provider } from '@/interfaces/purchaseDoc.interface';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Permission } from '@/interfaces/auth.interface';
 import { usePermission } from '@/hooks/usePermission';
@@ -47,6 +50,7 @@ function BuyDetailScreen({ id }: { id: string }) {
 
   const [buy, setBuy] = useState<BuyHeader | null>(null);
   const [items, setItems] = useState<BuyItem[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -88,6 +92,25 @@ function BuyDetailScreen({ id }: { id: string }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    providerService
+      .getProviders()
+      .then((list) => {
+        if (!cancelled) setProviders(list);
+      })
+      .catch(() => {
+        if (!cancelled) setProviders([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const proveedorLabel = providerLabel(providers, buy?.proveedor);
 
   const itemsTotal = items.reduce((sum, item) => sum + (item.total ?? 0), 0);
   const headerTotal = typeof buy?.total === 'number' ? buy.total : 0;
@@ -136,7 +159,7 @@ function BuyDetailScreen({ id }: { id: string }) {
         <TitleBlock>
           <Title>Detalle de compra</Title>
           <Subtitle>
-            {buy.proveedor ?? 'Proveedor sin identificar'}
+            {proveedorLabel}
             {buy.docNumber ? ` · Comprobante ${buy.docNumber}` : ''}
           </Subtitle>
         </TitleBlock>
