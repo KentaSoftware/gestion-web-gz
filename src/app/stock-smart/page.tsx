@@ -131,6 +131,7 @@ export default function SmartStockPage() {
   const [detail, setDetail] = useState<StockDetail | null>(null)
   const [detailStatus, setDetailStatus] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle')
   const [dialog, setDialog] = useState<'config' | 'writeoff' | 'remove' | 'bulk' | 'report' | null>(null)
+  const [configProductId, setConfigProductId] = useState('')
   const [minimum, setMinimum] = useState('')
   const [expiryAlertDays, setExpiryAlertDays] = useState('')
   const [writeOffQuantity, setWriteOffQuantity] = useState('')
@@ -190,20 +191,24 @@ export default function SmartStockPage() {
   const summary = overview?.globalSummary ?? EMPTY_SUMMARY
   const pageCount = Math.max(1, Math.ceil((overview?.total ?? 0) / PAGE_SIZE))
   const selectedItem = items.find((item) => item.productId === selectedId)
-  const openOperation = (kind: typeof dialog) => {
+  const configItem = items.find((item) => item.productId === configProductId)
+  const expiredItems = items.filter((item) => item.expiredQuantity > 0)
+  const openOperation = (kind: typeof dialog, productId = selectedId) => {
     pendingOperationIds.current.clear()
     setOperationError('')
     setOperationMessage('')
     setOperationResults([])
-    if (kind === 'config' && selectedItem) {
-      setMinimum(String(selectedItem.minimum ?? 0))
-      setExpiryAlertDays(String(selectedItem.expiryAlertDays))
+    if (kind === 'config') {
+      setConfigProductId(productId)
+      const product = items.find((item) => item.productId === productId)
+      setMinimum(product ? String(product.minimum ?? 0) : '')
+      setExpiryAlertDays(product ? String(product.expiryAlertDays) : '')
     }
     setDialog(kind)
   }
   const refreshData = () => { setRetry((value) => value + 1); if (selectedId) setDetailRetry((value) => value + 1) }
   const saveConfig = async () => {
-    if (!selectedItem) return
+    if (!configItem) return
     const minimumValue = Number(minimum)
     const daysValue = expiryAlertDays === '' ? undefined : Number(expiryAlertDays)
     if (!Number.isSafeInteger(minimumValue) || minimumValue < 0 || (daysValue !== undefined && (!Number.isSafeInteger(daysValue) || daysValue < 0 || daysValue > 3650))) {
@@ -212,7 +217,7 @@ export default function SmartStockPage() {
     }
     setOperationBusy(true)
     try {
-      await apiClient.patch(`/stock/products/${encodeURIComponent(selectedItem.productId)}/minimum`, { minimum: minimumValue, ...(daysValue === undefined ? {} : { expiryAlertDays: daysValue }) })
+      await apiClient.patch(`/stock/products/${encodeURIComponent(configItem.productId)}/minimum`, { minimum: minimumValue, ...(daysValue === undefined ? {} : { expiryAlertDays: daysValue }) })
       setOperationMessage('Configuración guardada correctamente.')
       refreshData()
     } catch {
@@ -284,6 +289,7 @@ export default function SmartStockPage() {
     <PageContainer className="gap-5 overflow-y-auto">
       <PageHeader title="Stock inteligente" description="Una lectura clara de las existencias y los productos que requieren atención." actions={
         <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => openOperation('config', '')} className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary"><Settings2 className="mr-2 inline size-4" aria-hidden="true" />Configuraciones</button>
           <button type="button" onClick={refreshData} aria-label="Actualizar stock" className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary"><RefreshCw className="mr-2 inline size-4" aria-hidden="true" />Actualizar</button>
           <button type="button" onClick={() => openOperation('bulk')} className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary">Retirar vencidos de esta página</button>
           <button type="button" onClick={() => openOperation('report')} aria-label="Generar reporte" className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary"><FileText className="mr-2 inline size-4" aria-hidden="true" />Generar reporte</button>
@@ -390,7 +396,7 @@ export default function SmartStockPage() {
           {!selectedId ? <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center text-text-secondary"><CircleHelp className="size-8" aria-hidden="true" /><p className="font-medium">Consultá un producto</p><p className="text-sm">Seleccioná un producto para ver su disponibilidad y movimientos recientes.</p></div>
             : <>
               <div className="border-b border-border-subtle pb-3"><p className="text-xs font-medium uppercase tracking-wide text-text-muted">Detalle de stock</p><h3 className="mt-1 text-lg font-semibold text-text-primary">{selectedItem?.productName ?? 'Producto seleccionado'}</h3>
-                {selectedItem && <div className="mt-3 flex flex-wrap gap-2"><button type="button" aria-label={`Configurar stock de ${selectedItem.productName}`} onClick={() => openOperation('config')} className="rounded-md border border-border-subtle px-3 py-2 text-sm"><Settings2 className="mr-1 inline size-4" aria-hidden="true" />Configurar</button><button type="button" onClick={() => openOperation('writeoff')} className="rounded-md border border-border-subtle px-3 py-2 text-sm">Registrar baja</button><button type="button" onClick={() => openOperation('remove')} disabled={selectedItem.expiredQuantity <= 0} className="rounded-md border border-border-subtle px-3 py-2 text-sm disabled:opacity-50"><Trash2 className="mr-1 inline size-4" aria-hidden="true" />Retirar vencidos</button></div>}
+                {selectedItem && <div className="mt-3 flex flex-wrap gap-2"><button type="button" aria-label={`Configurar stock de ${selectedItem.productName}`} onClick={() => openOperation('config', selectedItem.productId)} className="rounded-md border border-border-subtle px-3 py-2 text-sm"><Settings2 className="mr-1 inline size-4" aria-hidden="true" />Configurar</button><button type="button" onClick={() => openOperation('writeoff')} className="rounded-md border border-border-subtle px-3 py-2 text-sm">Registrar baja</button><button type="button" onClick={() => openOperation('remove')} disabled={selectedItem.expiredQuantity <= 0} className="rounded-md border border-border-subtle px-3 py-2 text-sm disabled:opacity-50"><Trash2 className="mr-1 inline size-4" aria-hidden="true" />Retirar vencidos</button></div>}
               </div>
               {detailStatus === 'loading' ? <p className="py-6 text-sm text-text-secondary" role="status">Cargando disponibilidad y movimientos…</p>
                 : detailStatus === 'error' ? <div className="py-6 text-center" role="alert"><p className="text-sm text-state-error">No se pudo consultar el detalle del producto.</p><button type="button" onClick={() => setDetailRetry((value) => value + 1)} className="mt-3 rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary">Reintentar</button></div>
@@ -411,13 +417,20 @@ export default function SmartStockPage() {
         </aside>
       </section>
       <Dialog open={dialog !== null} onOpenChange={(open) => { if (!open && !operationBusy) { pendingOperationIds.current.clear(); setDialog(null) } }}>
-        <DialogContent aria-describedby="stock-action-description">
-          <DialogHeader><DialogTitle>{dialog === 'config' ? 'Configuración de stock' : dialog === 'writeoff' ? 'Registrar baja de stock' : dialog === 'remove' ? 'Retirar existencias vencidas' : dialog === 'bulk' ? 'Retiro masivo de vencidos' : 'Generar reporte'}</DialogTitle><DialogDescription id="stock-action-description">{dialog === 'report' ? 'La generación de reportes todavía no está disponible.' : dialog === 'bulk' ? 'Se procesará cada producto de esta página con existencias vencidas de forma independiente.' : `Producto: ${selectedItem?.productName ?? 'seleccionado'}`}</DialogDescription></DialogHeader>
-          {dialog === 'config' && <div className="space-y-3"><label className="block text-sm">Stock mínimo<input aria-label="Stock mínimo" type="number" min="0" step="1" value={minimum} onChange={(event) => setMinimum(event.target.value)} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2" /></label><label className="block text-sm">Umbral preventivo (días)<input aria-label="Umbral preventivo (días)" type="number" min="0" max="3650" step="1" value={expiryAlertDays} placeholder="Sin cambios" onChange={(event) => setExpiryAlertDays(event.target.value)} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2" /></label></div>}
+        <DialogContent aria-describedby="stock-action-description" className={`${dialog === 'config' ? 'max-w-3xl' : 'max-w-lg'} max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6`}>
+          <DialogHeader><DialogTitle>{dialog === 'config' ? 'Configuración de stock' : dialog === 'writeoff' ? 'Registrar baja de stock' : dialog === 'remove' ? 'Retirar existencias vencidas' : dialog === 'bulk' ? 'Retiro masivo de vencidos' : 'Generar reporte'}</DialogTitle><DialogDescription id="stock-action-description">{dialog === 'report' ? 'La generación de reportes todavía no está disponible.' : dialog === 'bulk' ? `Se procesarán ${expiredItems.length} productos con existencias vencidas de esta página de forma independiente.` : `Producto: ${selectedItem?.productName ?? 'seleccionado'}`}</DialogDescription></DialogHeader>
+          {dialog === 'config' && <div className="grid gap-6">
+            <section aria-labelledby="expired-products-title">
+              <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 id="expired-products-title" className="font-semibold text-text-primary">Productos vencidos de esta página</h3><p className="mt-1 text-sm text-text-secondary">Mostramos únicamente los productos de la página actual.</p></div><button type="button" disabled={expiredItems.length === 0 || operationBusy} onClick={() => setDialog('bulk')} className="rounded-md border border-border-subtle px-3 py-2 text-sm disabled:opacity-50">Retirar todos de esta página</button></div>
+              {expiredItems.length === 0 ? <p role="status" className="mt-4 rounded-lg bg-background-subtle p-4 text-sm text-text-secondary">No hay productos vencidos en esta página.</p> : <ul className="mt-4 divide-y divide-border-subtle rounded-lg border border-border-subtle">{expiredItems.map((item) => <li key={item.productId} className="flex flex-wrap items-center justify-between gap-3 p-3"><div className="min-w-0"><p className="truncate font-medium text-text-primary">{item.productName}</p><p className="text-sm text-text-secondary">Existencias vencidas: {item.expiredQuantity}</p></div><button type="button" aria-label={`Retirar vencidos de ${item.productName}`} disabled={operationBusy} onClick={() => { setSelectedId(item.productId); setDialog('remove') }} className="rounded-md border border-border-subtle px-3 py-2 text-sm">Retirar vencidos</button></li>)}</ul>}
+            </section>
+            <section aria-labelledby="stock-config-title" className="border-t border-border-subtle pt-5 "><h3 id="stock-config-title" className="font-semibold text-text-primary">Umbrales por producto</h3><p className="mt-1 text-sm text-text-secondary">Elegí un producto de esta página para ajustar su configuración.</p><div className="mt-4 space-y-3"><label className="block text-sm">Producto<select aria-label="Producto para configurar" value={configProductId} onChange={(event) => { const product = items.find((entry) => entry.productId === event.target.value); setConfigProductId(event.target.value); setMinimum(product ? String(product.minimum ?? 0) : ''); setExpiryAlertDays(product ? String(product.expiryAlertDays) : ''); setOperationError(''); setOperationMessage('') }} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2"><option value="">Seleccionar producto</option>{items.map((item) => <option key={item.productId} value={item.productId}>{item.productName}</option>)}</select></label><label className="block text-sm">Stock mínimo<input aria-label="Stock mínimo" type="number" min="0" step="1" value={minimum} disabled={!configItem} onChange={(event) => setMinimum(event.target.value)} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2" /></label><label className="block text-sm">Umbral preventivo (días)<input aria-label="Umbral preventivo (días)" type="number" min="0" max="3650" step="1" value={expiryAlertDays} placeholder="Sin cambios" disabled={!configItem} onChange={(event) => setExpiryAlertDays(event.target.value)} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2" /></label><p className="text-xs text-text-secondary">El umbral preventivo define cuándo avisar que un producto está próximo a vencer.</p></div>
+            </section>
+          </div>}
           {dialog === 'writeoff' && <div className="space-y-3"><label className="block text-sm">Cantidad<input aria-label="Cantidad" type="number" min="1" step="1" value={writeOffQuantity} onChange={(event) => setWriteOffQuantity(event.target.value)} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2" /></label><p className="text-sm text-text-secondary">Motivo: Vencimiento</p><label className="block text-sm">Observación (máximo 250 caracteres)<textarea aria-label="Observación" maxLength={250} value={writeOffNote} onChange={(event) => setWriteOffNote(event.target.value)} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2" /></label></div>}
           {operationError && <p role="alert" className="text-sm text-state-error">{operationError}</p>}{operationMessage && <p role="status" className="text-sm text-text-primary">{operationMessage}</p>}
           {operationResults.length > 0 && <ul aria-label="Resultados por producto" className="max-h-48 space-y-1 overflow-auto text-sm">{operationResults.map((result) => { const status = result.status ?? result.outcome; return <li key={result.productId}>{items.find((item) => item.productId === result.productId)?.productName ?? result.productId}: {status === 'REMOVED' ? `Retirado: ${result.removedQuantity}` : status === 'PARTIAL' ? `Parcial: ${result.removedQuantity} retiradas; permanecen unidades comprometidas` : status === 'NO_ELIGIBLE' ? 'Sin cantidad elegible' : 'Error; corregir datos o reintentar'}</li> })}</ul>}
-          <DialogFooter><button type="button" disabled={operationBusy} onClick={() => { pendingOperationIds.current.clear(); setDialog(null) }} className="rounded-md border border-border-subtle px-3 py-2 text-sm">Cerrar</button>{dialog === 'config' && <button type="button" disabled={operationBusy} onClick={() => void saveConfig()} className="rounded-md bg-brand-primary px-3 py-2 text-sm font-semibold text-text-inverse">Guardar configuración</button>}{dialog === 'writeoff' && <button type="button" disabled={operationBusy} onClick={() => void submitWriteOff()} className="rounded-md bg-brand-primary px-3 py-2 text-sm font-semibold text-text-inverse">Confirmar baja</button>}{dialog === 'remove' && <button type="button" disabled={operationBusy} onClick={() => selectedItem && void removeExpired(selectedItem.productId)} className="rounded-md bg-brand-primary px-3 py-2 text-sm font-semibold text-text-inverse">Confirmar retiro</button>}{dialog === 'bulk' && <button type="button" disabled={operationBusy} onClick={() => void removeExpiredBulk()} className="rounded-md bg-brand-primary px-3 py-2 text-sm font-semibold text-text-inverse">Iniciar retiro</button>}</DialogFooter>
+          <DialogFooter className="sticky bottom-[-1rem] -mx-4 mt-2 flex-col-reverse gap-2 border-t border-border-subtle bg-surface-base px-4 py-3 sm:bottom-[-1.5rem] sm:-mx-6 sm:flex-row sm:px-6"> <button type="button" disabled={operationBusy} onClick={() => { pendingOperationIds.current.clear(); setDialog(null) }} className="rounded-md border border-border-subtle px-3 py-2 text-sm">Cerrar</button>{dialog === 'config' && <button type="button" disabled={operationBusy || !configItem} onClick={() => void saveConfig()} className="rounded-md bg-brand-primary px-3 py-2 text-sm font-semibold text-text-inverse">Guardar configuración</button>}{dialog === 'writeoff' && <button type="button" disabled={operationBusy} onClick={() => void submitWriteOff()} className="rounded-md bg-brand-primary px-3 py-2 text-sm font-semibold text-text-inverse">Confirmar baja</button>}{dialog === 'remove' && <button type="button" disabled={operationBusy} onClick={() => selectedItem && void removeExpired(selectedItem.productId)} className="rounded-md bg-brand-primary px-3 py-2 text-sm font-semibold text-text-inverse">Confirmar retiro</button>}{dialog === 'bulk' && <button type="button" disabled={operationBusy} onClick={() => void removeExpiredBulk()} className="rounded-md bg-brand-primary px-3 py-2 text-sm font-semibold text-text-inverse">Iniciar retiro</button>}</DialogFooter>
         </DialogContent>
       </Dialog>
     </PageContainer>

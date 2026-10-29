@@ -166,6 +166,76 @@ describe('Stock Inteligente read dashboard', () => {
     expect(screen.getByLabelText('Stock mínimo')).toHaveValue(9)
   })
 
+  it('opens configuration from the header before a product is selected and scopes expired products to this page', async () => {
+    get.mockResolvedValue({ data: { ...overview, items: [
+      { ...item('p-1', 'Yerba del Sur', 'Almacén'), expiredQuantity: 3 },
+      { ...item('p-2', 'Té del Norte', 'Infusiones'), expiredQuantity: 0 },
+    ] } })
+    render(<SmartStockPage />)
+    await screen.findByText('Yerba del Sur')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Configuraciones' }))
+
+    expect(screen.getByRole('dialog')).toHaveTextContent('Productos vencidos de esta página')
+    expect(screen.getByRole('dialog')).toHaveClass('max-h-[calc(100dvh-2rem)]')
+    expect(screen.getByRole('dialog')).toHaveTextContent('Yerba del Sur')
+    expect(screen.getByRole('dialog')).toHaveTextContent('3')
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('Té del Norte')
+    expect(screen.getByLabelText('Producto para configurar')).toHaveValue('')
+  })
+
+  it('selects a current-page product and populates its thresholds in configuration', async () => {
+    get.mockResolvedValue({ data: { ...overview, items: [
+      { ...item('p-1', 'Yerba del Sur', 'Almacén'), expiryAlertDays: 21 },
+    ] } })
+    render(<SmartStockPage />)
+    await screen.findByText('Yerba del Sur')
+    fireEvent.click(screen.getByRole('button', { name: 'Configuraciones' }))
+    fireEvent.change(screen.getByLabelText('Producto para configurar'), { target: { value: 'p-1' } })
+
+    expect(screen.getByLabelText('Stock mínimo')).toHaveValue(2)
+    expect(screen.getByLabelText('Umbral preventivo (días)')).toHaveValue(21)
+  })
+
+  it('shows an honest empty state when no current-page products are expired', async () => {
+    render(<SmartStockPage />)
+    await screen.findByText('Yerba del Sur')
+    fireEvent.click(screen.getByRole('button', { name: 'Configuraciones' }))
+
+    expect(screen.getByRole('status')).toHaveTextContent('No hay productos vencidos en esta página.')
+  })
+
+  it('names each expired-product removal button and waits for confirmation before requesting removal', async () => {
+    get.mockResolvedValue({ data: { ...overview, items: [
+      { ...item('p-1', 'Yerba del Sur', 'Almacén'), expiredQuantity: 3 },
+      { ...item('p-2', 'Té del Norte', 'Infusiones'), expiredQuantity: 1 },
+    ] } })
+    render(<SmartStockPage />)
+    await screen.findByText('Yerba del Sur')
+    fireEvent.click(screen.getByRole('button', { name: 'Configuraciones' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retirar vencidos de Yerba del Sur' }))
+
+    expect(screen.getByRole('dialog')).toHaveTextContent('Producto: Yerba del Sur')
+    expect(post).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar retiro' }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/stock/products/p-1/expired-removal', expect.any(Object)))
+  })
+
+  it('states the eligible current-page product count before bulk removal', async () => {
+    get.mockResolvedValue({ data: { ...overview, items: [
+      { ...item('p-1', 'Yerba del Sur', 'Almacén'), expiredQuantity: 3 },
+      { ...item('p-2', 'Té del Norte', 'Infusiones'), expiredQuantity: 1 },
+      { ...item('p-3', 'Yerba Orgánica', 'Infusiones'), expiredQuantity: 0 },
+    ] } })
+    render(<SmartStockPage />)
+    await screen.findByText('Yerba del Sur')
+    fireEvent.click(screen.getByRole('button', { name: 'Retirar vencidos de esta página' }))
+
+    expect(screen.getByRole('dialog')).toHaveTextContent('Se procesarán 2 productos con existencias vencidas de esta página')
+    expect(post).not.toHaveBeenCalled()
+  })
+
   it('reuses a write-off operation ID for the same failed payload and creates a new ID when the note changes', async () => {
     let nextId = 0
     vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(() => `operation-${++nextId}`)
