@@ -44,6 +44,14 @@ describe('MODULE_REGISTRY', () => {
     expect(isModuleEnabled(route!, repartidorAccess)).toBe(true)
   })
 
+  it('enables Stock inteligente for any authenticated session without stock permissions', () => {
+    const stock = MODULE_REGISTRY.find((entry) => entry.id === 'stock-smart')
+
+    expect(stock).toBeDefined()
+    expect(stock).toMatchObject({ href: '/stock-smart', flag: null, gate: null, requiredPermissions: [] })
+    expect(isModuleEnabled(stock!, repartidorAccess)).toBe(true)
+  })
+
   it('does not reintroduce route-specific permission requirements', () => {
     const route = MODULE_REGISTRY.find((entry) => entry.id === 'route')
 

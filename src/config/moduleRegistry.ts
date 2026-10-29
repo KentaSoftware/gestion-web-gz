@@ -9,6 +9,7 @@ import {
   Route,
   Wallet,
   FlaskConical,
+  Boxes,
   type LucideIcon,
 } from 'lucide-react'
 import { Permission, SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
@@ -77,6 +78,7 @@ export interface ModuleRegistryEntry {
 export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
   { id: 'home', href: '/home', label: 'Inicio', icon: Home, flag: null, requiredPermissions: [], gate: null },
   { id: 'product', href: '/product', label: 'Productos', icon: Package, flag: null, requiredPermissions: [], gate: null },
+  { id: 'stock-smart', href: '/stock-smart', label: 'Stock inteligente', icon: Boxes, flag: null, requiredPermissions: [], gate: null },
   { id: 'sale', href: '/sale', label: 'Ventas', icon: DollarSign, flag: null, requiredPermissions: [], gate: null },
   { id: 'buy', href: '/buy', label: 'Compras', icon: ClipboardList, flag: null, requiredPermissions: [], gate: null },
   { id: 'buy-smart-upload', href: '/buy/smart-upload', label: 'Carga inteligente', icon: Upload, flag: null, requiredPermissions: [], gate: null },
