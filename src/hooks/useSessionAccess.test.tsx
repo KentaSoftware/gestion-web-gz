@@ -8,7 +8,7 @@ const { useAppSelector } = vi.hoisted(() => ({
 
 vi.mock('@/redux/hook', () => ({ useAppSelector }))
 vi.mock('@/config/moduleRegistry', () => ({
-  DEFAULT_MODULE_GATES: { stock: false, finance: false, simulation: false },
+  DEFAULT_MODULE_GATES: { stock: false, finance: true, simulation: false },
 }))
 
 import { useSessionAccess } from './useSessionAccess'
@@ -61,11 +61,11 @@ describe('useSessionAccess', () => {
     expect(result.current.permissions).not.toContain(Permission.READ_ROUTE_PLAN)
   })
 
-  it('preserves the remaining module gates as unmet', () => {
+  it('preserves each module gate default for an authenticated session', () => {
     useAppSelector.mockReturnValue(authenticatedUser([Permission.READ_ROUTE_PLAN]))
 
     const { result } = renderHook(() => useSessionAccess())
 
-    expect(result.current.gates).toMatchObject({ stock: false, finance: false, simulation: false })
+    expect(result.current.gates).toMatchObject({ stock: false, finance: true, simulation: false })
   })
 })

@@ -7,9 +7,9 @@ import {
   CircleDollarSign,
   LineChart,
   Route,
-  Boxes,
   Wallet,
   FlaskConical,
+  Boxes,
   type LucideIcon,
 } from 'lucide-react'
 import { Permission, SESSION_STATUS, type SessionAccess } from '@/interfaces/auth.interface'
@@ -51,7 +51,7 @@ export const MODULE_FLAGS: Readonly<Record<ModuleFlagKey, boolean>> = {
   [MODULE_FLAG.SIMULATION]: parseEnabledFlag(process.env.NEXT_PUBLIC_SIMULATION_ENABLED),
 }
 
-/** Gate evidence is approved outside the app; every gate starts unmet. */
+/** Gate evidence is approved outside the app; defaults are unmet except explicit approvals below. */
 export const DEFAULT_MODULE_GATES: Readonly<Record<string, boolean>> = {
   [MODULE_GATE.STOCK]: false,
   /** Finance module enabled for this iteration (flag still required via env). */
@@ -83,6 +83,7 @@ export interface ModuleRegistryEntry {
 export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
   { id: 'home', href: '/home', label: 'Inicio', icon: Home, flag: null, requiredPermissions: [], gate: null },
   { id: 'product', href: '/product', label: 'Productos', icon: Package, flag: null, requiredPermissions: [], gate: null },
+  { id: 'stock-smart', href: '/stock-smart', label: 'Stock inteligente', icon: Boxes, flag: null, requiredPermissions: [], gate: null },
   { id: 'sale', href: '/sale', label: 'Ventas', icon: DollarSign, flag: null, requiredPermissions: [], gate: null },
   { id: 'buy', href: '/buy', label: 'Compras', icon: ClipboardList, flag: null, requiredPermissions: [], gate: null },
   { id: 'buy-smart-upload', href: '/buy/smart-upload', label: 'Carga inteligente', icon: Upload, flag: null, requiredPermissions: [], gate: null },
