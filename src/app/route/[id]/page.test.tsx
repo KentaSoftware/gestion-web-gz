@@ -16,7 +16,7 @@ const { getById, preview, useParams, push, refresh, back, useSessionAccess, useP
     useSessionAccess: vi.fn(),
     usePermission: vi.fn(),
     isModuleEnabled: vi.fn(),
-    moduleFlags: { route: true, finance: false, simulation: false } as Record<string, boolean>,
+    moduleFlags: { route: true, stock: false, finance: false, simulation: false } as Record<string, boolean>,
   }))
 
 delete process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
@@ -61,7 +61,7 @@ import RoutePlanDetailScreen from './page'
 const access = (overrides: Partial<SessionAccess> = {}): SessionAccess => ({
   status: SESSION_STATUS.READY,
   permissions: [],
-  gates: { route: true, finance: false, simulation: false },
+  gates: { route: true, stock: false, finance: false, simulation: false },
   ...overrides,
 })
 

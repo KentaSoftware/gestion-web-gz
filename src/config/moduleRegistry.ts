@@ -25,6 +25,7 @@ import { Permission, SESSION_STATUS, type SessionAccess } from '@/interfaces/aut
 
 /** Feature flag keys for the remaining Phase 0 modules. */
 export const MODULE_FLAG = {
+  STOCK: 'stock',
   FINANCE: 'finance',
   SIMULATION: 'simulation',
 } as const
@@ -33,6 +34,7 @@ export type ModuleFlagKey = (typeof MODULE_FLAG)[keyof typeof MODULE_FLAG]
 
 /** Gate evidence keys for the remaining gated modules. */
 export const MODULE_GATE = {
+  STOCK: 'stock',
   FINANCE: 'finance',
   SIMULATION: 'simulation',
 } as const
@@ -44,13 +46,16 @@ const parseEnabledFlag = (value: string | undefined): boolean => value === 'true
 
 /** Resolved module flags, read from public env vars at module load. Default false. */
 export const MODULE_FLAGS: Readonly<Record<ModuleFlagKey, boolean>> = {
+  [MODULE_FLAG.STOCK]: parseEnabledFlag(process.env.NEXT_PUBLIC_STOCK_ENABLED),
   [MODULE_FLAG.FINANCE]: parseEnabledFlag(process.env.NEXT_PUBLIC_FINANCE_ENABLED),
   [MODULE_FLAG.SIMULATION]: parseEnabledFlag(process.env.NEXT_PUBLIC_SIMULATION_ENABLED),
 }
 
-/** Gate evidence is approved outside the app; every gate starts unmet. */
+/** Gate evidence is approved outside the app; defaults are unmet except explicit approvals below. */
 export const DEFAULT_MODULE_GATES: Readonly<Record<string, boolean>> = {
-  [MODULE_GATE.FINANCE]: false,
+  [MODULE_GATE.STOCK]: false,
+  /** Finance module enabled for this iteration (flag still required via env). */
+  [MODULE_GATE.FINANCE]: true,
   [MODULE_GATE.SIMULATION]: false,
 }
 
@@ -85,7 +90,8 @@ export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
   { id: 'expense', href: '/expense', label: 'Egresos', icon: CircleDollarSign, flag: null, requiredPermissions: [], gate: null },
   { id: 'cashflow', href: '/cashflow', label: 'Flujo de caja', icon: LineChart, flag: null, requiredPermissions: [], gate: null },
   { id: 'route', href: '/route', label: 'Rutas', icon: Route, flag: null, requiredPermissions: [], gate: null },
-  { id: 'finance', href: '/finance', label: 'Finanzas', icon: Wallet, flag: MODULE_FLAG.FINANCE, requiredPermissions: [Permission.REFUND_SALE], gate: MODULE_GATE.FINANCE },
+  { id: 'stock', href: '/stock', label: 'Stock', icon: Boxes, flag: MODULE_FLAG.STOCK, requiredPermissions: [Permission.ADJUST_STOCK], gate: MODULE_GATE.STOCK },
+  { id: 'finance', href: '/finance', label: 'Finanzas', icon: Wallet, flag: MODULE_FLAG.FINANCE, requiredPermissions: [Permission.READ_CASHFLOW], gate: MODULE_GATE.FINANCE },
   { id: 'simulation', href: '/simulation', label: 'Simulación', icon: FlaskConical, flag: MODULE_FLAG.SIMULATION, requiredPermissions: [], gate: MODULE_GATE.SIMULATION },
 ]
 

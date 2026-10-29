@@ -36,7 +36,7 @@ describe('AppSidebar', () => {
     useSessionAccess.mockReturnValue({
       status: SESSION_STATUS.READY,
       permissions: [],
-       gates: { finance: false, simulation: false },
+      gates: { stock: false, finance: false, simulation: false },
     })
     isModuleEnabled.mockImplementation(routeEnabledForRepartidor)
 

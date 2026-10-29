@@ -7,6 +7,8 @@ export interface Sale {
   cliente: string
   total: number
   createdAt: string
+  /** ISO date string when cobro was confirmed; absent/null = unpaid */
+  paidAt?: string | null
   itemsSale: ItemSale[] | ExtendItemSale[]
   porcentaje?: number
 }
