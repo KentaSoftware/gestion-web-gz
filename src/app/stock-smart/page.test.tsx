@@ -2,9 +2,9 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SmartStockPage from './page'
 
-const { get } = vi.hoisted(() => ({ get: vi.fn() }))
+const { get, patch, post } = vi.hoisted(() => ({ get: vi.fn(), patch: vi.fn(), post: vi.fn() }))
 
-vi.mock('@/utils/client', () => ({ default: { get } }))
+vi.mock('@/utils/client', () => ({ default: { get, patch, post } }))
 
 const item = (productId: string, productName: string, categoryName: string, availableToSell = 4) => ({
   productId,
@@ -35,6 +35,8 @@ const overview = {
 describe('Stock Inteligente read dashboard', () => {
   beforeEach(() => {
     get.mockReset()
+    patch.mockReset()
+    post.mockReset()
     get.mockImplementation((url: string, config?: { params?: { category?: string } }) => {
       if (url === '/stock/overview') return Promise.resolve({ data: config?.params?.category
         ? { ...overview, total: 0, items: [] }
@@ -143,5 +145,113 @@ describe('Stock Inteligente read dashboard', () => {
     render(<SmartStockPage />)
     expect(await screen.findByText(/No se pudo cargar el stock/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+  })
+
+  it('S-07 confirms report is unavailable without making a request', async () => {
+    render(<SmartStockPage />)
+    await screen.findByText('Yerba del Sur')
+    fireEvent.click(screen.getByRole('button', { name: 'Generar reporte' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('La generación de reportes todavía no está disponible.')
+    expect(post).not.toHaveBeenCalled()
+  })
+
+  it('S-20 retains configuration values when the authenticated API rejects the update', async () => {
+    render(<SmartStockPage />)
+    await screen.findByText('Yerba del Sur')
+    fireEvent.click(screen.getByRole('button', { name: 'Configurar stock de Yerba del Sur' }))
+    fireEvent.change(screen.getByLabelText('Stock mínimo'), { target: { value: '9' } })
+    patch.mockRejectedValueOnce(new Error('invalid'))
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo guardar la configuración')
+    expect(screen.getByLabelText('Stock mínimo')).toHaveValue(9)
+  })
+
+  it('reuses a write-off operation ID for the same failed payload and creates a new ID when the note changes', async () => {
+    let nextId = 0
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(() => `operation-${++nextId}`)
+    render(<SmartStockPage />)
+    await screen.findByText('Yerba del Sur')
+    fireEvent.click(screen.getByRole('button', { name: 'Yerba del Sur' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar baja' }))
+    fireEvent.change(screen.getByLabelText('Cantidad'), { target: { value: '2' } })
+    fireEvent.change(screen.getByLabelText(/Observación/), { target: { value: 'Daño' } })
+    post.mockRejectedValueOnce(new Error('network'))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar baja' }))
+    await screen.findByRole('alert')
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar baja' }))
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2))
+    const firstPayload = post.mock.calls[0][1]
+    const retryPayload = post.mock.calls[1][1]
+    expect(retryPayload.operationId).toBe(firstPayload.operationId)
+
+    post.mockRejectedValueOnce(new Error('network'))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar baja' }))
+    await screen.findByRole('alert')
+    fireEvent.change(screen.getByLabelText(/Observación/), { target: { value: 'Rotura' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar baja' }))
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(4))
+    expect(post.mock.calls[3][1].operationId).not.toBe(firstPayload.operationId)
+    vi.restoreAllMocks()
+  })
+
+  it('creates a fresh bulk operation ID after complete success for the same payload', async () => {
+    let nextId = 0
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(() => `operation-${++nextId}`)
+    get.mockResolvedValue({ data: { ...overview, items: [ { ...item('p-1', 'Yerba del Sur', 'Almacén'), expiredQuantity: 2 } ] } })
+    post.mockResolvedValue({ data: { results: [{ productId: 'p-1', status: 'REMOVED', removedQuantity: 2 }] } })
+    render(<SmartStockPage />)
+    await screen.findByText('Yerba del Sur')
+    fireEvent.click(screen.getByRole('button', { name: 'Retirar vencidos de esta página' }))
+    const submit = screen.getByRole('button', { name: 'Iniciar retiro' })
+    fireEvent.click(submit)
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
+    fireEvent.click(submit)
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2))
+    expect(post.mock.calls[1][1].operationId).not.toBe(post.mock.calls[0][1].operationId)
+    vi.restoreAllMocks()
+  })
+
+  it('retains the bulk operation ID after partial failure for retrying the same payload', async () => {
+    let nextId = 0
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(() => `operation-${++nextId}`)
+    get.mockResolvedValue({ data: { ...overview, items: [ { ...item('p-1', 'Yerba del Sur', 'Almacén'), expiredQuantity: 2 } ] } })
+    post.mockResolvedValue({ data: { results: [{ productId: 'p-1', status: 'FAILED', removedQuantity: 0 }] } })
+    render(<SmartStockPage />)
+    await screen.findByText('Yerba del Sur')
+    fireEvent.click(screen.getByRole('button', { name: 'Retirar vencidos de esta página' }))
+    const submit = screen.getByRole('button', { name: 'Iniciar retiro' })
+    fireEvent.click(submit)
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
+    fireEvent.click(submit)
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2))
+    expect(post.mock.calls[1][1].operationId).toBe(post.mock.calls[0][1].operationId)
+    vi.restoreAllMocks()
+  })
+
+  it('reports all-ineligible bulk results neutrally and mixed results accurately', async () => {
+    get.mockResolvedValue({ data: { ...overview, items: [
+      { ...item('p-1', 'Yerba del Sur', 'Almacén'), expiredQuantity: 2 },
+      { ...item('p-2', 'Té del Norte', 'Infusiones'), expiredQuantity: 1 },
+    ] } })
+    post.mockResolvedValueOnce({ data: { results: [
+      { productId: 'p-1', status: 'NO_ELIGIBLE', removedQuantity: 0 },
+      { productId: 'p-2', status: 'NO_ELIGIBLE', removedQuantity: 0 },
+    ] } }).mockResolvedValueOnce({ data: { results: [
+      { productId: 'p-1', status: 'REMOVED', removedQuantity: 2 },
+      { productId: 'p-2', status: 'NO_ELIGIBLE', removedQuantity: 0 },
+    ] } })
+    render(<SmartStockPage />)
+    await screen.findByText('Yerba del Sur')
+    fireEvent.click(screen.getByRole('button', { name: 'Retirar vencidos de esta página' }))
+    const submit = screen.getByRole('button', { name: 'Iniciar retiro' })
+
+    fireEvent.click(submit)
+    expect(await screen.findByRole('status')).toHaveTextContent('No había existencias vencidas elegibles')
+    expect(screen.getByRole('list', { name: 'Resultados por producto' })).toHaveTextContent('Yerba del Sur: Sin cantidad elegible')
+    expect(screen.getByRole('status')).not.toHaveTextContent('retirados correctamente')
+
+    fireEvent.click(submit)
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 producto(s) con retiro; 1 sin cantidad elegible'))
+    expect(screen.getByRole('list', { name: 'Resultados por producto' })).toHaveTextContent('Té del Norte: Sin cantidad elegible')
   })
 })
