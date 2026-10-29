@@ -22,7 +22,7 @@ const item = (productId: string, productName: string, categoryName: string, avai
 
 const overview = {
   page: 1,
-  pageSize: 50,
+  pageSize: 8,
   total: 51,
   items: [item('p-1', 'Yerba del Sur', 'Almacén'), item('p-2', 'Té del Norte', 'Infusiones', 0), item('p-3', 'Yerba Orgánica', 'Infusiones')],
   globalSummary: { belowMinimumProductCount: 7, expiringProductCount: 3, expiredProductCount: 2, lowRotationProductCount: 4, activeAlertCount: 8 },
@@ -59,6 +59,38 @@ describe('Stock Inteligente read dashboard', () => {
     expect(screen.queryByText('Bajo mínimo')).not.toBeInTheDocument()
     expect(screen.getByText('Yerba Orgánica')).toBeInTheDocument()
     expect(screen.getByLabelText('8 alertas en todo el catálogo')).toBeInTheDocument()
+  })
+
+  it('shows five alerts per severity initially and reveals the remaining alerts on request', async () => {
+    const alerts = Array.from({ length: 7 }, (_, index) => ({
+      productId: `warning-${index}`,
+      productName: `Producto ${index + 1}`,
+      type: 'LOW_ROTATION',
+      severity: 'WARNING',
+      explanation: `Alerta adicional ${index + 1}`,
+      dataQuality: 'COMPLETE',
+    }))
+    get.mockResolvedValue({ data: { ...overview, globalAlerts: alerts } })
+
+    render(<SmartStockPage />)
+    await screen.findByText('Alerta adicional 1')
+
+    const warningGroup = screen.getByRole('region', { name: 'Alertas advertencias' })
+    expect(warningGroup).toHaveTextContent('(7)')
+    expect(warningGroup.querySelectorAll('li')).toHaveLength(5)
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar 2 alertas más' }))
+    expect(warningGroup.querySelectorAll('li')).toHaveLength(7)
+    expect(screen.getByRole('button', { name: 'Mostrar menos alertas' })).toBeInTheDocument()
+  })
+
+  it('requests eight products per page and keeps pagination based on API total', async () => {
+    render(<SmartStockPage />)
+    await screen.findByText('Yerba del Sur')
+    expect(get).toHaveBeenCalledWith('/stock/overview', expect.objectContaining({ params: expect.objectContaining({ pageSize: 8 }) }))
+    expect(screen.getByText('Página 1 de 7, 51 productos')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/stock/overview', expect.objectContaining({ params: expect.objectContaining({ page: 2, pageSize: 8 }) })))
   })
 
   it('S-09 sends intersecting filters to the API, resets pagination, and clears filters independently', async () => {
@@ -103,7 +135,7 @@ describe('Stock Inteligente read dashboard', () => {
     fireEvent.click(zeroStock)
     expect(await screen.findByText('No disponible: historial incompleto')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('Ingreso por compra')).toBeInTheDocument())
-    expect(get).toHaveBeenCalledWith('/stock/products/p-2', expect.objectContaining({ params: expect.objectContaining({ movementLimit: 10 }) }))
+    expect(get).toHaveBeenCalledWith('/stock/products/p-2', expect.objectContaining({ params: expect.objectContaining({ movementLimit: 5 }) }))
   })
 
   it('S-21 separates request failure from a valid empty page and offers retry', async () => {

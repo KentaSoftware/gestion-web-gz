@@ -6,7 +6,8 @@ import { PageContainer, PageHeader } from '@/components/layout/PageLayout'
 import apiClient from '@/utils/client'
 
 const TIME_ZONE = 'America/Argentina/Buenos_Aires'
-const PAGE_SIZE = 50
+const PAGE_SIZE = 8
+const INITIAL_ALERT_LIMIT = 5
 const SEVERITIES = { ALL: 'ALL', CRITICAL: 'CRITICAL', WARNING: 'WARNING', INFO: 'INFO' } as const
 type SeverityFilter = (typeof SEVERITIES)[keyof typeof SEVERITIES]
 type AlertSeverity = Exclude<SeverityFilter, 'ALL'>
@@ -111,6 +112,7 @@ export default function SmartStockPage() {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
   const [severity, setSeverity] = useState<SeverityFilter>(SEVERITIES.ALL)
+  const [expandedAlertGroups, setExpandedAlertGroups] = useState<Partial<Record<AlertSeverity, boolean>>>({})
   const [selectedId, setSelectedId] = useState('')
   const [detail, setDetail] = useState<StockDetail | null>(null)
   const [detailStatus, setDetailStatus] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle')
@@ -136,7 +138,7 @@ export default function SmartStockPage() {
     setDetailStatus('loading')
     setDetail(null)
     apiClient.get<StockDetail>(`/stock/products/${encodeURIComponent(selectedId)}`, {
-      params: { businessDate: dateInBuenosAires(), timeZone: TIME_ZONE, movementLimit: 10 },
+      params: { businessDate: dateInBuenosAires(), timeZone: TIME_ZONE, movementLimit: 5 },
       signal: controller.signal,
     }).then(({ data }) => {
       setDetail(data)
@@ -199,10 +201,14 @@ export default function SmartStockPage() {
           : status === 'error' ? <p className="py-6 text-sm text-state-error" role="alert">No se pudieron cargar las alertas.</p>
             : filteredAlerts.length === 0 ? <p className="py-6 text-sm text-text-secondary" role="status">{(overview?.globalAlerts.length ?? 0) === 0 ? 'No hay alertas activas.' : 'No hay alertas para esta severidad.'}</p>
               : <div className="mt-4 space-y-5">
-                {alertGroups.filter((group) => group.alerts.length > 0).map((group) => <section key={group.key} aria-label={`Alertas ${group.label.toLocaleLowerCase('es')}`}>
+                {alertGroups.filter((group) => group.alerts.length > 0).map((group) => {
+                  const expanded = expandedAlertGroups[group.key] ?? false
+                  const visibleAlerts = expanded ? group.alerts : group.alerts.slice(0, INITIAL_ALERT_LIMIT)
+                  const remainingCount = group.alerts.length - visibleAlerts.length
+                  return <section key={group.key} aria-label={`Alertas ${group.label.toLocaleLowerCase('es')}`}>
                   <h3 className="mb-2 text-sm font-semibold text-text-primary">{group.label} <span className="font-normal text-text-secondary">({group.alerts.length})</span></h3>
                   <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                    {group.alerts.map((alert, index) => <li key={`${alert.productId}-${alert.type}-${index}`} className="rounded-lg bg-background-subtle p-3">
+                    {visibleAlerts.map((alert, index) => <li key={`${alert.productId}-${alert.type}-${index}`} className="rounded-lg bg-background-subtle p-3">
                       <div className="flex items-start gap-3">
                         <AlertTriangle className={`mt-0.5 size-4 shrink-0 ${alert.severity === 'CRITICAL' ? 'text-state-error' : alert.severity === 'WARNING' ? 'text-brand-accent' : 'text-text-secondary'}`} aria-hidden="true" />
                         <div className="min-w-0">
@@ -213,7 +219,10 @@ export default function SmartStockPage() {
                       </div>
                     </li>)}
                   </ul>
-                </section>)}
+                  {group.alerts.length > INITIAL_ALERT_LIMIT && <button type="button" aria-expanded={expanded} onClick={() => setExpandedAlertGroups((current) => ({ ...current, [group.key]: !expanded }))} className="mt-2 rounded-md px-3 py-2 text-sm font-medium text-text-secondary hover:bg-background-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary">
+                    {expanded ? 'Mostrar menos alertas' : `Mostrar ${remainingCount} alertas más`}
+                  </button>}
+                </section>})}
               </div>}
       </section>
 
