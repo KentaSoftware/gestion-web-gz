@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, ArrowDown, ArrowUp, Boxes, ChevronLeft, ChevronRight, CircleHelp, PackageSearch, RefreshCw, Search, X, Settings2, FileText, Trash2 } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, Boxes, ChevronLeft, ChevronRight, CircleHelp, PackageSearch, RefreshCw, Search, X, Settings2, FileText, Trash2, MoreVertical } from 'lucide-react'
 import { PageContainer, PageHeader } from '@/components/layout/PageLayout'
 import apiClient from '@/utils/client'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 const TIME_ZONE = 'America/Argentina/Buenos_Aires'
 const PAGE_SIZE = 8
-const INITIAL_ALERT_LIMIT = 5
+const INITIAL_ALERT_LIMIT = 2
 const SEVERITIES = { ALL: 'ALL', CRITICAL: 'CRITICAL', WARNING: 'WARNING', INFO: 'INFO' } as const
 type SeverityFilter = (typeof SEVERITIES)[keyof typeof SEVERITIES]
 type AlertSeverity = Exclude<SeverityFilter, 'ALL'>
@@ -105,6 +105,15 @@ const formatAlertType = (type: string): string => ({
   EXPIRED: 'Existencias vencidas', LOW_ROTATION: 'Baja rotación',
 }[type] ?? 'Alerta de stock')
 
+const formatAlertExplanation = (alert: StockAlert): string => {
+  const explanation = alert.explanation
+  const normalized = explanation.trim().toUpperCase().replace(/[ -]+/g, '_')
+  if (normalized.includes('INCOMPLETE') && normalized.includes('THRESHOLD')) return 'Datos incompletos para evaluar los umbrales de stock.'
+  if (alert.type === 'LOW_ROTATION' && (normalized.includes('INCOMPLETE') || normalized.includes('INSUFFICIENT'))) return 'Historial de ventas insuficiente para evaluar la rotación.'
+  if (normalized.includes('PREVENTIVE') && normalized.includes('THRESHOLD')) return 'No se pudo evaluar el umbral preventivo.'
+  return explanation.trim() || 'Revisá el estado del stock de este producto.'
+}
+
 const formatMovementType = (type: string): string => ({
   OPENING: 'Stock inicial', PURCHASE_IN: 'Ingreso por compra', SALE_COMMIT: 'Reserva por venta',
   SALE_ADJUSTMENT: 'Ajuste de venta', SALE_CANCEL: 'Cancelación de venta', SALE_DELIVERED_OUT: 'Salida por venta',
@@ -117,6 +126,13 @@ const imageUrl = (path: string): string => {
   return `${host}/${safePath.replace(/^\//, '')}`
 }
 
+const stockStatus = (item: StockItem) => {
+  if (item.dataQuality !== 'COMPLETE' || item.minimum === null) return { label: 'Datos incompletos', classes: 'bg-background-subtle text-text-secondary' }
+  if (item.availableToSell === 0) return { label: 'Sin disponibilidad', classes: 'bg-state-error/10 text-state-error' }
+  if (item.availableToSell <= item.minimum) return { label: 'Stock bajo', classes: 'bg-brand-accent/10 text-brand-accent' }
+  return { label: 'Disponible', classes: 'bg-state-success/10 text-state-success' }
+}
+
 export default function SmartStockPage() {
   const [overview, setOverview] = useState<StockOverview | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -124,6 +140,7 @@ export default function SmartStockPage() {
   const [detailRetry, setDetailRetry] = useState(0)
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
+  const [quickSearch, setQuickSearch] = useState('')
   const [category, setCategory] = useState('')
   const [severity, setSeverity] = useState<SeverityFilter>(SEVERITIES.ALL)
   const [expandedAlertGroups, setExpandedAlertGroups] = useState<Partial<Record<AlertSeverity, boolean>>>({})
@@ -182,6 +199,7 @@ export default function SmartStockPage() {
   }, [selectedId, detailRetry])
 
   const items = overview?.items ?? []
+  const quickItems = items.filter((item) => `${item.productName} ${item.categoryName ?? ''}`.toLocaleLowerCase('es').includes(quickSearch.trim().toLocaleLowerCase('es')))
   const filteredAlerts = (overview?.globalAlerts ?? []).filter((alert) => severity === SEVERITIES.ALL || alert.severity === severity)
   const alertGroups = [
     { key: 'CRITICAL' as const, label: 'Críticas' },
@@ -291,16 +309,14 @@ export default function SmartStockPage() {
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => openOperation('config', '')} className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary"><Settings2 className="mr-2 inline size-4" aria-hidden="true" />Configuraciones</button>
           <button type="button" onClick={refreshData} aria-label="Actualizar stock" className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary"><RefreshCw className="mr-2 inline size-4" aria-hidden="true" />Actualizar</button>
-          <button type="button" onClick={() => openOperation('bulk')} className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary">Retirar vencidos de esta página</button>
           <button type="button" onClick={() => openOperation('report')} aria-label="Generar reporte" className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary"><FileText className="mr-2 inline size-4" aria-hidden="true" />Generar reporte</button>
         </div>
       } />
 
-      <section aria-label="Indicadores globales de stock" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section aria-label="Indicadores globales de stock" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: 'Stock bajo', value: summary.belowMinimumProductCount, note: 'productos bajo el mínimo' },
           { label: 'Por vencer', value: summary.expiringProductCount, note: 'productos en ventana preventiva' },
-          { label: 'Vencido', value: summary.expiredProductCount, note: 'productos con existencias vencidas' },
           { label: 'Baja rotación', value: summary.lowRotationProductCount, note: 'productos con baja rotación' },
           { label: 'Alertas activas', value: summary.activeAlertCount, note: 'alertas en todo el catálogo' },
         ].map((metric) => (
@@ -313,7 +329,8 @@ export default function SmartStockPage() {
       </section>
 
       <section aria-labelledby="stock-alerts-title" className="rounded-xl border border-border-subtle bg-surface-base p-4 md:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div role="group" aria-label="Filtros del catálogo" className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 id="stock-alerts-title" className="text-lg font-semibold text-text-primary">Alertas del catálogo</h2>
             <p className="text-sm text-text-secondary">Priorizá por severidad. El filtro no modifica el listado ni los indicadores.</p>
@@ -324,25 +341,38 @@ export default function SmartStockPage() {
               <option value="ALL">Todas</option><option value="CRITICAL">Crítica</option><option value="WARNING">Advertencia</option><option value="INFO">Informativa</option>
             </select>
           </label>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <label className="relative min-w-52 flex-1">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" aria-hidden="true" />
+              <input aria-label="Buscar producto por nombre" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} placeholder="Buscar producto" className="h-10 w-full rounded-md border border-border-subtle bg-background-canvas pl-9 pr-9 text-sm text-text-primary placeholder:text-text-muted" />
+              {search && <button type="button" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-text-secondary hover:bg-background-subtle" aria-label="Limpiar búsqueda"><X className="size-4" /></button>}
+            </label>
+            <label className="flex items-center gap-2">
+              <span className="sr-only">Filtrar productos por categoría</span>
+              <input aria-label="Filtrar productos por categoría" className="h-10 min-w-36 rounded-md border border-border-subtle bg-background-canvas px-3 text-sm text-text-primary placeholder:text-text-muted" value={category} onChange={(event) => { setCategory(event.target.value); setPage(1) }} placeholder="Categoría" />
+              {category && <button type="button" onClick={() => setCategory('')} className="rounded p-2 text-text-secondary hover:bg-background-subtle" aria-label="Limpiar categoría"><X className="size-4" /></button>}
+            </label>
+          </div>
         </div>
         {status === 'loading' ? <p className="py-6 text-sm text-text-secondary" role="status">Cargando alertas…</p>
           : status === 'error' ? <p className="py-6 text-sm text-state-error" role="alert">No se pudieron cargar las alertas.</p>
-            : filteredAlerts.length === 0 ? <p className="py-6 text-sm text-text-secondary" role="status">{(overview?.globalAlerts.length ?? 0) === 0 ? 'No hay alertas activas.' : 'No hay alertas para esta severidad.'}</p>
-              : <div className="mt-4 space-y-5">
-                {alertGroups.filter((group) => group.alerts.length > 0).map((group) => {
+            : <div className="mt-4 grid gap-4 md:grid-cols-3">
+                {alertGroups.map((group) => {
                   const expanded = expandedAlertGroups[group.key] ?? false
                   const visibleAlerts = expanded ? group.alerts : group.alerts.slice(0, INITIAL_ALERT_LIMIT)
                   const remainingCount = group.alerts.length - visibleAlerts.length
-                  return <section key={group.key} aria-label={`Alertas ${group.label.toLocaleLowerCase('es')}`}>
+                  return <section key={group.key} aria-label={`Alertas ${group.label.toLocaleLowerCase('es')}`} className="min-w-0">
                   <h3 className="mb-2 text-sm font-semibold text-text-primary">{group.label} <span className="font-normal text-text-secondary">({group.alerts.length})</span></h3>
-                  <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {group.alerts.length === 0 ? <p className="rounded-lg bg-background-subtle p-3 text-sm text-text-secondary" role="status">{(overview?.globalAlerts.length ?? 0) === 0 ? 'Sin alertas activas.' : 'Sin alertas para esta severidad.'}</p> : <>
+                  <ul className="grid gap-2">
                     {visibleAlerts.map((alert, index) => <li key={`${alert.productId}-${alert.type}-${index}`} className="rounded-lg bg-background-subtle p-3">
                       <div className="flex items-start gap-3">
                         <AlertTriangle className={`mt-0.5 size-4 shrink-0 ${alert.severity === 'CRITICAL' ? 'text-state-error' : alert.severity === 'WARNING' ? 'text-brand-accent' : 'text-text-secondary'}`} aria-hidden="true" />
                         <div className="min-w-0">
                           <p className="font-semibold text-text-primary">{alert.productName}</p>
                           <p className="text-xs text-text-secondary">{formatAlertType(alert.type)}</p>
-                          <p className="mt-1 text-sm text-text-secondary">{alert.explanation}</p>
+                          <p className="mt-1 text-sm text-text-secondary">{formatAlertExplanation(alert)}</p>
                         </div>
                       </div>
                     </li>)}
@@ -350,6 +380,7 @@ export default function SmartStockPage() {
                   {group.alerts.length > INITIAL_ALERT_LIMIT && <button type="button" aria-expanded={expanded} onClick={() => setExpandedAlertGroups((current) => ({ ...current, [group.key]: !expanded }))} className="mt-2 rounded-md px-3 py-2 text-sm font-medium text-text-secondary hover:bg-background-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary">
                     {expanded ? 'Mostrar menos alertas' : `Mostrar ${remainingCount} alertas más`}
                   </button>}
+                  </>}
                 </section>})}
               </div>}
       </section>
@@ -358,32 +389,14 @@ export default function SmartStockPage() {
         <div className="min-w-0 rounded-xl border border-border-subtle bg-surface-base p-4 md:p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div><h2 id="stock-products-title" className="text-lg font-semibold text-text-primary">Productos</h2><p className="text-sm text-text-secondary">Página {overview?.page ?? page} de {pageCount}, {overview?.total ?? 0} productos</p></div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-              <label className="relative min-w-52 flex-1">
-                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" aria-hidden="true" />
-                <input aria-label="Buscar producto por nombre" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} placeholder="Buscar producto" className="h-10 w-full rounded-md border border-border-subtle bg-background-canvas pl-9 pr-9 text-sm text-text-primary placeholder:text-text-muted" />
-                {search && <button type="button" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-text-secondary hover:bg-background-subtle" aria-label="Limpiar búsqueda"><X className="size-4" /></button>}
-              </label>
-              <label className="flex items-center gap-2">
-                <span className="sr-only">Filtrar productos por categoría</span>
-                <input aria-label="Filtrar productos por categoría" className="h-10 min-w-36 rounded-md border border-border-subtle bg-background-canvas px-3 text-sm text-text-primary placeholder:text-text-muted" value={category} onChange={(event) => { setCategory(event.target.value); setPage(1) }} placeholder="Categoría" />
-                {category && <button type="button" onClick={() => setCategory('')} className="rounded p-2 text-text-secondary hover:bg-background-subtle" aria-label="Limpiar categoría"><X className="size-4" /></button>}
-              </label>
-            </div>
           </div>
 
           {status === 'loading' ? <div className="flex min-h-48 items-center justify-center gap-3 text-text-secondary" role="status" aria-live="polite"><RefreshCw className="size-5 animate-spin" aria-hidden="true" />Cargando productos…</div>
             : status === 'error' ? <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-center" role="alert"><AlertTriangle className="size-8 text-state-error" /><p className="text-sm text-text-secondary">No se pudo cargar el stock. Verificá la conexión e intentá nuevamente.</p><button type="button" className="rounded-md bg-brand-primary px-4 py-2 text-sm font-semibold text-text-inverse" onClick={() => setRetry((value) => value + 1)}>Reintentar</button></div>
-              : items.length === 0 ? <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center" role="status"><PackageSearch className="size-8 text-text-muted" aria-hidden="true" /><p className="font-medium text-text-primary">{emptyProductsMessage}</p><p className="text-sm text-text-secondary">La búsqueda y la categoría se aplican juntas.</p></div>
-                : <ul className="mt-4 divide-y divide-border-subtle">
-                  {items.map((item) => <li key={item.productId}>
-                    <button type="button" onClick={() => setSelectedId(item.productId)} aria-pressed={selectedId === item.productId} className={`flex w-full items-center gap-3 rounded-md px-2 py-3 text-left transition-colors hover:bg-background-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary ${selectedId === item.productId ? 'bg-background-subtle' : ''}`}>
-                      {item.imagePath ? <img src={imageUrl(item.imagePath)} alt="" className="size-12 shrink-0 rounded-md object-cover" /> : <span className="flex size-12 shrink-0 items-center justify-center rounded-md bg-background-subtle text-text-muted"><Boxes className="size-5" aria-hidden="true" /></span>}
-                      <span className="min-w-0 flex-1"><span className="block truncate font-semibold text-text-primary">{item.productName}</span><span className="block truncate text-xs text-text-secondary">{item.categoryName || 'Sin categoría'} · Mínimo {item.minimum ?? 'No definido'}</span><span className="mt-1 block text-xs text-text-secondary">Físico {item.physicalQuantity} · Comprometido {item.committedQuantity} · Disponible {item.availableToSell}</span></span>
-                      <span className={`hidden shrink-0 rounded-full px-2 py-1 text-xs font-medium sm:inline-flex ${item.availableToSell <= 0 ? 'bg-state-error/10 text-state-error' : 'bg-background-subtle text-text-secondary'}`}>{item.availableToSell <= 0 ? 'Sin disponibilidad' : 'Disponible'}</span>
-                    </button>
-                  </li>)}
-                </ul>}
+               : items.length === 0 ? <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center" role="status"><PackageSearch className="size-8 text-text-muted" aria-hidden="true" /><p className="font-medium text-text-primary">{emptyProductsMessage}</p><p className="text-sm text-text-secondary">La búsqueda y la categoría se aplican juntas.</p></div>
+                 : <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-border-subtle text-xs font-semibold uppercase tracking-wide text-text-secondary"><th className="px-2 py-3">Producto</th><th className="px-2 py-3">Categoría</th><th className="px-2 py-3">Stock actual</th><th className="px-2 py-3">Stock mínimo</th><th className="px-2 py-3">Estado</th><th className="px-2 py-3">Última venta</th><th className="px-2 py-3"><span className="sr-only">Acciones</span></th></tr></thead><tbody className="divide-y divide-border-subtle">{items.map((item) => { const state = stockStatus(item); return <tr key={item.productId} className={selectedId === item.productId ? 'bg-background-subtle' : ''}>
+                   <td className="px-2 py-3"><button type="button" onClick={() => setSelectedId(item.productId)} aria-pressed={selectedId === item.productId} className="flex min-w-40 items-center gap-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary">{item.imagePath ? <img src={imageUrl(item.imagePath)} alt="" className="size-9 shrink-0 rounded-md object-cover" /> : <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-background-subtle text-text-muted"><Boxes className="size-4" aria-hidden="true" /></span>}<span className="font-semibold text-text-primary">{item.productName}</span></button></td>
+                   <td className="px-2 py-3 text-text-secondary">{item.categoryName || 'Sin categoría'}</td><td className="px-2 py-3"><span className="block font-semibold text-text-primary">{item.physicalQuantity} físico</span><span className="block text-xs text-text-secondary">Comprometido {item.committedQuantity} · Disponible {item.availableToSell}</span></td><td className="px-2 py-3 text-text-primary">{item.minimum === null ? 'No definido' : item.minimum}</td><td className="px-2 py-3"><span className={`whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ${state.classes}`}>{state.label}</span></td><td className="px-2 py-3 text-xs text-text-secondary">{item.latestSale.status === 'RECORDED' && item.latestSale.occurredAt ? formatDate(item.latestSale.occurredAt) : 'No disponible: historial incompleto'}</td><td className="px-2 py-3"><details className="relative"><summary aria-label={`Acciones de ${item.productName}`} className="flex size-8 cursor-pointer list-none items-center justify-center rounded-md text-text-secondary hover:bg-background-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary"><MoreVertical className="size-4" aria-hidden="true" /></summary><div className="absolute right-0 z-10 mt-1 flex min-w-40 flex-col rounded-md border border-border-subtle bg-surface-base p-1 shadow-lg"><button type="button" onClick={() => openOperation('config', item.productId)} className="rounded px-3 py-2 text-left text-sm hover:bg-background-subtle">Configurar stock</button><button type="button" onClick={() => { setSelectedId(item.productId); openOperation('writeoff', item.productId) }} className="rounded px-3 py-2 text-left text-sm hover:bg-background-subtle">Registrar baja</button><button type="button" disabled={item.expiredQuantity <= 0} onClick={() => { setSelectedId(item.productId); openOperation('remove', item.productId) }} className="rounded px-3 py-2 text-left text-sm hover:bg-background-subtle disabled:opacity-50">Retirar vencidos</button></div></details></td></tr> })}</tbody></table></div>}
 
           <div className="mt-4 flex items-center justify-between border-t border-border-subtle pt-3">
             <button type="button" disabled={page <= 1 || status === 'loading'} onClick={() => { setSelectedId(''); setPage((value) => Math.max(1, value - 1)) }} className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm text-text-secondary hover:bg-background-subtle disabled:cursor-not-allowed disabled:opacity-50"><ChevronLeft className="size-4" aria-hidden="true" />Anterior</button>
@@ -392,25 +405,28 @@ export default function SmartStockPage() {
           </div>
         </div>
 
-        <aside aria-label="Detalle y movimientos del producto" className="min-w-0 rounded-xl border border-border-subtle bg-surface-base p-4 md:p-5">
-          {!selectedId ? <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center text-text-secondary"><CircleHelp className="size-8" aria-hidden="true" /><p className="font-medium">Consultá un producto</p><p className="text-sm">Seleccioná un producto para ver su disponibilidad y movimientos recientes.</p></div>
+        <aside aria-label="Consulta rápida de existencias" className="min-w-0 rounded-xl border border-border-subtle bg-surface-base p-4 md:p-5">
+          <h2 className="text-lg font-semibold text-text-primary">Consulta rápida de existencias</h2><p className="mt-1 text-sm text-text-secondary">Buscá entre los productos de la página actual.</p><label className="relative mt-3 block"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" aria-hidden="true" /><input aria-label="Búsqueda rápida en esta página" value={quickSearch} onChange={(event) => setQuickSearch(event.target.value)} placeholder="Nombre o categoría" className="h-10 w-full rounded-md border border-border-subtle bg-background-canvas pl-9 pr-3 text-sm text-text-primary" /></label>
+           {quickSearch.trim() && (quickItems.length === 0 ? <p className="py-4 text-sm text-text-secondary" role="status">No hay productos en esta página que coincidan.</p> : <ul className="mt-2 divide-y divide-border-subtle">{quickItems.map((item) => <li key={item.productId}><button type="button" onClick={() => setSelectedId(item.productId)} aria-pressed={selectedId === item.productId} className="flex w-full items-center gap-3 py-2 text-left hover:bg-background-subtle">{item.imagePath ? <img src={imageUrl(item.imagePath)} alt="" className="size-9 rounded object-cover" /> : <Boxes className="size-5 text-text-muted" aria-hidden="true" />}<span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary">{item.productName}</span><span className="block text-xs text-text-secondary">{item.categoryName || 'Sin categoría'}</span></span></button></li>)}</ul>)}
+          {!selectedId ? <div className="flex min-h-32 flex-col items-center justify-center gap-2 text-center text-text-secondary"><CircleHelp className="size-8" aria-hidden="true" /><p className="font-medium">Consultá un producto</p><p className="text-sm">Seleccioná un resultado para ver existencias y movimientos.</p></div>
             : <>
-              <div className="border-b border-border-subtle pb-3"><p className="text-xs font-medium uppercase tracking-wide text-text-muted">Detalle de stock</p><h3 className="mt-1 text-lg font-semibold text-text-primary">{selectedItem?.productName ?? 'Producto seleccionado'}</h3>
+               <div className="border-b border-border-subtle pb-3"><p className="text-xs font-medium uppercase tracking-wide text-text-muted">Detalle de stock</p>{selectedItem?.imagePath && <img src={imageUrl(selectedItem.imagePath)} alt="" className="mt-2 size-12 rounded-md object-cover" />}<h3 className="mt-1 text-lg font-semibold text-text-primary">{selectedItem?.productName ?? 'Producto seleccionado'}</h3><p className="text-sm text-text-secondary">{selectedItem?.categoryName || 'Sin categoría'}</p>
                 {selectedItem && <div className="mt-3 flex flex-wrap gap-2"><button type="button" aria-label={`Configurar stock de ${selectedItem.productName}`} onClick={() => openOperation('config', selectedItem.productId)} className="rounded-md border border-border-subtle px-3 py-2 text-sm"><Settings2 className="mr-1 inline size-4" aria-hidden="true" />Configurar</button><button type="button" onClick={() => openOperation('writeoff')} className="rounded-md border border-border-subtle px-3 py-2 text-sm">Registrar baja</button><button type="button" onClick={() => openOperation('remove')} disabled={selectedItem.expiredQuantity <= 0} className="rounded-md border border-border-subtle px-3 py-2 text-sm disabled:opacity-50"><Trash2 className="mr-1 inline size-4" aria-hidden="true" />Retirar vencidos</button></div>}
               </div>
               {detailStatus === 'loading' ? <p className="py-6 text-sm text-text-secondary" role="status">Cargando disponibilidad y movimientos…</p>
                 : detailStatus === 'error' ? <div className="py-6 text-center" role="alert"><p className="text-sm text-state-error">No se pudo consultar el detalle del producto.</p><button type="button" onClick={() => setDetailRetry((value) => value + 1)} className="mt-3 rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary">Reintentar</button></div>
                   : detail && <>
-                    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 py-4 text-sm">
+                     <dl className="grid grid-cols-2 gap-x-4 gap-y-3 py-4 text-sm">
                       <div><dt className="text-text-secondary">Físico</dt><dd className="font-semibold text-text-primary">{detail.availability.physicalQuantity}</dd></div>
                       <div><dt className="text-text-secondary">Comprometido</dt><dd className="font-semibold text-text-primary">{detail.availability.committedQuantity}</dd></div>
                       <div><dt className="text-text-secondary">Disponible</dt><dd className="font-semibold text-text-primary">{detail.availability.availableToSell}</dd></div>
-                      <div><dt className="text-text-secondary">Vencido</dt><dd className="font-semibold text-text-primary">{detail.availability.expiredQuantity}</dd></div>
-                    </dl>
+                       <div><dt className="text-text-secondary">Mínimo</dt><dd className="font-semibold text-text-primary">{selectedItem?.minimum === null ? 'No definido' : selectedItem?.minimum ?? 'No definido'}</dd></div>
+                     </dl>
+                     {selectedItem && <span className={`rounded-full px-2 py-1 text-xs font-medium ${stockStatus(selectedItem).classes}`}>{stockStatus(selectedItem).label}</span>}
                     <p className="text-sm text-text-secondary">Última venta: <span className="font-medium text-text-primary">{selectedItem?.latestSale.status === 'RECORDED' && selectedItem.latestSale.occurredAt ? formatDate(selectedItem.latestSale.occurredAt) : 'No disponible: historial incompleto'}</span></p>
-                    <div className="mt-5"><h4 className="font-semibold text-text-primary">Movimientos recientes</h4>
+                     <div className="mt-5"><h4 className="font-semibold text-text-primary">Últimos movimientos</h4>
                       {detail.movements.length === 0 ? <p className="py-4 text-sm text-text-secondary" role="status">No hay movimientos registrados.</p>
-                        : <ol className="mt-2 divide-y divide-border-subtle">{detail.movements.map((movement, index) => <li key={movement.movementId ?? `${movement.type}-${movement.occurredAt}-${index}`} className="flex items-start justify-between gap-3 py-3"><span><span className="block text-sm font-medium text-text-primary">{formatMovementType(movement.type)}</span><time className="block text-xs text-text-secondary" dateTime={movement.occurredAt}>{formatDate(movement.occurredAt)}</time></span><span className="inline-flex items-center gap-1 text-sm font-semibold text-text-primary">{movement.quantity > 0 ? <ArrowUp className="size-3 text-state-success" aria-hidden="true" /> : <ArrowDown className="size-3 text-state-error" aria-hidden="true" />}{Math.abs(movement.quantity)}</span></li>)}</ol>}
+                         : <ol className="mt-2 divide-y divide-border-subtle">{detail.movements.map((movement, index) => <li key={movement.movementId ?? `${movement.type}-${movement.occurredAt}-${index}`} className="flex items-start justify-between gap-3 py-3"><span><span className="block text-sm font-medium text-text-primary">{formatMovementType(movement.type)}</span><time className="block text-xs text-text-secondary" dateTime={movement.occurredAt}>{formatDate(movement.occurredAt)}</time></span><span className="inline-flex items-center gap-1 text-sm font-semibold text-text-primary">{movement.quantity >= 0 ? <ArrowUp className="size-3 text-state-success" aria-hidden="true" /> : <ArrowDown className="size-3 text-state-error" aria-hidden="true" />}{movement.quantity > 0 ? '+' : ''}{movement.quantity}</span></li>)}</ol>}
                     </div>
                   </>}
             </>}

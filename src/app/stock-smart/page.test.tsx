@@ -48,9 +48,22 @@ describe('Stock Inteligente read dashboard', () => {
   it('S-01 renders invariant global indicators and catalog-wide alerts', async () => {
     render(<SmartStockPage />)
     expect(await screen.findByText('Yerba del Sur')).toBeInTheDocument()
+    expect(screen.getByLabelText('Indicadores globales de stock').querySelectorAll('article')).toHaveLength(4)
+    expect(screen.queryByText('Vencido')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retirar vencidos de esta página' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('7 productos bajo el mínimo')).toBeInTheDocument()
     expect(screen.getByText('Té del Norte')).toBeInTheDocument()
     expect(screen.getByText('8 alertas en todo el catálogo')).toBeInTheDocument()
+    const toolbar = screen.getByRole('group', { name: 'Filtros del catálogo' })
+    expect(toolbar).toContainElement(screen.getByLabelText('Buscar producto por nombre'))
+    expect(toolbar).toContainElement(screen.getByLabelText('Filtrar productos por categoría'))
+    expect(toolbar).toContainElement(screen.getByLabelText('Filtrar alertas por severidad'))
+    expect(screen.getByRole('region', { name: 'Alertas críticas' }).parentElement).toHaveClass('md:grid-cols-3')
+    expect(screen.getByRole('region', { name: 'Alertas críticas' }).querySelector('ul')).toHaveClass('grid', 'gap-2')
+    expect(screen.getByRole('region', { name: 'Alertas informativas' })).toHaveTextContent('Sin alertas para esta severidad.')
+    expect(screen.getByRole('region', { name: 'Alertas críticas' })).toHaveTextContent('Bajo mínimo')
+    expect(screen.getByRole('region', { name: 'Alertas informativas' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Alertas advertencias' })).toBeInTheDocument()
   })
 
   it('S-02 severity narrows only global alerts', async () => {
@@ -61,9 +74,10 @@ describe('Stock Inteligente read dashboard', () => {
     expect(screen.queryByText('Bajo mínimo')).not.toBeInTheDocument()
     expect(screen.getByText('Yerba Orgánica')).toBeInTheDocument()
     expect(screen.getByLabelText('8 alertas en todo el catálogo')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retirar vencidos de esta página' })).not.toBeInTheDocument()
   })
 
-  it('shows five alerts per severity initially and reveals the remaining alerts on request', async () => {
+  it('shows two alerts per severity initially and reveals the truthful remaining count on request', async () => {
     const alerts = Array.from({ length: 7 }, (_, index) => ({
       productId: `warning-${index}`,
       productName: `Producto ${index + 1}`,
@@ -79,8 +93,9 @@ describe('Stock Inteligente read dashboard', () => {
 
     const warningGroup = screen.getByRole('region', { name: 'Alertas advertencias' })
     expect(warningGroup).toHaveTextContent('(7)')
-    expect(warningGroup.querySelectorAll('li')).toHaveLength(5)
-    fireEvent.click(screen.getByRole('button', { name: 'Mostrar 2 alertas más' }))
+    expect(warningGroup.querySelectorAll('li')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'Mostrar 5 alertas más' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar 5 alertas más' }))
     expect(warningGroup.querySelectorAll('li')).toHaveLength(7)
     expect(screen.getByRole('button', { name: 'Mostrar menos alertas' })).toBeInTheDocument()
   })
@@ -138,6 +153,70 @@ describe('Stock Inteligente read dashboard', () => {
     expect(await screen.findByText('No disponible: historial incompleto')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('Ingreso por compra')).toBeInTheDocument())
     expect(get).toHaveBeenCalledWith('/stock/products/p-2', expect.objectContaining({ params: expect.objectContaining({ movementLimit: 5 }) }))
+  })
+
+  it('translates documented incomplete stock explanations and preserves other explanations', async () => {
+    get.mockResolvedValue({ data: { ...overview, globalAlerts: [
+      { productId: 'p-1', productName: 'Yerba del Sur', type: 'LOW_STOCK', severity: 'CRITICAL', explanation: 'INCOMPLETE_STOCK_THRESHOLDS', dataQuality: 'INCOMPLETE' },
+      { productId: 'p-2', productName: 'Té del Norte', type: 'LOW_ROTATION', severity: 'WARNING', explanation: 'LOW_ROTATION_INSUFFICIENT_SALES_HISTORY', dataQuality: 'INCOMPLETE' },
+      { productId: 'p-3', productName: 'Yerba Orgánica', type: 'LOW_STOCK', severity: 'INFO', explanation: 'Explicación específica del servicio', dataQuality: 'COMPLETE' },
+    ] } })
+    render(<SmartStockPage />)
+    expect(await screen.findByText('Datos incompletos para evaluar los umbrales de stock.')).toBeInTheDocument()
+    expect(screen.getByText('Historial de ventas insuficiente para evaluar la rotación.')).toBeInTheDocument()
+    expect(screen.getByText('Explicación específica del servicio')).toBeInTheDocument()
+  })
+
+  it('translates low-rotation history explanations using the alert type', async () => {
+    const explanation = 'Product p-90 has insufficient history for the last 90 complete calendar days'
+    get.mockResolvedValue({ data: { ...overview, globalAlerts: [
+      { productId: 'p-90', productName: 'Producto con historial incompleto', type: 'LOW_ROTATION', severity: 'WARNING', explanation, dataQuality: 'INCOMPLETE' },
+    ] } })
+    render(<SmartStockPage />)
+
+    expect(await screen.findByText('Historial de ventas insuficiente para evaluar la rotación.')).toBeInTheDocument()
+    expect(screen.queryByText(explanation)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Product p-90/)).not.toBeInTheDocument()
+  })
+
+  it('renders dense stock columns, status boundaries, and accessible row actions', async () => {
+    get.mockResolvedValue({ data: { ...overview, items: [
+      item('p-1', 'Yerba del Sur', 'Almacén', 2),
+      { ...item('p-2', 'Té del Norte', 'Infusiones', 0), minimum: 0 },
+      { ...item('p-3', 'Yerba Orgánica', 'Infusiones', 5), minimum: null },
+      { ...item('p-4', 'Té Verde', 'Infusiones', 8), dataQuality: 'PARTIAL' },
+    ] } })
+    render(<SmartStockPage />)
+    await screen.findByText('Yerba del Sur')
+    for (const header of ['Producto', 'Categoría', 'Stock actual', 'Stock mínimo', 'Estado', 'Última venta']) expect(screen.getByRole('columnheader', { name: header })).toBeInTheDocument()
+    expect(screen.getByText('Stock bajo')).toBeInTheDocument()
+    expect(screen.getByText('Sin disponibilidad')).toBeInTheDocument()
+    expect(screen.getAllByText('Datos incompletos')).toHaveLength(2)
+    expect(screen.getByText('8 físico')).toBeInTheDocument()
+    expect(screen.getByLabelText('Acciones de Yerba del Sur')).toBeInTheDocument()
+  })
+
+  it('quick lookup searches only current-page results and loads selected identity, threshold, status and movements', async () => {
+    render(<SmartStockPage />)
+    await screen.findByText('Yerba del Sur')
+    const quickLookup = screen.getByRole('complementary', { name: 'Consulta rápida de existencias' })
+    expect(quickLookup).toHaveTextContent('Consultá un producto')
+    expect(quickLookup.querySelector('ul')).not.toBeInTheDocument()
+    const quickSearch = screen.getByLabelText('Búsqueda rápida en esta página')
+    fireEvent.change(quickSearch, { target: { value: 'Norte' } })
+    expect(quickLookup.querySelectorAll('li')).toHaveLength(1)
+    expect(quickLookup.querySelector('ul')).toHaveTextContent('Té del Norte')
+    fireEvent.change(quickSearch, { target: { value: 'Producto inexistente' } })
+    expect(quickLookup).toHaveTextContent('No hay productos en esta página que coincidan.')
+    expect(quickLookup.querySelector('ul')).not.toBeInTheDocument()
+    fireEvent.change(quickSearch, { target: { value: 'Norte' } })
+    expect(screen.getByText('Buscá entre los productos de la página actual.')).toBeInTheDocument()
+    expect(get.mock.calls.filter(([url]) => url === '/stock/overview')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: /Té del Norte/ }))
+    expect(await screen.findByText('Mínimo')).toBeInTheDocument()
+    expect(await screen.findByText('Ingreso por compra')).toBeInTheDocument()
+    expect(screen.getByText('+8')).toBeInTheDocument()
+    expect(screen.getByText('Sin disponibilidad')).toBeInTheDocument()
   })
 
   it('S-21 separates request failure from a valid empty page and offers retry', async () => {
@@ -230,7 +309,8 @@ describe('Stock Inteligente read dashboard', () => {
     ] } })
     render(<SmartStockPage />)
     await screen.findByText('Yerba del Sur')
-    fireEvent.click(screen.getByRole('button', { name: 'Retirar vencidos de esta página' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Configuraciones' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retirar todos de esta página' }))
 
     expect(screen.getByRole('dialog')).toHaveTextContent('Se procesarán 2 productos con existencias vencidas de esta página')
     expect(post).not.toHaveBeenCalled()
@@ -271,7 +351,8 @@ describe('Stock Inteligente read dashboard', () => {
     post.mockResolvedValue({ data: { results: [{ productId: 'p-1', status: 'REMOVED', removedQuantity: 2 }] } })
     render(<SmartStockPage />)
     await screen.findByText('Yerba del Sur')
-    fireEvent.click(screen.getByRole('button', { name: 'Retirar vencidos de esta página' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Configuraciones' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retirar todos de esta página' }))
     const submit = screen.getByRole('button', { name: 'Iniciar retiro' })
     fireEvent.click(submit)
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
@@ -288,7 +369,8 @@ describe('Stock Inteligente read dashboard', () => {
     post.mockResolvedValue({ data: { results: [{ productId: 'p-1', status: 'FAILED', removedQuantity: 0 }] } })
     render(<SmartStockPage />)
     await screen.findByText('Yerba del Sur')
-    fireEvent.click(screen.getByRole('button', { name: 'Retirar vencidos de esta página' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Configuraciones' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retirar todos de esta página' }))
     const submit = screen.getByRole('button', { name: 'Iniciar retiro' })
     fireEvent.click(submit)
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
@@ -312,7 +394,8 @@ describe('Stock Inteligente read dashboard', () => {
     ] } })
     render(<SmartStockPage />)
     await screen.findByText('Yerba del Sur')
-    fireEvent.click(screen.getByRole('button', { name: 'Retirar vencidos de esta página' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Configuraciones' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retirar todos de esta página' }))
     const submit = screen.getByRole('button', { name: 'Iniciar retiro' })
 
     fireEvent.click(submit)
