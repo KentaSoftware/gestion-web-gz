@@ -1,307 +1,343 @@
-import { render, screen, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SimulationPage from './page'
+import type { RouteDashboard, RouteDashboardCard } from '@/interfaces/routePlan.interface'
 
-const MAIN_REGION_HEADINGS = [
-  'Parámetros de simulación',
-  'Ejecutar simulación',
-  'Registros de escenarios',
-]
+const { get, post } = vi.hoisted(() => ({
+  get: vi.fn(),
+  post: vi.fn(),
+}))
 
-const REVIEW_HEADING = 'Estados de revisión'
-const COMPOSED_COLLAPSED = 'Configuración contraída con historial de muestra'
-const COMPOSED_COLLAPSED_UNSELECTED = 'Configuración contraída con historial sin selección'
-const COMPOSED_EMPTY_ROUTE = 'Ruta vacía con historial de muestra'
-const EMPTY_HISTORY = 'Historial sin registros'
+vi.mock('@/utils/client', () => ({
+  default: { get, post },
+}))
 
-const regionFor = (name: string): HTMLElement => {
-  const heading = screen.getByRole('heading', { level: 2, name })
-  const region = heading.closest('section')
-  expect(region).not.toBeNull()
-  return region as HTMLElement
+vi.mock('@/components/ProtectedRoute', () => ({
+  default: ({ children }: { children: ReactNode }) => (
+    <div data-testid="protected-route">{children}</div>
+  ),
+}))
+
+const ROUTE_NORTH = 'a'.repeat(24)
+const ROUTE_CENTER = 'b'.repeat(24)
+const TOKEN = 'opaque-token_123.abc'
+const BASE_HASH = 'c'.repeat(64)
+
+const routeCard = (
+  id: string,
+  status: RouteDashboardCard['status'],
+  zoneCode: string,
+): RouteDashboardCard => ({
+  id,
+  status,
+  zoneCode,
+  selectedSaleIds: ['d'.repeat(24)],
+  clientCount: 2,
+  metrics: { distanceMeters: 1234, durationSeconds: 600, fuelLiters: null },
+  assignments: {},
+  warnings: [],
+  stale: false,
+})
+
+const dashboardWith = (routes: RouteDashboardCard[]): RouteDashboard => ({
+  filters: {},
+  kpis: {
+    activeRoutes: routes.length,
+    pendingOrders: 0,
+    totalDistanceMeters: null,
+    estimatedFuelLiters: null,
+  },
+  routes,
+  candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' },
+  warnings: [],
+})
+
+const baseScenarioComplete = {
+  dataQuality: 'COMPLETE' as const,
+  token: TOKEN,
+  baseScenarioHash: BASE_HASH,
+  versions: {
+    routeContractVersion: 'SIM-ROUTE-SNAPSHOT-001',
+    stockContractVersion: 'SIM-STOCK-SNAPSHOT-001',
+    rulesVersion: 'SIMULATION_RULES_PROVISIONAL_V1',
+  },
 }
 
-const specimenFor = (name: string): HTMLElement => {
-  const heading = screen.getByRole('heading', { level: 3, name })
-  const specimen = heading.closest('article')
-  expect(specimen).not.toBeNull()
-  return specimen as HTMLElement
+const calculationComplete = {
+  baseScenarioHash: BASE_HASH,
+  variantId: 'variant-1',
+  dataQuality: 'COMPLETE' as const,
+  viability: 'VIABLE' as const,
+  recommended: true,
+  risks: [],
+  components: [{ code: 'FUEL', amountArs: 12.34 }],
+  // Deliberately not derived from components: the page must render server values.
+  totals: {
+    revenueArs: 500,
+    merchandiseCostArs: 200,
+    operatingCostArs: 50,
+    marginArs: 250,
+  },
+  calculatedAt: '2026-11-02T00:00:00.000Z',
 }
 
-const selectedRows = (table: HTMLElement): HTMLElement[] =>
-  within(table)
-    .getAllByRole('row')
-    .filter((row) => row.getAttribute('data-state') === 'selected')
+const selectRoute = async (id: string): Promise<void> => {
+  fireEvent.click(await screen.findByRole('radio', { name: `Seleccionar ruta ${id}` }))
+}
 
-const unselectedRows = (table: HTMLElement): HTMLElement[] =>
-  within(table)
-    .getAllByRole('row')
-    .filter((row) => row.getAttribute('data-state') === 'unselected')
+const createBase = async (id: string): Promise<void> => {
+  await selectRoute(id)
+  fireEvent.click(screen.getByRole('button', { name: 'Crear escenario base' }))
+}
 
-describe('SimulationPage illustrative presentation specimens (structural assertions only)', () => {
-  it('S-01 renders the dashboard frame and three main zones in reading order', () => {
+describe('SimulationPage bounded operational integration', () => {
+  beforeEach(() => {
+    get.mockResolvedValue({
+      data: dashboardWith([
+        routeCard(ROUTE_NORTH, 'PENDING', 'NORTE'),
+        routeCard(ROUTE_CENTER, 'IN_PROGRESS', 'CENTRO'),
+      ]),
+    })
+  })
+
+  it('renders the protected dashboard shell and honest unavailable sections', async () => {
     render(<SimulationPage />)
 
+    expect(screen.getByTestId('protected-route')).toBeInTheDocument()
     expect(
       screen.getByRole('heading', { level: 1, name: 'Simulación de escenarios' }),
     ).toBeInTheDocument()
 
     expect(
       screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent),
-    ).toEqual([...MAIN_REGION_HEADINGS, REVIEW_HEADING])
-
-    for (const name of MAIN_REGION_HEADINGS) {
-      expect(regionFor(name)).toBeInTheDocument()
-    }
-
-    expect(
-      within(regionFor('Parámetros de simulación')).getByText('Datos de muestra'),
-    ).toBeInTheDocument()
-    expect(within(regionFor('Ejecutar simulación')).getByText('Datos de muestra')).toBeInTheDocument()
-    expect(
-      within(regionFor('Registros de escenarios')).getByText('Datos de muestra'),
-    ).toBeInTheDocument()
-  })
-
-  it('S-02 renders expanded-configuration content structurally', () => {
-    render(<SimulationPage />)
-
-    const configuration = regionFor('Parámetros de simulación')
-
-    expect(
-      within(configuration).getByRole('heading', { level: 3, name: 'Rutas a simular' }),
-    ).toBeInTheDocument()
-    expect(
-      within(configuration).getByRole('heading', {
-        level: 3,
-        name: 'Productos para venta ambulante',
-      }),
-    ).toBeInTheDocument()
-    expect(
-      within(configuration).getByRole('heading', {
-        level: 3,
-        name: 'Parámetros del escenario',
-      }),
-    ).toBeInTheDocument()
-
-    const routes = within(configuration).getByRole('table', { name: 'Rutas de muestra' })
-    expect(within(routes).getAllByRole('row')).toHaveLength(4)
-    expect(within(routes).getByText('R-001')).toBeInTheDocument()
-    expect(within(configuration).getByText('3 rutas de muestra')).toBeInTheDocument()
-
-    expect(
-      within(configuration).getByRole('heading', { level: 4, name: 'Productos disponibles' }),
-    ).toBeInTheDocument()
-    expect(
-      within(configuration).getByRole('heading', {
-        level: 4,
-        name: 'Productos incluidos en el vehículo',
-      }),
-    ).toBeInTheDocument()
-    expect(within(configuration).getAllByText('Agua 500 ml')).toHaveLength(2)
-    expect(within(configuration).getByText('Incluir excedentes')).toBeInTheDocument()
-    expect(within(configuration).getByText('3 productos de muestra')).toBeInTheDocument()
-  })
-
-  it('S-01 renders exactly one full-width prominent action in the main composition', () => {
-    render(<SimulationPage />)
-
-    const actionRegion = regionFor('Ejecutar simulación')
-    const actionVariants = actionRegion.querySelectorAll('[data-variant]')
-
-    expect(actionVariants).toHaveLength(1)
-    expect(actionVariants[0]).toHaveAttribute('data-variant', 'prominent')
-    expect(actionVariants[0]).toHaveAttribute('data-layout', 'full-width')
-    expect(within(actionRegion).getByText('Simular escenario')).toBeInTheDocument()
-    expect(within(actionRegion).queryByText(/variante atenuada/i)).not.toBeInTheDocument()
-
-    const review = regionFor(REVIEW_HEADING)
-    expect(
-      within(review).getByText('Simular escenario (variante atenuada)'),
-    ).toHaveAttribute('data-variant', 'muted')
-  })
-
-  it('S-03/S-12 renders the composed collapsed-configuration and one-selected specimen structurally', () => {
-    render(<SimulationPage />)
-
-    const composed = specimenFor(COMPOSED_COLLAPSED)
-
-    expect(within(composed).getByText('Mostrar configuración')).toBeInTheDocument()
-    expect(within(composed).getByText(/Contenido plegado \(ilustrativo\)\./)).toBeInTheDocument()
-    expect(within(composed).queryByRole('button')).not.toBeInTheDocument()
-
-    const history = within(composed).getByRole('table', {
-      name: 'Historial con una selección de muestra',
-    })
-
-    expect(selectedRows(history)).toHaveLength(1)
-    expect(unselectedRows(history)).toHaveLength(2)
-    expect(within(composed).getByText('1 seleccionada')).toBeInTheDocument()
-    expect(within(composed).getByText('Comparar escenarios')).toHaveAttribute(
-      'data-variant',
-      'prominent',
-    )
-  })
-
-  it('S-03 renders collapsed configuration with populated unselected history in one specimen', () => {
-    render(<SimulationPage />)
-
-    const composed = specimenFor(COMPOSED_COLLAPSED_UNSELECTED)
-
-    expect(within(composed).getByText('Mostrar configuración')).toBeInTheDocument()
-    expect(within(composed).getByText(/Contenido plegado \(ilustrativo\)\./)).toBeInTheDocument()
-    expect(within(composed).queryByRole('button')).not.toBeInTheDocument()
-
-    const history = within(composed).getByRole('table', {
-      name: 'Historial poblado sin selección de muestra',
-    })
-
-    expect(within(history).getAllByRole('row')).toHaveLength(3)
-    expect(selectedRows(history)).toHaveLength(0)
-    expect(unselectedRows(history)).toHaveLength(2)
-    expect(within(history).getByText('ESC-010')).toBeInTheDocument()
-    expect(within(history).getByText('ESC-009')).toBeInTheDocument()
-    expect(within(composed).getByText('Ninguna marcada')).toBeInTheDocument()
-    expect(within(composed).getByText('2 filas de muestra')).toBeInTheDocument()
-    expect(within(composed).getByText('Comparar escenarios')).toHaveAttribute(
-      'data-variant',
-      'muted',
-    )
-  })
-
-  it('S-10 renders the composed empty-route and none-selected specimen structurally', () => {
-    render(<SimulationPage />)
-
-    const composed = specimenFor(COMPOSED_EMPTY_ROUTE)
-
-    expect(within(composed).getByText('No hay rutas disponibles.')).toBeInTheDocument()
-    expect(
-      within(composed).getByText('Estado vacío de la región de rutas, solo para revisión visual.'),
-    ).toBeInTheDocument()
-
-    const history = within(composed).getByRole('table', {
-      name: 'Historial sin selección de muestra',
-    })
-
-    expect(selectedRows(history)).toHaveLength(0)
-    expect(unselectedRows(history)).toHaveLength(2)
-    expect(within(composed).getByText('0 seleccionadas')).toBeInTheDocument()
-    expect(
-      within(composed).getByText('Simular escenario (variante atenuada)'),
-    ).toHaveAttribute('data-variant', 'muted')
-    expect(within(composed).getByText('Comparar escenarios')).toHaveAttribute(
-      'data-variant',
-      'muted',
-    )
-  })
-
-  it('S-11 renders the empty-history specimen structurally, distinct from populated history', () => {
-    render(<SimulationPage />)
-
-    const populated = within(regionFor('Registros de escenarios')).getByRole('table', {
-      name: 'Registros de escenarios de muestra',
-    })
-    expect(within(populated).getAllByRole('row')).toHaveLength(5)
-    expect(within(populated).getByText('ESC-014')).toBeInTheDocument()
-
-    const emptyHistory = specimenFor(EMPTY_HISTORY)
-    const emptyTable = within(emptyHistory).getByRole('table', {
-      name: 'Historial vacío de muestra',
-    })
-
-    expect(within(emptyTable).getByText('No hay escenarios registrados.')).toBeInTheDocument()
-    expect(within(emptyTable).getAllByRole('row')).toHaveLength(2)
-    expect(within(emptyTable).queryByText('ESC-014')).not.toBeInTheDocument()
-  })
-
-  it('S-12 renders distinct zero-, one- and two-selection history representations', () => {
-    render(<SimulationPage />)
-
-    const mainHistory = within(regionFor('Registros de escenarios')).getByRole('table', {
-      name: 'Registros de escenarios de muestra',
-    })
-    expect(selectedRows(mainHistory)).toHaveLength(2)
-    expect(unselectedRows(mainHistory)).toHaveLength(2)
-
-    const oneSelected = within(specimenFor(COMPOSED_COLLAPSED)).getByRole('table', {
-      name: 'Historial con una selección de muestra',
-    })
-    expect(selectedRows(oneSelected)).toHaveLength(1)
-    expect(unselectedRows(oneSelected)).toHaveLength(2)
-
-    const noneSelected = within(specimenFor(COMPOSED_EMPTY_ROUTE)).getByRole('table', {
-      name: 'Historial sin selección de muestra',
-    })
-    expect(selectedRows(noneSelected)).toHaveLength(0)
-    expect(unselectedRows(noneSelected)).toHaveLength(2)
-  })
-
-  it('S-20 labels sample history without completed-or-saved claims', () => {
-    render(<SimulationPage />)
-
-    const history = regionFor('Registros de escenarios')
-
-    expect(within(history).getByText('Historial de escenarios de muestra.')).toBeInTheDocument()
-    expect(within(history).queryByText(/realizadas y guardadas/i)).not.toBeInTheDocument()
-    expect(within(history).queryByText(/simulaciones realizadas/i)).not.toBeInTheDocument()
-  })
-
-  it('S-20 keeps record counts internally consistent and omits pagination controls', () => {
-    render(<SimulationPage />)
-
-    expect(screen.queryByText('Anterior')).not.toBeInTheDocument()
-    expect(screen.queryByText('Siguiente')).not.toBeInTheDocument()
-    expect(screen.queryByText(/Mostrando 1 a/)).not.toBeInTheDocument()
-
-    expect(screen.getByText('4 registros de muestra')).toBeInTheDocument()
-    expect(screen.getByText('2 seleccionadas')).toBeInTheDocument()
-    expect(screen.getByText('3 registros de muestra')).toBeInTheDocument()
-    expect(screen.getByText('1 seleccionada')).toBeInTheDocument()
-    expect(screen.getByText('2 registros de muestra')).toBeInTheDocument()
-    expect(screen.getByText('0 seleccionadas')).toBeInTheDocument()
-    expect(screen.getByText('0 registros de muestra')).toBeInTheDocument()
-  })
-
-  it('S-20 marks displayed content as illustrative specimens, not approved or real', () => {
-    render(<SimulationPage />)
+    ).toEqual(['Parámetros de simulación', 'Ejecutar simulación', 'Registros de escenarios'])
 
     const notice = screen.getByRole('note')
-    expect(notice).toHaveTextContent('Vista ilustrativa')
-    expect(notice).toHaveTextContent(/especímenes de revisión/i)
-    expect(notice).toHaveTextContent(/no representan una pantalla aprobada ni datos reales/i)
-    expect(notice).toHaveTextContent(/no ejecuta simulaciones, no calcula, no consulta servicios/i)
-    expect(notice).toHaveTextContent(/no guarda datos/i)
+    expect(notice).toHaveTextContent('Integración operativa acotada')
+    expect(notice).toHaveTextContent(/los resuelve el servidor/i)
+    expect(notice).toHaveTextContent(/no calcula importes, márgenes, capacidad ni recomendaciones/i)
+    expect(notice).toHaveTextContent(/solo aportan su identificador/i)
+    expect(notice).toHaveTextContent(/si el módulo o los productores no están habilitados/i)
 
-    expect(screen.getAllByText('Datos de muestra').length).toBeGreaterThanOrEqual(3)
+    expect(screen.queryByText('Datos de muestra')).not.toBeInTheDocument()
+    expect(screen.queryByText('Vista ilustrativa')).not.toBeInTheDocument()
+    expect(screen.queryByText('Espécimen de revisión')).not.toBeInTheDocument()
+    expect(screen.queryByText('ESC-014')).not.toBeInTheDocument()
+    expect(screen.queryByText('R-001')).not.toBeInTheDocument()
 
     expect(
-      within(regionFor(REVIEW_HEADING)).getByText(
-        'Variantes de presentación ilustrativas. No son estados aprobados ni comportamientos del producto.',
-      ),
+      screen.getByText('El historial de corridas guardadas no está habilitado en esta integración.'),
     ).toBeInTheDocument()
-
     expect(
-      screen.getAllByText('Espécimen de revisión').length,
-    ).toBeGreaterThanOrEqual(2)
+      screen.getByText('La comparación no está habilitada en esta integración.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /comparar escenarios/i })).not.toBeInTheDocument()
+
+    await screen.findByRole('table', { name: 'Rutas de planificación' })
   })
 
-  it('S-20 introduces no behavior, service call, calculation or persistence', () => {
-    const fetchSpy = vi.fn()
-    vi.stubGlobal('fetch', fetchSpy)
+  it('lists planning routes as identifiers only and never uses their metrics', async () => {
+    render(<SimulationPage />)
+
+    const table = await screen.findByRole('table', { name: 'Rutas de planificación' })
+    expect(within(table).getAllByRole('row')).toHaveLength(3)
+    expect(within(table).getByText(ROUTE_NORTH)).toBeInTheDocument()
+    expect(within(table).getByText('PENDING')).toBeInTheDocument()
+    expect(within(table).getByText('NORTE')).toBeInTheDocument()
+    expect(within(table).getByText(ROUTE_CENTER)).toBeInTheDocument()
+
+    expect(get).toHaveBeenCalledWith('/routePlan/dashboard', { params: {} })
+    expect(post).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Crear escenario base' })).toBeDisabled()
+  })
+
+  it('reports a planning-route load failure without inventing routes', async () => {
+    get.mockRejectedValueOnce(new Error('network down'))
 
     render(<SimulationPage />)
 
-    expect(fetchSpy).not.toHaveBeenCalled()
-    expect(screen.queryAllByRole('button')).toHaveLength(0)
-    expect(screen.queryAllByRole('textbox')).toHaveLength(0)
-    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
-    expect(screen.queryAllByRole('combobox')).toHaveLength(0)
-    expect(screen.queryAllByRole('link')).toHaveLength(0)
-    expect(document.querySelector('form')).toBeNull()
-    expect(document.querySelector('details')).toBeNull()
-    expect(document.querySelector('input, select, textarea')).toBeNull()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No se pudieron cargar las rutas de planificación.',
+    )
+    expect(screen.queryByRole('table', { name: 'Rutas de planificación' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Crear escenario base' })).toBeDisabled()
 
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+    await screen.findByRole('table', { name: 'Rutas de planificación' })
+    expect(get).toHaveBeenCalledTimes(2)
+  })
+
+  it('creates the base scenario with only the selected route identifier', async () => {
+    post.mockResolvedValueOnce({ data: baseScenarioComplete })
+
+    render(<SimulationPage />)
+
+    await createBase(ROUTE_NORTH)
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/simulation/base-scenarios', {
+        routeId: ROUTE_NORTH,
+      }),
+    )
+    expect(await screen.findByText('Escenario base completo')).toBeInTheDocument()
+    expect(screen.getByText(BASE_HASH)).toBeInTheDocument()
+    expect(screen.getByText('SIM-ROUTE-SNAPSHOT-001')).toBeInTheDocument()
+    expect(screen.getByText('SIM-STOCK-SNAPSHOT-001')).toBeInTheDocument()
+    expect(screen.getByText('SIMULATION_RULES_PROVISIONAL_V1')).toBeInTheDocument()
+    expect(screen.queryByText(TOKEN)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Calcular variante' })).toBeInTheDocument()
+  })
+
+  it('renders the server incomplete base-scenario state without a token or calculation', async () => {
+    post.mockRejectedValueOnce({
+      response: {
+        data: {
+          dataQuality: 'INCOMPLETE',
+          error: {
+            code: 'SIMULATION_SNAPSHOT_INCOMPLETE',
+            message: 'Stock snapshot is incomplete',
+          },
+          missingField: 'stock.products',
+        },
+      },
+    })
+
+    render(<SimulationPage />)
+    await createBase(ROUTE_NORTH)
+
+    expect(await screen.findByText('Escenario base incompleto')).toBeInTheDocument()
+    expect(screen.getByText('SIMULATION_SNAPSHOT_INCOMPLETE')).toBeInTheDocument()
+    expect(screen.getByText('stock.products')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Calcular variante' })).not.toBeInTheDocument()
+    expect(screen.queryByText(BASE_HASH)).not.toBeInTheDocument()
+  })
+
+  it('surfaces a closed-gate error envelope with its correlation identifier', async () => {
+    post.mockRejectedValueOnce({
+      response: {
+        data: {
+          code: 'SIMULATION_DISABLED',
+          message: 'Simulation is disabled',
+          correlationId: 'corr-42',
+        },
+      },
+    })
+
+    render(<SimulationPage />)
+    await createBase(ROUTE_NORTH)
+
+    expect(await screen.findByText('No se pudo crear el escenario base')).toBeInTheDocument()
+    expect(screen.getByText('SIMULATION_DISABLED')).toBeInTheDocument()
+    expect(screen.getByText('Simulation is disabled')).toBeInTheDocument()
+    expect(screen.getByText('corr-42')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Calcular variante' })).not.toBeInTheDocument()
+  })
+
+  it('calculates a variant against the server token and renders server amounts only', async () => {
+    post
+      .mockResolvedValueOnce({ data: baseScenarioComplete })
+      .mockResolvedValueOnce({ data: calculationComplete })
+
+    render(<SimulationPage />)
+    await createBase(ROUTE_NORTH)
+
+    fireEvent.change(await screen.findByLabelText('Nombre de la variante'), {
+      target: { value: 'Base' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Calcular variante' }))
+
+    await waitFor(() =>
+      expect(post).toHaveBeenLastCalledWith(
+        `/simulation/base-scenarios/${encodeURIComponent(TOKEN)}/variants/calculate`,
+        { name: 'Base', overrides: [], directLoad: [] },
+      ),
+    )
+    expect(await screen.findByText('Resultado del servidor')).toBeInTheDocument()
+    expect(screen.getByText('variant-1')).toBeInTheDocument()
+    expect(screen.getByText('VIABLE')).toBeInTheDocument()
+    expect(screen.getByText('Recomendada por el servidor')).toBeInTheDocument()
+    expect(screen.getByText('FUEL')).toBeInTheDocument()
+    expect(screen.getByText('12.34')).toBeInTheDocument()
+    expect(screen.getByText('500')).toBeInTheDocument()
+    expect(screen.getByText('200')).toBeInTheDocument()
+    expect(screen.getByText('50')).toBeInTheDocument()
+    expect(screen.getByText('250')).toBeInTheDocument()
+    expect(
+      screen.getByText('Estimación de análisis sin garantía de resultado real.'),
+    ).toBeInTheDocument()
+  })
+
+  it('renders an incomplete calculation with missing fields and no totals', async () => {
+    post.mockResolvedValueOnce({ data: baseScenarioComplete }).mockResolvedValueOnce({
+      data: {
+        baseScenarioHash: BASE_HASH,
+        variantId: 'variant-2',
+        dataQuality: 'INCOMPLETE',
+        viability: 'INCOMPLETE',
+        recommended: false,
+        risks: ['INCOMPLETE_DATA'],
+        missingFields: ['configuration.fuelPriceArsPerLiter'],
+        calculatedAt: '2026-11-02T00:00:00.000Z',
+      },
+    })
+
+    render(<SimulationPage />)
+    await createBase(ROUTE_NORTH)
+    fireEvent.change(await screen.findByLabelText('Nombre de la variante'), {
+      target: { value: 'Base' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Calcular variante' }))
+
+    expect(await screen.findByText('Cálculo incompleto')).toBeInTheDocument()
+    expect(screen.getByText('configuration.fuelPriceArsPerLiter')).toBeInTheDocument()
+    expect(screen.getByText('INCOMPLETE_DATA')).toBeInTheDocument()
+    expect(screen.queryByText('Ingreso estimado (ARS)')).not.toBeInTheDocument()
+    expect(screen.queryByText('Margen bruto (ARS)')).not.toBeInTheDocument()
+    expect(screen.queryByText('Recomendada por el servidor')).not.toBeInTheDocument()
+  })
+
+  it('invalidates the base scenario when the server rejects or expires its token', async () => {
+    post.mockResolvedValueOnce({ data: baseScenarioComplete }).mockRejectedValueOnce({
+      response: {
+        data: {
+          code: 'SIMULATION_TOKEN_EXPIRED',
+          message: 'Base scenario token expired',
+        },
+      },
+    })
+
+    render(<SimulationPage />)
+    await createBase(ROUTE_NORTH)
+    fireEvent.change(await screen.findByLabelText('Nombre de la variante'), {
+      target: { value: 'Base' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Calcular variante' }))
+
+    expect(await screen.findByText('No se pudo calcular la variante')).toBeInTheDocument()
+    expect(screen.getByText('SIMULATION_TOKEN_EXPIRED')).toBeInTheDocument()
+    expect(screen.queryByText('Escenario base completo')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Calcular variante' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Crear escenario base' })).toBeInTheDocument()
+  })
+
+  it('performs no fetch, local persistence or unsupported simulation calls', async () => {
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem')
+
+    render(<SimulationPage />)
+    await screen.findByRole('table', { name: 'Rutas de planificación' })
+
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(setItemSpy).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalled()
+    expect(screen.queryByText(/guardar corrida/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/configuraciones/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/presets/i)).not.toBeInTheDocument()
+
+    setItemSpy.mockRestore()
     vi.unstubAllGlobals()
   })
 })
