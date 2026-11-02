@@ -172,6 +172,7 @@ function SimulationWorkspace() {
 
   const completeBase =
     baseScenario?.dataQuality === SIMULATION_DATA_QUALITY.COMPLETE ? baseScenario : null
+  const routeSelectionLocked = baseState === 'pending' || calculationState === 'pending'
 
   const clearSimulationState = () => {
     setBaseState('idle')
@@ -184,7 +185,7 @@ function SimulationWorkspace() {
   }
 
   const handleSelectRoute = (routeId: string) => {
-    if (routeId === selectedRouteId) return
+    if (routeSelectionLocked || routeId === selectedRouteId) return
     setSelectedRouteId(routeId)
     clearSimulationState()
   }
@@ -371,7 +372,8 @@ function SimulationWorkspace() {
                                   value={route.id}
                                   checked={route.id === selectedRouteId}
                                   onChange={() => handleSelectRoute(route.id)}
-                                  className="size-4 cursor-pointer accent-brand-primary"
+                                  disabled={routeSelectionLocked}
+                                  className="size-4 cursor-pointer accent-brand-primary disabled:cursor-not-allowed"
                                 />
                                 <span className="sr-only">Seleccionar ruta {route.id}</span>
                               </label>

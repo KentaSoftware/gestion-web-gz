@@ -92,6 +92,9 @@ const createBase = async (id: string): Promise<void> => {
   fireEvent.click(screen.getByRole('button', { name: 'Crear escenario base' }))
 }
 
+const selectedRouteValue = (): HTMLElement =>
+  screen.getByText('Ruta seleccionada').parentElement as HTMLElement
+
 describe('SimulationPage bounded operational integration', () => {
   beforeEach(() => {
     get.mockResolvedValue({
@@ -188,6 +191,64 @@ describe('SimulationPage bounded operational integration', () => {
     expect(screen.getByText('SIMULATION_RULES_PROVISIONAL_V1')).toBeInTheDocument()
     expect(screen.queryByText(TOKEN)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Calcular variante' })).toBeInTheDocument()
+  })
+
+  it('blocks route changes while the base-scenario request is pending', async () => {
+    let resolveBase: (value: { data: unknown }) => void = () => {}
+    post.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveBase = resolve
+        }),
+    )
+
+    render(<SimulationPage />)
+    await createBase(ROUTE_NORTH)
+
+    expect(await screen.findByText('Creando escenario base.')).toBeInTheDocument()
+    const centerRadio = screen.getByRole('radio', { name: `Seleccionar ruta ${ROUTE_CENTER}` })
+    expect(centerRadio).toBeDisabled()
+    fireEvent.click(centerRadio)
+    expect(within(selectedRouteValue()).getByText(ROUTE_NORTH)).toBeInTheDocument()
+
+    resolveBase({ data: baseScenarioComplete })
+    expect(await screen.findByText('Escenario base completo')).toBeInTheDocument()
+    await waitFor(() => expect(centerRadio).not.toBeDisabled())
+    expect(post).toHaveBeenCalledTimes(1)
+    expect(post).toHaveBeenCalledWith('/simulation/base-scenarios', { routeId: ROUTE_NORTH })
+  })
+
+  it('blocks route changes while a variant calculation is pending', async () => {
+    let resolveCalculation: (value: { data: unknown }) => void = () => {}
+    post
+      .mockResolvedValueOnce({ data: baseScenarioComplete })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveCalculation = resolve
+          }),
+      )
+
+    render(<SimulationPage />)
+    await createBase(ROUTE_NORTH)
+    fireEvent.change(await screen.findByLabelText('Nombre de la variante'), {
+      target: { value: 'Base' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Calcular variante' }))
+
+    expect(await screen.findByText('Calculando variante.')).toBeInTheDocument()
+    const centerRadio = screen.getByRole('radio', { name: `Seleccionar ruta ${ROUTE_CENTER}` })
+    expect(centerRadio).toBeDisabled()
+    fireEvent.click(centerRadio)
+    expect(within(selectedRouteValue()).getByText(ROUTE_NORTH)).toBeInTheDocument()
+
+    resolveCalculation({ data: calculationComplete })
+    expect(await screen.findByText('Resultado del servidor')).toBeInTheDocument()
+    await waitFor(() => expect(centerRadio).not.toBeDisabled())
+    expect(post).toHaveBeenLastCalledWith(
+      `/simulation/base-scenarios/${encodeURIComponent(TOKEN)}/variants/calculate`,
+      { name: 'Base', overrides: [], directLoad: [] },
+    )
   })
 
   it('renders the server incomplete base-scenario state without a token or calculation', async () => {
