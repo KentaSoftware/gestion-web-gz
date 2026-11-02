@@ -51,6 +51,16 @@ const SECONDARY_BUTTON =
 const TEXT_INPUT =
   'mt-1 w-full rounded-md border border-border-subtle bg-surface-base px-3 py-2 text-label text-text-primary focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-state-focus'
 const EMPTY_STATE = 'rounded-md border border-dashed border-border-strong bg-background-subtle p-4'
+const ARS_FORMATTER = new Intl.NumberFormat('es-AR', {
+  style: 'currency',
+  currency: 'ARS',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
+function formatArsAmount(amount: number): string {
+  return ARS_FORMATTER.format(amount)
+}
 
 interface RouteOption {
   id: string
@@ -688,7 +698,9 @@ function SimulationWorkspace() {
                               <TableCell className="px-3 py-2.5 font-mono text-caption text-text-primary">
                                 {component.code}
                               </TableCell>
-                              <TableCell className={TABLE_CELL}>{component.amountArs}</TableCell>
+                              <TableCell className={TABLE_CELL}>
+                                {formatArsAmount(component.amountArs)}
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -701,7 +713,7 @@ function SimulationWorkspace() {
                           Ingreso estimado (ARS)
                         </dt>
                         <dd className="mt-1 text-label font-semibold text-text-primary">
-                          {calculation.totals.revenueArs}
+                          {formatArsAmount(calculation.totals.revenueArs)}
                         </dd>
                       </div>
                       <div>
@@ -709,7 +721,7 @@ function SimulationWorkspace() {
                           Costo de mercadería (ARS)
                         </dt>
                         <dd className="mt-1 text-label font-semibold text-text-primary">
-                          {calculation.totals.merchandiseCostArs}
+                          {formatArsAmount(calculation.totals.merchandiseCostArs)}
                         </dd>
                       </div>
                       <div>
@@ -717,7 +729,7 @@ function SimulationWorkspace() {
                           Costo operativo (ARS)
                         </dt>
                         <dd className="mt-1 text-label font-semibold text-text-primary">
-                          {calculation.totals.operatingCostArs}
+                          {formatArsAmount(calculation.totals.operatingCostArs)}
                         </dd>
                       </div>
                       <div>
@@ -725,7 +737,7 @@ function SimulationWorkspace() {
                           Margen bruto (ARS)
                         </dt>
                         <dd className="mt-1 text-label font-semibold text-text-primary">
-                          {calculation.totals.marginArs}
+                          {formatArsAmount(calculation.totals.marginArs)}
                         </dd>
                       </div>
                     </dl>

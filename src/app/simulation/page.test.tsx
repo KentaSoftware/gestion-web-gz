@@ -72,11 +72,11 @@ const calculationComplete = {
   viability: 'VIABLE' as const,
   recommended: true,
   risks: [],
-  components: [{ code: 'FUEL', amountArs: 12.34 }],
+  components: [{ code: 'FUEL', amountArs: 1234.5 }],
   // Deliberately not derived from components: the page must render server values.
   totals: {
     revenueArs: 500,
-    merchandiseCostArs: 200,
+    merchandiseCostArs: 200.5,
     operatingCostArs: 50,
     marginArs: 250,
   },
@@ -259,11 +259,11 @@ describe('SimulationPage bounded operational integration', () => {
     expect(screen.getByText('VIABLE')).toBeInTheDocument()
     expect(screen.getByText('Recomendada por el servidor')).toBeInTheDocument()
     expect(screen.getByText('FUEL')).toBeInTheDocument()
-    expect(screen.getByText('12.34')).toBeInTheDocument()
-    expect(screen.getByText('500')).toBeInTheDocument()
-    expect(screen.getByText('200')).toBeInTheDocument()
-    expect(screen.getByText('50')).toBeInTheDocument()
-    expect(screen.getByText('250')).toBeInTheDocument()
+    expect(screen.getByText('$ 1.234,50')).toBeInTheDocument()
+    expect(screen.getByText('$ 500,00')).toBeInTheDocument()
+    expect(screen.getByText('$ 200,50')).toBeInTheDocument()
+    expect(screen.getByText('$ 50,00')).toBeInTheDocument()
+    expect(screen.getByText('$ 250,00')).toBeInTheDocument()
     expect(
       screen.getByText('Estimación de análisis sin garantía de resultado real.'),
     ).toBeInTheDocument()
