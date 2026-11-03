@@ -92,7 +92,8 @@ export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
   { id: 'route', href: '/route', label: 'Rutas', icon: Route, flag: null, requiredPermissions: [], gate: null },
   { id: 'stock', href: '/stock', label: 'Stock', icon: Boxes, flag: MODULE_FLAG.STOCK, requiredPermissions: [Permission.ADJUST_STOCK], gate: MODULE_GATE.STOCK },
   { id: 'finance', href: '/finance', label: 'Finanzas', icon: Wallet, flag: MODULE_FLAG.FINANCE, requiredPermissions: [Permission.READ_CASHFLOW], gate: MODULE_GATE.FINANCE },
-  { id: 'simulation', href: '/simulation', label: 'Simulación', icon: FlaskConical, flag: MODULE_FLAG.SIMULATION, requiredPermissions: [], gate: MODULE_GATE.SIMULATION },
+  /** Simulation stays visible for the authorized demo while its flag/gate remain reserved for activation. */
+  { id: 'simulation', href: '/simulation', label: 'Simulación', icon: FlaskConical, flag: null, requiredPermissions: [], gate: null },
 ]
 
 /**

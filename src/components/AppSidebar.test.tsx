@@ -1,12 +1,16 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import { act } from 'react'
+import { hydrateRoot } from 'react-dom/client'
+import { renderToString } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { SESSION_STATUS } from '@/interfaces/auth.interface'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { REPARTIDOR_ACCESS } from '@/test/fixtures/sessionAccess'
 
-const { useSessionAccess, isModuleEnabled } = vi.hoisted(() => ({
+const { useSessionAccess, isModuleEnabled, useLocalStorage } = vi.hoisted(() => ({
   useSessionAccess: vi.fn(),
   isModuleEnabled: vi.fn(),
+  useLocalStorage: vi.fn((): [unknown, () => void, () => void] => ['', vi.fn(), vi.fn()]),
 }))
 
 vi.mock('next/navigation', () => ({
@@ -19,8 +23,8 @@ vi.mock('next/link', () => ({
   ),
 }))
 vi.mock('next-themes', () => ({ useTheme: () => ({ theme: 'light', setTheme: vi.fn() }) }))
-vi.mock('react-redux', () => ({ useSelector: () => ({ nickname: 'Repartidor' }) }))
-vi.mock('@/hooks/useLocalStorage', () => ({ default: () => ['', vi.fn(), vi.fn()] }))
+vi.mock('react-redux', () => ({ useSelector: () => ({ nickname: '' }) }))
+vi.mock('@/hooks/useLocalStorage', () => ({ default: useLocalStorage }))
 vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess }))
 vi.mock('@/config/moduleRegistry', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/config/moduleRegistry')>()
@@ -63,5 +67,32 @@ describe('AppSidebar', () => {
     render(<SidebarProvider><AppSidebar /></SidebarProvider>)
 
     expect(screen.getByRole('link', { name: 'Rutas' })).toBeInTheDocument()
+  })
+
+  it('does not render a stored nickname during hydration and shows it after mount', async () => {
+    useSessionAccess.mockReturnValue({ ...REPARTIDOR_ACCESS, status: SESSION_STATUS.READY })
+    isModuleEnabled.mockImplementation(routeEnabledForRepartidor)
+
+    const sidebar = <SidebarProvider><AppSidebar /></SidebarProvider>
+    const serverMarkup = renderToString(sidebar)
+    expect(serverMarkup).not.toContain('>A<')
+    useLocalStorage.mockReturnValue([{ nickname: 'admin' }, vi.fn(), vi.fn()])
+    const container = document.createElement('div')
+    container.innerHTML = serverMarkup
+    const recoverableErrors: unknown[] = []
+    let root: ReturnType<typeof hydrateRoot> | undefined
+
+    try {
+      await act(async () => {
+        root = hydrateRoot(container, sidebar, {
+          onRecoverableError: (error) => recoverableErrors.push(error),
+        })
+      })
+
+      expect(recoverableErrors).toEqual([])
+      await waitFor(() => expect(container).toHaveTextContent('admin'))
+    } finally {
+      await act(async () => root?.unmount())
+    }
   })
 })
