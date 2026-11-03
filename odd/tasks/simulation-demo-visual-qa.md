@@ -54,7 +54,9 @@ The live page loads API-backed route, catalog, and scenario data, but its initia
 - Final focused checks: web Vitest 17 passed; web `npx tsc --noEmit` passed; API simulation/seed/auth Mocha 35 passed; API build and targeted ts-standard passed. Existing warnings: Vite native config-loader compatibility and Mongoose duplicate `draftId` index.
 - Local API returned 200/304 for web reload requests and browser console had no errors. Mongo-backed seeded/create/detail persistence worked; Mongo-specific simultaneous-write behavior is not independently validated (the concurrency test uses the repository seam).
 - Engram mirror remains pending because its tools are unavailable in this runtime.
-- Verification evidence and commit identity: pending.
+- Web work-unit commit: `7134118` (`feat(simulation): align demo workspace and dialogs`).
+- API work-unit commit: `5a53ce7` (`feat(simulation): persist and harden demo scenarios`).
+- Delivery checks: no push or PR update was performed; PRs remain under human control.
 - Next step: review final diffs, record work-unit commit identities, and keep PR updates/pushes human-authorized.
 
 ## Delivery
