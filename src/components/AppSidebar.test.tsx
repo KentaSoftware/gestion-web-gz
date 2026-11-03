@@ -1,4 +1,7 @@
 import { render, screen } from '@testing-library/react'
+import { act } from 'react'
+import { hydrateRoot } from 'react-dom/client'
+import { renderToString } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { SESSION_STATUS } from '@/interfaces/auth.interface'
 import { SidebarProvider } from '@/components/ui/sidebar'
@@ -19,8 +22,7 @@ vi.mock('next/link', () => ({
   ),
 }))
 vi.mock('next-themes', () => ({ useTheme: () => ({ theme: 'light', setTheme: vi.fn() }) }))
-vi.mock('react-redux', () => ({ useSelector: () => ({ nickname: 'Repartidor' }) }))
-vi.mock('@/hooks/useLocalStorage', () => ({ default: () => ['', vi.fn(), vi.fn()] }))
+vi.mock('react-redux', () => ({ useSelector: () => ({ nickname: '' }) }))
 vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess }))
 vi.mock('@/config/moduleRegistry', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/config/moduleRegistry')>()
@@ -63,5 +65,40 @@ describe('AppSidebar', () => {
     render(<SidebarProvider><AppSidebar /></SidebarProvider>)
 
     expect(screen.getByRole('link', { name: 'Rutas' })).toBeInTheDocument()
+  })
+
+  it('hydrates without a mismatch when an admin is stored and shows the name after mount', async () => {
+    useSessionAccess.mockReturnValue({
+      status: SESSION_STATUS.READY,
+      permissions: [],
+      gates: { stock: false, finance: false, simulation: false },
+    })
+    isModuleEnabled.mockImplementation(() => true)
+    window.localStorage.setItem('user', JSON.stringify({ nickname: 'Admin' }))
+
+    const originalWindow = window
+    vi.stubGlobal('window', undefined)
+    const serverMarkup = renderToString(<SidebarProvider><AppSidebar /></SidebarProvider>)
+    vi.stubGlobal('window', originalWindow)
+
+    const container = document.createElement('div')
+    container.innerHTML = serverMarkup
+    document.body.appendChild(container)
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    let root!: ReturnType<typeof hydrateRoot>
+    await act(async () => {
+      root = hydrateRoot(container, <SidebarProvider><AppSidebar /></SidebarProvider>)
+    })
+
+    expect(consoleError).not.toHaveBeenCalled()
+    expect(await screen.findByText('Admin')).toBeInTheDocument()
+    expect(screen.getByText('A', { exact: true })).toBeInTheDocument()
+
+    await act(async () => root.unmount())
+    consoleError.mockRestore()
+    container.remove()
+    window.localStorage.removeItem('user')
   })
 })

@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useSelector } from 'react-redux'
@@ -30,6 +31,7 @@ import { useTheme } from 'next-themes'
 import { LogOut, ChevronUp, Sun, Moon } from 'lucide-react'
 
 export default function AppSidebar() {
+  const [mounted, setMounted] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const user: any = useSelector(getUser)
@@ -40,9 +42,13 @@ export default function AppSidebar() {
 
   // While the session hydrates, the user name is unknown: render a neutral
   // placeholder instead of treating the session as logged out.
-  const hydrating = status === SESSION_STATUS.HYDRATING
+  const hydrating = !mounted || status === SESSION_STATUS.HYDRATING
   const userName = valueStorage?.nickname || user?.nickname || ''
   const displayName = userName || (hydrating ? '' : 'Usuario')
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   function isActive(href: string): boolean {
     return pathname === href
@@ -116,10 +122,10 @@ export default function AppSidebar() {
             >
               <Avatar className="size-8 shrink-0 rounded-lg group-data-[collapsible=icon]:size-6">
                 <AvatarFallback className="rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  {userName ? userName.charAt(0).toUpperCase() : hydrating ? '' : 'U'}
+                  {mounted && userName ? userName.charAt(0).toUpperCase() : hydrating ? '' : 'U'}
                 </AvatarFallback>
               </Avatar>
-              {hydrating && userName === '' ? (
+              {hydrating ? (
                 <span
                   className="h-3 min-w-0 flex-1 animate-pulse rounded bg-sidebar-accent group-data-[collapsible=icon]:hidden"
                   aria-hidden="true"
