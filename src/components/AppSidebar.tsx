@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { useSelector } from 'react-redux'
 import useLocalStorage from '@/hooks/useLocalStorage'
 import { useSessionAccess } from '@/hooks/useSessionAccess'
@@ -34,6 +35,7 @@ export default function AppSidebar() {
   const router = useRouter()
   const user: any = useSelector(getUser)
   const [valueStorage, , clearValue] = useLocalStorage('user', '')
+  const [hasMounted, setHasMounted] = useState(false)
   const { theme, setTheme } = useTheme()
   const access = useSessionAccess()
   const { status } = access
@@ -41,7 +43,9 @@ export default function AppSidebar() {
   // While the session hydrates, the user name is unknown: render a neutral
   // placeholder instead of treating the session as logged out.
   const hydrating = status === SESSION_STATUS.HYDRATING
-  const userName = valueStorage?.nickname || user?.nickname || ''
+  useEffect(() => setHasMounted(true), [])
+
+  const userName = (hasMounted ? valueStorage?.nickname : '') || user?.nickname || ''
   const displayName = userName || (hydrating ? '' : 'Usuario')
 
   function isActive(href: string): boolean {
@@ -72,7 +76,7 @@ export default function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup className="px-5 py-3 group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:gap-1">
+        <SidebarGroup className="px-3 py-3 group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:gap-1">
           <SidebarGroupContent>
             <SidebarMenu className="gap-1.5">
               {MODULE_REGISTRY.filter((item) => isModuleEnabled(item, access)).map((item) => {
@@ -85,7 +89,7 @@ export default function AppSidebar() {
                       href={href}
                       prefetch={false}
                       aria-current={active ? 'page' : undefined}
-                      className={`flex h-10 min-w-0 items-center gap-3 rounded-lg pl-5 pr-3 text-sm font-medium transition-colors group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:overflow-hidden ${
+                      className={`flex h-10 min-w-0 items-center gap-2 rounded-lg pl-3 pr-2 text-sm font-medium transition-colors group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:overflow-hidden ${
                         active
                           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                           : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'

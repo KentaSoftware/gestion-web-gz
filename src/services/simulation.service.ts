@@ -61,6 +61,15 @@ export interface SimulationScenario {
   grossMargin: number
 }
 
+export interface SimulationScenarioDetail extends SimulationScenario {
+  orderCount: number
+  fuelLiters: number
+  distanceKm: number
+  durationHours: number
+  parameters: SimulationParameters
+  products: SimulationLoadedProduct[]
+}
+
 export interface SimulationRunInput {
   route: SimulationRoute
   parameters: SimulationParameters
@@ -71,6 +80,7 @@ export interface SimulationService {
   getRoutes: (page: number) => Promise<SimulationPage<SimulationRoute>>
   getCatalog: () => Promise<SimulationCatalog>
   getScenarios: (page: number) => Promise<SimulationPage<SimulationScenario>>
+  getScenarioDetail: (scenarioId: string) => Promise<SimulationScenarioDetail>
   simulate: (input: SimulationRunInput) => Promise<SimulationScenario>
 }
 
@@ -89,6 +99,11 @@ export const simulationService: SimulationService = {
 
   getScenarios: async (page) => {
     const response = await apiClient.get<SimulationPage<SimulationScenario>>(`${SIMULATION_DEMO_URL}/scenarios`, { params: { page } })
+    return response.data
+  },
+
+  getScenarioDetail: async (scenarioId) => {
+    const response = await apiClient.get<SimulationScenarioDetail>(`${SIMULATION_DEMO_URL}/scenarios/${encodeURIComponent(scenarioId)}`)
     return response.data
   },
 

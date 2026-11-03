@@ -8,10 +8,11 @@ import type {
   SimulationScenario,
 } from '@/services/simulation.service'
 
-const { getRoutes, getCatalog, getScenarios, simulate } = vi.hoisted(() => ({
+const { getRoutes, getCatalog, getScenarios, getScenarioDetail, simulate } = vi.hoisted(() => ({
   getRoutes: vi.fn(),
   getCatalog: vi.fn(),
   getScenarios: vi.fn(),
+  getScenarioDetail: vi.fn(),
   simulate: vi.fn(),
 }))
 
@@ -19,7 +20,7 @@ const { apiGet, apiPost } = vi.hoisted(() => ({ apiGet: vi.fn(), apiPost: vi.fn(
 
 vi.mock('@/services/simulation.service', () => ({
   SIMULATION_PAGE_SIZE: { routes: 5, scenarios: 8 },
-  simulationService: { getRoutes, getCatalog, getScenarios, simulate },
+  simulationService: { getRoutes, getCatalog, getScenarios, getScenarioDetail, simulate },
 }))
 
 vi.mock('@/utils/client', () => ({ default: { get: apiGet, post: apiPost } }))
@@ -45,8 +46,8 @@ const scenario = (id: string, routeId: string, margin: number): SimulationScenar
   zone: 'Norte',
   driver: 'Juan Pérez',
   vehicle: 'Móvil 1',
-  estimatedRevenue: 485_000,
-  operatingCost: 125_000,
+  estimatedRevenue: id === 'ESC-013' ? 620_000 : 485_000,
+  operatingCost: id === 'ESC-013' ? 168_000 : 125_000,
   grossMargin: margin,
 })
 
@@ -108,14 +109,36 @@ beforeEach(() => {
   getRoutes.mockReset()
   getCatalog.mockReset()
   getScenarios.mockReset()
+  getScenarioDetail.mockReset()
   simulate.mockReset()
   getRoutes.mockImplementation((page: number) => Promise.resolve(routesPage(page)))
   getCatalog.mockResolvedValue(catalog())
   getScenarios.mockImplementation((page: number) => Promise.resolve(scenariosPage(page)))
+  getScenarioDetail.mockImplementation((id: string) => Promise.resolve({
+    ...scenario(id, id === 'ESC-014' ? 'R-001' : 'R-002', 360_000),
+    orderCount: 12,
+    fuelLiters: 18.5,
+    distanceKm: 102.4,
+    durationHours: 6.5,
+    parameters: { fuelPricePerLiter: 1250, includeSurplus: true, generalCosts: 25000, hourlyRate: 8000 },
+    products: catalog().included,
+  }))
   simulate.mockResolvedValue(scenario('ESC-015', 'R-002', 341_000))
 })
 
 describe('Simulation page', () => {
+  it('starts with the reference route and comparison scenarios selected', async () => {
+    render(<SimulationScreen />)
+
+    const routeTable = await screen.findByRole('table', { name: 'Rutas a simular' })
+    expect(within(routeTable).getByRole('radio', { name: 'Seleccionar ruta R-001' })).toBeChecked()
+
+    await screen.findByText('ESC-014')
+    expect(screen.getByRole('checkbox', { name: 'Seleccionar ESC-014 para comparar' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Seleccionar ESC-012 para comparar' })).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Comparar Escenarios' })).toBeEnabled()
+  })
+
   it('renders the route table and paginates the route catalog', async () => {
     render(<SimulationScreen />)
 
@@ -137,7 +160,7 @@ describe('Simulation page', () => {
     const routeTable = await screen.findByRole('table', { name: 'Rutas a simular' })
     await within(routeTable).findByText('R-001')
     const simulateButton = screen.getByRole('button', { name: 'Simular' })
-    expect(simulateButton).toBeDisabled()
+    expect(simulateButton).toBeEnabled()
 
     fireEvent.click(screen.getByRole('radio', { name: 'Seleccionar ruta R-002' }))
     expect(screen.getByRole('radio', { name: 'Seleccionar ruta R-002' })).toBeChecked()
@@ -230,8 +253,19 @@ describe('Simulation page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ver detalle de ESC-014' }))
 
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByRole('heading', { name: 'Detalle del escenario ESC-014' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('heading', { name: 'Detalle del escenario' })).toBeInTheDocument()
+    expect(within(dialog).getByText('ESC-014')).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(/Identificación del escenario/).firstElementChild).toHaveClass('flex', 'items-center')
     expect(within(dialog).getByText('Ingreso estimado')).toBeInTheDocument()
+    expect(within(dialog).getByText('Pedidos')).toBeInTheDocument()
+    expect(within(dialog).getByText('Precio combustible')).toBeInTheDocument()
+    expect(within(dialog).getByText('Productos incluidos')).toBeInTheDocument()
+    expect(within(dialog).getByText('Agua 500 ml')).toBeInTheDocument()
+    const includedProducts = within(dialog).getByRole('table', { name: 'Productos incluidos' })
+    expect(within(includedProducts).getAllByRole('columnheader')).toHaveLength(2)
+    expect(within(includedProducts).getByRole('columnheader', { name: 'Cantidad' })).toBeInTheDocument()
+    expect(within(dialog).getByText(/estimaciones y no generan acciones reales/i)).toBeInTheDocument()
+    expect(getScenarioDetail).toHaveBeenCalledWith('ESC-014')
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cerrar' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
@@ -247,6 +281,10 @@ describe('Simulation page', () => {
 
     await screen.findByText('ESC-014')
     const compareButton = screen.getByRole('button', { name: 'Comparar Escenarios' })
+    expect(compareButton).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar ESC-014 para comparar' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar ESC-012 para comparar' }))
     expect(compareButton).toBeDisabled()
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar ESC-014 para comparar' }))
@@ -261,8 +299,15 @@ describe('Simulation page', () => {
     expect(
       within(dialog).getByRole('heading', { name: 'Comparación de escenarios' }),
     ).toBeInTheDocument()
-    expect(within(dialog).getByText('ESC-014')).toBeInTheDocument()
-    expect(within(dialog).getByText('ESC-013')).toBeInTheDocument()
+    const summary = within(dialog).getByRole('region', { name: 'Resumen comparativo' })
+    expect(within(summary).getByText('Mejor ingreso').parentElement).toHaveTextContent('ESC-013')
+    expect(within(summary).getByText('Menor costo operativo').parentElement).toHaveTextContent('ESC-014')
+    expect(within(summary).getByText('Mejor margen bruto').parentElement).toHaveTextContent('ESC-014')
+
+    const comparedScenarios = within(dialog).getByLabelText('Escenarios comparados')
+    const scenarioRows = within(comparedScenarios).getAllByText('Repartidor')
+    expect(scenarioRows).toHaveLength(2)
+    scenarioRows.forEach((label) => expect(label.parentElement).toHaveClass('flex', 'items-center', 'justify-between'))
   })
 
   it('renders route and history empty states with disabled primary actions', async () => {
@@ -314,6 +359,15 @@ describe('Simulation HTTP adapter', () => {
     expect(apiGet).toHaveBeenNthCalledWith(1, '/simulation/demo/routes', { params: { page: 1 } })
     expect(apiGet).toHaveBeenNthCalledWith(2, '/simulation/demo/catalog')
     expect(apiGet).toHaveBeenNthCalledWith(3, '/simulation/demo/scenarios', { params: { page: 2 } })
+  })
+
+  it('loads scenario detail from its dedicated demo API endpoint', async () => {
+    const { simulationService: service } = await vi.importActual<typeof import('@/services/simulation.service')>('@/services/simulation.service')
+    const detail = { ...scenario('ESC-014', 'R-001', 360_000), orderCount: 12, fuelLiters: 18.5, distanceKm: 102.4, durationHours: 6.5, parameters: { fuelPricePerLiter: 1250, includeSurplus: true, generalCosts: 25000, hourlyRate: 8000 }, products: catalog().included }
+    apiGet.mockResolvedValueOnce({ data: detail })
+
+    await expect(service.getScenarioDetail('ESC-014')).resolves.toEqual(detail)
+    expect(apiGet).toHaveBeenCalledWith('/simulation/demo/scenarios/ESC-014')
   })
 
   it('posts only the selected route, supported parameters, and product quantities, then propagates failures', async () => {

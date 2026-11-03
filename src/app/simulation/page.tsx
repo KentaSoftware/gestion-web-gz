@@ -38,14 +38,15 @@ import {
   type SimulationParameters,
   type SimulationRoute,
   type SimulationScenario,
+  type SimulationScenarioDetail,
 } from '@/services/simulation.service'
 
 const FIELD_INPUT =
-  'h-10 w-full rounded-md border border-border-subtle bg-surface-base px-3 text-sm text-text-primary placeholder:text-text-muted focus:border-border-interactive focus:outline-none focus:ring-2 focus:ring-state-focus disabled:cursor-not-allowed disabled:opacity-60'
-const PANEL = 'rounded-xl border border-border-subtle bg-surface-base shadow-sm'
+  'h-9 w-full rounded-md border border-border-subtle bg-surface-base px-3 text-sm text-text-primary placeholder:text-text-muted focus:border-border-interactive focus:outline-none focus:ring-2 focus:ring-state-focus disabled:cursor-not-allowed disabled:opacity-60'
+const PANEL = 'rounded-lg border border-border-subtle bg-surface-base shadow-sm'
 const TABLE_HEAD =
-  'h-9 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-text-secondary'
-const TABLE_CELL = 'px-3 py-2.5 text-sm text-text-secondary'
+  'h-8 px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-text-secondary'
+const TABLE_CELL = 'px-2 py-1.5 text-sm text-text-secondary'
 const ICON_BUTTON =
   'inline-flex size-9 items-center justify-center rounded-md border border-border-subtle bg-surface-base text-text-secondary transition-colors hover:bg-background-subtle focus:outline-none focus:ring-2 focus:ring-state-focus disabled:cursor-not-allowed disabled:opacity-40'
 const PAGINATION_BUTTON =
@@ -206,6 +207,9 @@ export default function SimulationScreen() {
   const [scenarioRetry, setScenarioRetry] = useState(0)
   const [selectedScenarioIds, setSelectedScenarioIds] = useState<string[]>([])
   const [detailScenario, setDetailScenario] = useState<SimulationScenario | null>(null)
+  const [scenarioDetail, setScenarioDetail] = useState<SimulationScenarioDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState('')
   const [compareOpen, setCompareOpen] = useState(false)
   const createdScenarios = useRef<SimulationScenario[]>([])
 
@@ -219,6 +223,7 @@ export default function SimulationScreen() {
         if (cancelled) return
         setRoutes(result.items)
         setRouteTotal(result.total)
+        setSelectedRoute((current) => current ?? result.items[0] ?? null)
         setRouteState('ready')
       })
       .catch(() => {
@@ -272,6 +277,13 @@ export default function SimulationScreen() {
             ? [...created, ...baseItems].slice(0, result.pageSize)
             : result.items,
         )
+        if (scenarioPage === 1) {
+          setSelectedScenarioIds((current) =>
+            current.length > 0
+              ? current
+              : ['ESC-014', 'ESC-012'].filter((id) => result.items.some((entry) => entry.id === id)),
+          )
+        }
         setScenarioTotal(result.total + created.length)
         setScenarioState('ready')
       })
@@ -400,15 +412,32 @@ export default function SimulationScreen() {
     })
   }
 
+  const openScenarioDetail = (scenario: SimulationScenario) => {
+    setDetailScenario(scenario)
+    setScenarioDetail(null)
+    setDetailError('')
+    setDetailLoading(true)
+    void simulationService.getScenarioDetail(scenario.id)
+      .then(setScenarioDetail)
+      .catch(() => setDetailError('No se pudo cargar el detalle del escenario.'))
+      .finally(() => setDetailLoading(false))
+  }
+
+  const closeScenarioDetail = () => {
+    setDetailScenario(null)
+    setScenarioDetail(null)
+    setDetailError('')
+  }
+
   return (
-    <PageContainer className="gap-5 overflow-y-auto">
+    <PageContainer className="gap-4 overflow-y-auto">
       <PageHeader
         title="Simulación de Escenarios"
         description="Módulo de Simulación de Costos Operativos"
       />
 
       <section aria-labelledby="simulation-parameters-title" className={PANEL}>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-4 py-3">
           <PanelHeading
             id="simulation-parameters-title"
             icon={<SlidersHorizontal className="size-5" aria-hidden="true" />}
@@ -437,7 +466,7 @@ export default function SimulationScreen() {
         {parametersOpen ? (
           <div
             id="simulation-parameters-content"
-            className="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_20rem]"
+            className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_18rem]"
           >
             <div className="min-w-0">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -447,7 +476,7 @@ export default function SimulationScreen() {
                 <p className="text-xs text-text-secondary">Seleccioná una sola ruta</p>
               </div>
 
-              <div className="mt-2 overflow-x-auto rounded-lg border border-border-subtle">
+              <div className="mt-2 overflow-x-auto rounded-md border border-border-subtle">
                 <table aria-label="Rutas a simular" className="w-full min-w-[54rem] text-left">
                   <thead className="bg-background-subtle">
                     <tr>
@@ -554,7 +583,7 @@ export default function SimulationScreen() {
               </div>
             </div>
 
-            <aside aria-label="Costos de la simulación" className="grid content-start gap-4">
+            <aside aria-label="Costos de la simulación" className="grid content-start gap-3">
               <ParameterField
                 id="simulation-fuel-price"
                 label="Precio combustible ($/L)"
@@ -608,7 +637,7 @@ export default function SimulationScreen() {
       {parametersOpen ? (
         <>
           <section aria-labelledby="simulation-products-title" className={PANEL}>
-            <div className="border-b border-border-subtle px-5 py-4">
+            <div className="border-b border-border-subtle px-4 py-3">
               <PanelHeading
                 id="simulation-products-title"
                 icon={<Boxes className="size-5" aria-hidden="true" />}
@@ -616,7 +645,7 @@ export default function SimulationScreen() {
               />
             </div>
 
-            <div className="grid gap-4 p-5 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+            <div className="grid gap-3 p-4 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
               <div className="min-w-0 rounded-lg border border-border-subtle">
                 <div className="flex items-center gap-1.5 border-b border-border-subtle px-3 py-2.5">
                   <Info className="size-4 text-brand-primary" aria-hidden="true" />
@@ -813,7 +842,7 @@ export default function SimulationScreen() {
               type="button"
               onClick={() => void handleSimulate()}
               disabled={simulateDisabled}
-              className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-lg bg-brand-accent text-base font-semibold text-text-inverse transition-colors hover:bg-brand-accent-hover focus:outline-none focus:ring-2 focus:ring-state-focus disabled:cursor-not-allowed disabled:bg-border-strong disabled:text-text-muted"
+              className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-lg bg-brand-accent text-base font-semibold text-text-inverse transition-colors hover:bg-brand-accent-hover focus:outline-none focus:ring-2 focus:ring-state-focus disabled:cursor-not-allowed disabled:bg-border-strong disabled:text-text-muted"
             >
               <Play className="size-5" aria-hidden="true" />
               {simulating ? 'Simulando…' : 'Simular'}
@@ -833,7 +862,7 @@ export default function SimulationScreen() {
       ) : null}
 
       <section aria-labelledby="simulation-history-title" className={PANEL}>
-        <div className="border-b border-border-subtle px-5 py-4">
+        <div className="border-b border-border-subtle px-4 py-3">
           <PanelHeading
             id="simulation-history-title"
             icon={<ListChecks className="size-5" aria-hidden="true" />}
@@ -864,13 +893,13 @@ export default function SimulationScreen() {
             <tbody className="divide-y divide-border-subtle">
               {scenarioState === 'loading' ? (
                 <tr>
-                  <td colSpan={11} className="px-3 py-16 text-center text-sm text-text-secondary" role="status">
+                  <td colSpan={11} className="px-3 py-10 text-center text-sm text-text-secondary" role="status">
                     Cargando registros…
                   </td>
                 </tr>
               ) : scenarioState === 'error' ? (
                 <tr>
-                  <td colSpan={11} className="px-3 py-16 text-center">
+                  <td colSpan={11} className="px-3 py-10 text-center">
                     <p className="text-sm text-state-error" role="alert">
                       No se pudieron cargar los registros.
                     </p>
@@ -886,7 +915,7 @@ export default function SimulationScreen() {
                 </tr>
               ) : scenarios.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-3 py-16 text-center" role="status">
+                  <td colSpan={11} className="px-3 py-10 text-center" role="status">
                     <span className="mx-auto flex size-16 items-center justify-center rounded-full bg-background-subtle text-text-muted">
                       <FileText className="size-8" aria-hidden="true" />
                     </span>
@@ -927,7 +956,7 @@ export default function SimulationScreen() {
                         <button
                           type="button"
                           aria-label={`Ver detalle de ${scenario.id}`}
-                          onClick={() => setDetailScenario(scenario)}
+                          onClick={() => openScenarioDetail(scenario)}
                           className="inline-flex items-center gap-1.5 rounded-md border border-brand-primary/40 px-2.5 py-1.5 text-xs font-medium text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-state-focus"
                         >
                           <Eye className="size-3.5" aria-hidden="true" />
@@ -942,7 +971,7 @@ export default function SimulationScreen() {
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle px-4 py-3">
           <p className="text-sm text-text-secondary">
             {scenarioTotal === 0
               ? 'Mostrando 0 de 0 registros'
@@ -957,7 +986,7 @@ export default function SimulationScreen() {
           />
         </div>
 
-        <div className="flex justify-end px-5 pb-5">
+        <div className="flex justify-end px-4 pb-4">
           <button
             type="button"
             onClick={() => setCompareOpen(true)}
@@ -970,137 +999,125 @@ export default function SimulationScreen() {
         </div>
       </section>
 
-      <Dialog open={detailScenario !== null} onOpenChange={(open) => !open && setDetailScenario(null)}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-xl overflow-y-auto bg-surface-base">
+      <Dialog open={detailScenario !== null} onOpenChange={(open) => !open && closeScenarioDetail()}>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-3xl overflow-y-auto bg-surface-base">
           <DialogHeader>
-            <DialogTitle>Detalle del escenario {detailScenario?.id}</DialogTitle>
-            <DialogDescription>
-              Resultado registrado para la ruta {detailScenario?.routeId}. Los importes están
-              expresados en pesos argentinos.
-            </DialogDescription>
+            <DialogTitle>Detalle del escenario</DialogTitle>
+            <DialogDescription>Información completa de la simulación guardada.</DialogDescription>
           </DialogHeader>
 
           {detailScenario ? (
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
-              <div>
-                <dt className="text-text-secondary">Fecha</dt>
-                <dd className="font-semibold text-text-primary">{detailScenario.date}</dd>
-              </div>
-              <div>
-                <dt className="text-text-secondary">Ruta</dt>
-                <dd className="font-semibold text-text-primary">{detailScenario.routeId}</dd>
-              </div>
-              <div>
-                <dt className="text-text-secondary">Zona</dt>
-                <dd className="font-semibold text-text-primary">{detailScenario.zone}</dd>
-              </div>
-              <div>
-                <dt className="text-text-secondary">Repartidor</dt>
-                <dd className="font-semibold text-text-primary">{detailScenario.driver}</dd>
-              </div>
-              <div>
-                <dt className="text-text-secondary">Vehículo</dt>
-                <dd className="font-semibold text-text-primary">{detailScenario.vehicle}</dd>
-              </div>
-              <div>
-                <dt className="text-text-secondary">Ingreso estimado</dt>
-                <dd className="font-semibold text-text-primary">
-                  {formatCurrency(detailScenario.estimatedRevenue)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-text-secondary">Costo operativo</dt>
-                <dd className="font-semibold text-text-primary">
-                  {formatCurrency(detailScenario.operatingCost)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-text-secondary">Margen bruto</dt>
-                <dd className="font-semibold text-text-primary">
-                  {formatCurrency(detailScenario.grossMargin)}
-                </dd>
-              </div>
-            </dl>
+            <div className="space-y-5">
+              <section className="rounded-lg border border-border-subtle bg-background-subtle p-4" aria-label="Identificación del escenario">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <p className="text-lg font-bold text-text-primary">{detailScenario.id}</p>
+                  <span className="text-sm text-text-secondary">{detailScenario.routeId}</span>
+                  <span className="text-sm text-text-secondary">{detailScenario.zone}</span>
+                  <span className="rounded-full bg-state-success/10 px-3 py-1 text-xs font-semibold text-state-success">Guardado</span>
+                </div>
+              </section>
+
+              {detailLoading ? <p role="status" className="text-sm text-text-secondary">Cargando detalle…</p> : null}
+              {detailError ? <p role="alert" className="text-sm text-state-error">{detailError}</p> : null}
+
+              {scenarioDetail ? (
+                <>
+                  <section aria-label="Resultados del escenario" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {[
+                      ['Ingreso estimado', formatCurrency(scenarioDetail.estimatedRevenue)],
+                      ['Costo operativo', formatCurrency(scenarioDetail.operatingCost)],
+                      ['Margen bruto', formatCurrency(scenarioDetail.grossMargin)],
+                      ['Fecha', scenarioDetail.date],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-md border border-border-subtle p-3">
+                        <p className="text-xs text-text-secondary">{label}</p>
+                        <p className="mt-1 font-semibold text-text-primary">{value}</p>
+                      </div>
+                    ))}
+                  </section>
+
+                  <section className="space-y-2" aria-labelledby="detail-route-title">
+                    <h3 id="detail-route-title" className="font-semibold text-text-primary">Datos de la ruta</h3>
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-md border border-border-subtle p-3 text-sm sm:grid-cols-3">
+                      {[
+                        ['Repartidor', scenarioDetail.driver], ['Vehículo', scenarioDetail.vehicle],
+                        ['Pedidos', formatNumber(scenarioDetail.orderCount)], ['Distancia', `${formatDecimal(scenarioDetail.distanceKm)} km`],
+                        ['Duración', `${formatDecimal(scenarioDetail.durationHours)} h`], ['Combustible', `${formatDecimal(scenarioDetail.fuelLiters)} L`],
+                      ].map(([label, value]) => <div key={label}><dt className="text-text-secondary">{label}</dt><dd className="font-medium text-text-primary">{value}</dd></div>)}
+                    </dl>
+                  </section>
+
+                  <section className="space-y-2" aria-labelledby="detail-parameters-title">
+                    <h3 id="detail-parameters-title" className="font-semibold text-text-primary">Parámetros de simulación</h3>
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-md border border-border-subtle p-3 text-sm sm:grid-cols-4">
+                      <div><dt className="text-text-secondary">Precio combustible</dt><dd className="font-medium text-text-primary">{formatCurrency(scenarioDetail.parameters.fuelPricePerLiter)} / L</dd></div>
+                      <div><dt className="text-text-secondary">Incluir excedentes</dt><dd className="font-medium text-text-primary">{scenarioDetail.parameters.includeSurplus ? 'Sí' : 'No'}</dd></div>
+                      <div><dt className="text-text-secondary">Gastos generales</dt><dd className="font-medium text-text-primary">{formatCurrency(scenarioDetail.parameters.generalCosts)}</dd></div>
+                      <div><dt className="text-text-secondary">Costo por hora</dt><dd className="font-medium text-text-primary">{formatCurrency(scenarioDetail.parameters.hourlyRate)}</dd></div>
+                    </dl>
+                  </section>
+
+                  <section className="space-y-2" aria-labelledby="detail-products-title">
+                    <h3 id="detail-products-title" className="font-semibold text-text-primary">Productos incluidos</h3>
+                    <div className="overflow-x-auto rounded-md border border-border-subtle">
+                      <table aria-label="Productos incluidos" className="w-full text-left text-sm">
+                        <thead className="bg-background-subtle"><tr><th className={TABLE_HEAD}>Producto</th><th className={TABLE_HEAD}>Cantidad</th></tr></thead>
+                        <tbody className="divide-y divide-border-subtle">
+                          {scenarioDetail.products.map((product) => <tr key={product.id}><td className={TABLE_CELL}>{product.name}</td><td className={TABLE_CELL}>{formatNumber(product.quantity)}</td></tr>)}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                  <p className="rounded-md bg-background-subtle p-3 text-sm text-text-secondary">Los resultados son estimaciones y no generan acciones reales.</p>
+                </>
+              ) : null}
+            </div>
           ) : null}
 
           <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setDetailScenario(null)}
-              className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary hover:bg-background-subtle"
-            >
-              Cerrar
-            </button>
+            <button type="button" onClick={closeScenarioDetail} className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary hover:bg-background-subtle">Cerrar</button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-3xl overflow-y-auto bg-surface-base">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-5xl overflow-y-auto bg-surface-base">
           <DialogHeader>
             <DialogTitle>Comparación de escenarios</DialogTitle>
-            <DialogDescription>
-              Comparación lado a lado de los dos escenarios seleccionados.
-            </DialogDescription>
+            <DialogDescription>Revisá los datos principales y las diferencias entre los escenarios seleccionados.</DialogDescription>
           </DialogHeader>
 
-          <div className="overflow-x-auto">
-            <table aria-label="Comparación de escenarios seleccionados" className="w-full text-left text-sm">
-              <thead className="bg-background-subtle">
-                <tr>
-                  <th className={TABLE_HEAD}>Indicador</th>
-                  {selectedScenarios.map((scenario) => (
-                    <th key={scenario.id} className={`${TABLE_HEAD} text-text-primary`}>
-                      {scenario.id}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-subtle">
-                <tr>
-                  <td className={TABLE_CELL}>Ruta</td>
-                  {selectedScenarios.map((scenario) => (
-                    <td key={scenario.id} className={TABLE_CELL}>
-                      {scenario.routeId}
-                    </td>
-                  ))}
-                </tr>
-                <tr>
-                  <td className={TABLE_CELL}>Ingreso estimado</td>
-                  {selectedScenarios.map((scenario) => (
-                    <td key={scenario.id} className={TABLE_CELL}>
-                      {formatCurrency(scenario.estimatedRevenue)}
-                    </td>
-                  ))}
-                </tr>
-                <tr>
-                  <td className={TABLE_CELL}>Costo operativo</td>
-                  {selectedScenarios.map((scenario) => (
-                    <td key={scenario.id} className={TABLE_CELL}>
-                      {formatCurrency(scenario.operatingCost)}
-                    </td>
-                  ))}
-                </tr>
-                <tr>
-                  <td className={TABLE_CELL}>Margen bruto</td>
-                  {selectedScenarios.map((scenario) => (
-                    <td key={scenario.id} className={`${TABLE_CELL} font-semibold text-text-primary`}>
-                      {formatCurrency(scenario.grossMargin)}
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
+          <div className="grid gap-4 sm:grid-cols-2" aria-label="Escenarios comparados">
+            {selectedScenarios.map((scenario) => (
+              <section key={scenario.id} className="rounded-lg border border-border-subtle p-4">
+                <header className="mb-3 border-b border-border-subtle pb-3">
+                  <h3 className="font-bold text-text-primary">{scenario.id}</h3>
+                  <p className="text-sm text-text-secondary">{scenario.date}</p>
+                </header>
+                <dl className="space-y-2 text-sm">
+                  {[
+                    ['Fecha', scenario.date], ['Ruta', scenario.routeId], ['Zona', scenario.zone],
+                    ['Repartidor', scenario.driver], ['Vehículo', scenario.vehicle],
+                    ['Ingreso estimado', formatCurrency(scenario.estimatedRevenue)], ['Costo operativo', formatCurrency(scenario.operatingCost)],
+                    ['Margen bruto', formatCurrency(scenario.grossMargin)],
+                  ].map(([label, value]) => <div key={`${scenario.id}-${label}`} className="flex items-center justify-between gap-3 border-b border-border-subtle pb-2 last:border-0 last:pb-0"><dt className="text-text-secondary">{label}</dt><dd className="text-right font-semibold text-text-primary">{value}</dd></div>)}
+                </dl>
+              </section>
+            ))}
           </div>
 
+          {selectedScenarios.length === 2 ? (() => {
+            const [first, second] = selectedScenarios
+            const highlights = [
+              { label: 'Mejor ingreso', scenario: first.estimatedRevenue >= second.estimatedRevenue ? first : second, value: Math.max(first.estimatedRevenue, second.estimatedRevenue) },
+              { label: 'Menor costo operativo', scenario: first.operatingCost <= second.operatingCost ? first : second, value: Math.min(first.operatingCost, second.operatingCost) },
+              { label: 'Mejor margen bruto', scenario: first.grossMargin >= second.grossMargin ? first : second, value: Math.max(first.grossMargin, second.grossMargin) },
+            ]
+            return <section aria-label="Resumen comparativo" className="space-y-3"><h3 className="font-semibold text-text-primary">Resumen comparativo</h3><div className="grid gap-3 sm:grid-cols-3">{highlights.map((highlight) => <div key={highlight.label} className="rounded-lg border border-border-subtle bg-background-subtle p-3"><p className="text-sm text-text-secondary">{highlight.label}</p><p className="mt-1 font-semibold text-text-primary">{highlight.scenario.id}</p><p className="text-sm text-text-primary">{formatCurrency(highlight.value)}</p></div>)}</div></section>
+          })() : null}
+
           <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setCompareOpen(false)}
-              className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary hover:bg-background-subtle"
-            >
-              Cerrar
-            </button>
+            <button type="button" onClick={() => setCompareOpen(false)} className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary hover:bg-background-subtle">Cerrar</button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
