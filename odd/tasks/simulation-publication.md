@@ -18,8 +18,8 @@ The user approved issue #18, publication through the existing gh session and ori
 
 ## Tasks
 - [x] PUB-1: Adapt accepted page and tests to main's service contract, retaining main's relevant regression/contract coverage. Route: delegated direct; trigger: source/test adaptation and preparation span two non-trivial files. Default test-first policy applies to changed compatibility behavior; runner: `npm test -- src/app/simulation/page.test.tsx`.
-- [ ] PUB-2: Verify the exact clean-branch candidate, record checks, and commit the work unit. Route: writer self-check, parent rerun and independent read-only verification if required by native risk. RDD status must be read without changing it.
-- [ ] PUB-3: Push only the publication branch and create one PR to main linking issue #18 with exactly one type label and the size exception. Route: parent git/gh state operations. Verify the created URL, base/head, labels, diff scope, and remote checks; do not merge.
+- [x] PUB-2: Verify the exact clean-branch candidate, record checks, and commit the work unit. Route: writer self-check, parent rerun and independent read-only verification. Work-unit commit: `d084f8f`. RDD remained off.
+- [x] PUB-3: Push only the publication branch and create one PR to main linking issue #18 with exactly one type label and the size exception. Route: parent git/gh state operations. PR #19 confirmed open against main with `type:feature` and `size:exception`; no merge performed.
 
 ## Checks and evidence
 Required: focused page/contract tests, `npm run tsc`, `npm run lint`, `git diff --check`, scoped main-vs-branch diff, and browser verification when a safely isolated dev instance can be launched.
@@ -37,4 +37,6 @@ Parent verification: reran page/auth/registry tests successfully, 28/28 across t
 
 Isolated browser check: launched a separate frontend on port 3003 against the existing local demo API on 3002 without restarting the original frontend on 3000. Verified the accepted Spanish workspace, absent banner, surplus switch, populated records, accessible detail modal with sourced fields and focus, Escape close, two-record comparison modal with retrieved values and explicit tie, and comparison focus. The console had no errors; inspected XHRs were GET requests only under `/simulation/demo/*`. No database writes or production endpoint calls were made for this check. Functional create/stock/empty/retry/pagination cases are covered by the focused tests; the full suite was not rerun.
 
-PUB-2 functional and independent checks are complete; the parent will record the observed work-unit commit before closing it. PUB-3 publication remains pending. No worker commit, push, or remote mutation.
+Publication confirmed: source work-unit commit `d084f8f` was pushed to `origin/feat/simulation-api-workspace`; PR https://github.com/KentaSoftware/gestion-web-gz/pull/19 links approved issue https://github.com/KentaSoftware/gestion-web-gz/issues/18. GitHub confirmed main as base, exactly three changed paths, one `type:feature` label, and `size:exception`. Initial remote checks: Vercel deployment pending; Vercel Preview Comments successful. No merge or backend publication was performed. The original development branch remains unchanged.
+
+Next step: await Vercel deployment and human review of PR #19. Local focused checks passed; full-suite and production-build limitations remain disclosed in the PR. The parent will push this documentation-only publication receipt without changing the verified source candidate.
