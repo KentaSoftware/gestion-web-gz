@@ -1,353 +1,253 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  SimulationCatalog,
-  SimulationPage,
-  SimulationProduct,
-  SimulationRoute,
-  SimulationScenario,
-} from '@/services/simulation.service'
+import SimulationPage from './page'
 
-const { getRoutes, getCatalog, getScenarios, getScenarioDetail, simulate } = vi.hoisted(() => ({
-  getRoutes: vi.fn(),
-  getCatalog: vi.fn(),
-  getScenarios: vi.fn(),
-  getScenarioDetail: vi.fn(),
-  simulate: vi.fn(),
-}))
+const { get, post, permissions } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), permissions: ['simulation:read', 'simulation:write'] as string[] }))
+vi.mock('@/utils/client', () => ({ default: { get, post } }))
+vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess: () => ({ status: 'ready', permissions }) }))
+vi.mock('@/components/ProtectedRoute', () => ({ default: ({ children }: { children: ReactNode }) => <div>{children}</div> }))
 
-const { apiGet, apiPost } = vi.hoisted(() => ({ apiGet: vi.fn(), apiPost: vi.fn() }))
+const routes = { items: [
+  { id: 'R-001', zone: 'Norte', orderCount: 12, driver: 'Juan Pérez', vehicle: 'Móvil 1', fuelLiters: 18.5, distanceKm: 102.4, durationHours: 6.5, date: '26/05/2025' },
+  { id: 'R-002', zone: 'Centro', orderCount: 10, driver: 'María López', vehicle: 'Móvil 2', fuelLiters: 15.2, distanceKm: 85.6, durationHours: 5.1, date: '26/05/2025' },
+], page: 1, pageSize: 5, total: 2 }
+const catalog = { available: [{ id: 'agua', name: 'Agua', stock: 120, unitPrice: 1200 }], included: [{ id: 'agua', name: 'Agua', stock: 120, unitPrice: 1200, quantity: 40 }] }
+const scenarios = { items: [
+  { id: 'ESC-014', date: '26/05/2025', routeId: 'R-001', zone: 'Norte', driver: 'Juan Pérez', vehicle: 'Móvil 1', estimatedRevenue: 485000, operatingCost: 125000, grossMargin: 360000 },
+  { id: 'ESC-015', date: '27/05/2025', routeId: 'R-002', zone: 'Centro', driver: 'María López', vehicle: 'Móvil 2', estimatedRevenue: 600000, operatingCost: 125000, grossMargin: 475000 },
+  { id: 'ESC-016', date: '28/05/2025', routeId: 'R-001', zone: 'Norte', driver: 'Juan Pérez', vehicle: 'Móvil 1', estimatedRevenue: 100, operatingCost: 30, grossMargin: 70 },
+], page: 1, pageSize: 8, total: 3 }
+const details = scenarios.items.map((item) => ({ ...item, orderCount: 12, fuelLiters: 18.5, distanceKm: 102.4, durationHours: 6.5, parameters: { fuelPricePerLiter: 1250, includeSurplus: true, generalCosts: 25000, hourlyRate: 8000 }, products: catalog.included }))
 
-vi.mock('@/services/simulation.service', () => ({
-  SIMULATION_PAGE_SIZE: { routes: 5, scenarios: 8 },
-  simulationService: { getRoutes, getCatalog, getScenarios, getScenarioDetail, simulate },
-}))
-
-vi.mock('@/utils/client', () => ({ default: { get: apiGet, post: apiPost } }))
-
-import SimulationScreen from './page'
-
-const route = (id: string, zone: string, orderCount: number, driver: string): SimulationRoute => ({
-  id,
-  zone,
-  orderCount,
-  driver,
-  vehicle: 'Móvil 1',
-  fuelLiters: 18.5,
-  distanceKm: 102.4,
-  durationHours: 6.5,
-  date: '26/05/2025',
-})
-
-const scenario = (id: string, routeId: string, margin: number): SimulationScenario => ({
-  id,
-  date: '26/05/2025',
-  routeId,
-  zone: 'Norte',
-  driver: 'Juan Pérez',
-  vehicle: 'Móvil 1',
-  estimatedRevenue: id === 'ESC-013' ? 620_000 : 485_000,
-  operatingCost: id === 'ESC-013' ? 168_000 : 125_000,
-  grossMargin: margin,
-})
-
-const product = (id: string, name: string, stock: number, unitPrice: number): SimulationProduct => ({
-  id,
-  name,
-  stock,
-  unitPrice,
-})
-
-const catalog = (): SimulationCatalog => ({
-  available: [
-    product('p-1', 'Agua 500 ml', 120, 1_200),
-    product('p-2', 'Gaseosa 1.5 L', 90, 2_500),
-    product('p-3', 'Jugo 1 L', 75, 1_800),
-    product('p-4', 'Snacks', 60, 1_000),
-    product('p-5', 'Panificados', 40, 1_500),
-  ],
-  included: [
-    { ...product('p-1', 'Agua 500 ml', 120, 1_200), quantity: 40 },
-    { ...product('p-2', 'Gaseosa 1.5 L', 90, 2_500), quantity: 30 },
-    { ...product('p-3', 'Jugo 1 L', 75, 1_800), quantity: 20 },
-    { ...product('p-4', 'Snacks', 60, 1_000), quantity: 25 },
-    { ...product('p-5', 'Panificados', 40, 1_500), quantity: 15 },
-  ],
-})
-
-const routesPage = (page: number): SimulationPage<SimulationRoute> => {
-  const all = [
-    route('R-001', 'Norte', 12, 'Juan Pérez'),
-    route('R-002', 'Centro', 10, 'María López'),
-    route('R-003', 'Sur', 8, 'Carlos Ruiz'),
-    route('R-004', 'Este', 15, 'Ana Torres'),
-    route('R-005', 'Oeste', 9, 'Luis Gómez'),
-    route('R-006', 'Norte', 11, 'Juan Pérez'),
-    route('R-007', 'Centro', 7, 'María López'),
-    route('R-008', 'Sur', 6, 'Carlos Ruiz'),
-  ]
-  return { items: page === 1 ? all.slice(0, 5) : all.slice(5), page, pageSize: 5, total: all.length }
+function setupGet() {
+  get.mockImplementation((url: string) => {
+    if (url === '/simulation/demo/routes') return Promise.resolve({ data: routes })
+    if (url === '/simulation/demo/catalog') return Promise.resolve({ data: catalog })
+    if (url === '/simulation/demo/scenarios') return Promise.resolve({ data: scenarios })
+    const detail = details.find((item) => url === `/simulation/demo/scenarios/${item.id}`)
+    return detail ? Promise.resolve({ data: detail }) : Promise.reject(new Error('Unexpected endpoint'))
+  })
 }
 
-const scenariosPage = (page: number): SimulationPage<SimulationScenario> => {
-  const all = Array.from({ length: 14 }, (_, index) =>
-    scenario(
-      `ESC-${String(14 - index).padStart(3, '0')}`,
-      `R-00${(index % 5) + 1}`,
-      360_000 - index * 1_000,
-    ),
-  )
-  return {
-    items: page === 1 ? all.slice(0, 8) : all.slice(8, 14),
-    page,
-    pageSize: 8,
-    total: all.length,
-  }
-}
-
-beforeEach(() => {
-  getRoutes.mockReset()
-  getCatalog.mockReset()
-  getScenarios.mockReset()
-  getScenarioDetail.mockReset()
-  simulate.mockReset()
-  getRoutes.mockImplementation((page: number) => Promise.resolve(routesPage(page)))
-  getCatalog.mockResolvedValue(catalog())
-  getScenarios.mockImplementation((page: number) => Promise.resolve(scenariosPage(page)))
-  getScenarioDetail.mockImplementation((id: string) => Promise.resolve({
-    ...scenario(id, id === 'ESC-014' ? 'R-001' : 'R-002', 360_000),
-    orderCount: 12,
-    fuelLiters: 18.5,
-    distanceKm: 102.4,
-    durationHours: 6.5,
-    parameters: { fuelPricePerLiter: 1250, includeSurplus: true, generalCosts: 25000, hourlyRate: 8000 },
-    products: catalog().included,
-  }))
-  simulate.mockResolvedValue(scenario('ESC-015', 'R-002', 341_000))
-})
-
-describe('Simulation page', () => {
-  it('starts with the reference route and comparison scenarios selected', async () => {
-    render(<SimulationScreen />)
-
-    const routeTable = await screen.findByRole('table', { name: 'Rutas a simular' })
-    expect(within(routeTable).getByRole('radio', { name: 'Seleccionar ruta R-001' })).toBeChecked()
-
-    await screen.findByText('ESC-014')
-    expect(screen.getByRole('checkbox', { name: 'Seleccionar ESC-014 para comparar' })).toBeChecked()
-    expect(screen.getByRole('checkbox', { name: 'Seleccionar ESC-012 para comparar' })).toBeChecked()
-    expect(screen.getByRole('button', { name: 'Comparar Escenarios' })).toBeEnabled()
+describe('Simulation workspace', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    permissions.splice(0, permissions.length, 'simulation:read', 'simulation:write')
+    setupGet()
+    post.mockResolvedValue({ data: scenarios.items[0] })
   })
 
-  it('renders the route table and paginates the route catalog', async () => {
-    render(<SimulationScreen />)
-
-    const routeTable = await screen.findByRole('table', { name: 'Rutas a simular' })
-    expect(await within(routeTable).findByText('R-001')).toBeInTheDocument()
-    expect(getRoutes).toHaveBeenCalledWith(1)
-    expect(screen.getByText('Mostrando 1 a 5 de 8 rutas')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Página siguiente de rutas' }))
-
-    await waitFor(() => expect(getRoutes).toHaveBeenCalledWith(2))
-    expect(await screen.findByText('R-006')).toBeInTheDocument()
-    expect(screen.getByText('Mostrando 6 a 8 de 8 rutas')).toBeInTheDocument()
+  it('renders reference headings, switch, route columns and zero transfer draft', async () => {
+    render(<SimulationPage />)
+    expect(await screen.findByRole('heading', { name: 'Registros de Escenarios' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Simulación de Escenarios' })).toBeInTheDocument()
+    expect(screen.queryByText(/modo de demostración/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Incluir excedentes' })).toBeChecked()
+    expect(screen.getByLabelText('El cálculo de muestra no aplica excedentes.')).toHaveAttribute('title')
+    fireEvent.click(screen.getByRole('switch', { name: 'Incluir excedentes' }))
+    expect(screen.getByRole('switch', { name: 'Incluir excedentes' })).not.toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Seleccionar ruta R-001' })).toBeChecked()
+    expect(within(screen.getByRole('table', { name: 'Rutas' })).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual(['Selección', 'ID', 'Zona', 'Pedidos', 'Repartidor', 'Vehículo', 'Combustible (L)', 'Distancia', 'Tiempo', 'Fecha'])
+    expect(screen.getByLabelText('Cantidad de Agua')).toHaveValue(0)
+    expect(screen.getByRole('table', { name: 'Productos incluidos en el vehículo' })).toHaveTextContent('40')
   })
 
-  it('selects a single route and runs a simulation with the current parameters', async () => {
-    render(<SimulationScreen />)
-
-    const routeTable = await screen.findByRole('table', { name: 'Rutas a simular' })
-    await within(routeTable).findByText('R-001')
-    const simulateButton = screen.getByRole('button', { name: 'Simular' })
-    expect(simulateButton).toBeEnabled()
-
-    fireEvent.click(screen.getByRole('radio', { name: 'Seleccionar ruta R-002' }))
-    expect(screen.getByRole('radio', { name: 'Seleccionar ruta R-002' })).toBeChecked()
-    expect(simulateButton).toBeEnabled()
-
-    fireEvent.click(simulateButton)
-
-    await waitFor(() => expect(simulate).toHaveBeenCalledTimes(1))
-    expect(simulate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        route: expect.objectContaining({ id: 'R-002' }),
-        parameters: {
-          fuelPricePerLiter: 1_250,
-          includeSurplus: true,
-          generalCosts: 25_000,
-          hourlyRate: 8_000,
-        },
-      }),
-    )
-    expect(await screen.findByRole('status')).toHaveTextContent('ESC-015')
+  it('transfers valid quantities independently and returns selected included product', async () => {
+    render(<SimulationPage />)
+    const input = await screen.findByLabelText('Cantidad de Agua')
+    const add = screen.getByRole('button', { name: 'Agregar producto al vehículo' })
+    expect(add).toBeDisabled()
+    fireEvent.change(input, { target: { value: '81' } })
+    expect(add).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent(/stock disponible/i)
+    fireEvent.change(input, { target: { value: '-1' } })
+    expect(add).toBeDisabled()
+    fireEvent.change(input, { target: { value: '5' } })
+    fireEvent.click(add)
+    expect(input).toHaveValue(0)
+    expect(screen.getByRole('table', { name: 'Productos incluidos en el vehículo' })).toHaveTextContent('45')
+    fireEvent.click(screen.getByRole('button', { name: 'Simular' }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/simulation/demo/scenarios', expect.objectContaining({ products: [{ id: 'agua', quantity: 45 }] })))
+    fireEvent.click(screen.getByRole('button', { name: 'Seleccionar incluido Agua' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar producto del vehículo' }))
+    expect(screen.getByRole('table', { name: 'Productos incluidos en el vehículo' })).not.toHaveTextContent('Agua')
   })
 
-  it('updates the parameter inputs and the surplus toggle', async () => {
-    render(<SimulationScreen />)
+  it('collapses the whole workspace and preserves draft state', async () => {
+    render(<SimulationPage />)
+    fireEvent.change(await screen.findByLabelText('Cantidad de Agua'), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Contraer parámetros' }))
+    expect(screen.getByRole('button', { name: 'Expandir parámetros' })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('button', { name: 'Simular' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Registros de Escenarios' })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Expandir parámetros' }))
+    expect(screen.getByLabelText('Cantidad de Agua')).toHaveValue(5)
+  })
 
-    const routeTable = await screen.findByRole('table', { name: 'Rutas a simular' })
-    await within(routeTable).findByText('R-001')
-    fireEvent.change(screen.getByLabelText('Precio combustible ($/L)'), { target: { value: '1500' } })
+  it('submits updated cost parameters and surplus setting', async () => {
+    render(<SimulationPage />)
+    fireEvent.change(await screen.findByLabelText('Precio combustible ($/L)'), { target: { value: '1500' } })
     fireEvent.change(screen.getByLabelText('Gastos varios ($)'), { target: { value: '30000' } })
     fireEvent.change(screen.getByLabelText('Costo por hora ($)'), { target: { value: '9000' } })
     fireEvent.click(screen.getByRole('switch', { name: 'Incluir excedentes' }))
-    fireEvent.click(screen.getByRole('radio', { name: 'Seleccionar ruta R-001' }))
     fireEvent.click(screen.getByRole('button', { name: 'Simular' }))
-
-    await waitFor(() =>
-      expect(simulate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          parameters: {
-            fuelPricePerLiter: 1_500,
-            includeSurplus: false,
-            generalCosts: 30_000,
-            hourlyRate: 9_000,
-          },
-        }),
-      ),
-    )
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/simulation/demo/scenarios', expect.objectContaining({
+      parameters: { fuelPricePerLiter: 1500, includeSurplus: false, generalCosts: 30000, hourlyRate: 9000 },
+    })))
   })
 
-  it('collapses and expands the parameters panel while keeping the registry visible', async () => {
-    render(<SimulationScreen />)
-
-    const routeTable = await screen.findByRole('table', { name: 'Rutas a simular' })
-    await within(routeTable).findByText('R-001')
-    fireEvent.click(screen.getByRole('button', { name: 'Contraer parámetros de simulación' }))
-
-    expect(screen.queryByRole('table', { name: 'Rutas a simular' })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Registros de Escenarios' })).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Expandir parámetros de simulación' }))
-    expect(await screen.findByRole('table', { name: 'Rutas a simular' })).toBeInTheDocument()
+  it('retries a failed workspace request', async () => {
+    get.mockRejectedValueOnce(new Error('offline'))
+    render(<SimulationPage />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron cargar los datos')
+    setupGet()
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+    expect(await screen.findByRole('table', { name: 'Rutas' })).toBeInTheDocument()
   })
 
-  it('moves products between the available and included tables', async () => {
-    render(<SimulationScreen />)
-
-    const availableTable = await screen.findByRole('table', { name: 'Productos disponibles' })
-    const includedTable = screen.getByRole('table', { name: 'Productos incluidos en el vehículo' })
-
-    fireEvent.click(within(availableTable).getByRole('radio', { name: 'Seleccionar Agua 500 ml disponible' }))
-    fireEvent.change(within(availableTable).getByLabelText('Cantidad de Agua 500 ml'), {
-      target: { value: '10' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Agregar producto al vehículo' }))
-
-    const aguaRow = within(includedTable).getByText('Agua 500 ml').closest('tr')
-    expect(aguaRow).toHaveTextContent('50')
-
-    fireEvent.click(within(includedTable).getByRole('button', { name: 'Seleccionar Snacks incluido' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Quitar producto del vehículo' }))
-
-    expect(within(includedTable).queryByText('Snacks')).not.toBeInTheDocument()
-  })
-
-  it('paginates the scenario registry and opens a scenario detail', async () => {
-    render(<SimulationScreen />)
-
-    await screen.findByText('ESC-014')
-    expect(screen.getByText('Mostrando 1 a 8 de 14 registros')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Ver detalle de ESC-014' }))
-
-    const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByRole('heading', { name: 'Detalle del escenario' })).toBeInTheDocument()
-    expect(within(dialog).getByText('ESC-014')).toBeInTheDocument()
-    expect(within(dialog).getByLabelText(/Identificación del escenario/).firstElementChild).toHaveClass('flex', 'items-center')
-    expect(within(dialog).getByText('Ingreso estimado')).toBeInTheDocument()
-    expect(within(dialog).getByText('Pedidos')).toBeInTheDocument()
-    expect(within(dialog).getByText('Precio combustible')).toBeInTheDocument()
-    expect(within(dialog).getByText('Productos incluidos')).toBeInTheDocument()
-    expect(within(dialog).getByText('Agua 500 ml')).toBeInTheDocument()
-    const includedProducts = within(dialog).getByRole('table', { name: 'Productos incluidos' })
-    expect(within(includedProducts).getAllByRole('columnheader')).toHaveLength(2)
-    expect(within(includedProducts).getByRole('columnheader', { name: 'Cantidad' })).toBeInTheDocument()
-    expect(within(dialog).getByText(/estimaciones y no generan acciones reales/i)).toBeInTheDocument()
-    expect(getScenarioDetail).toHaveBeenCalledWith('ESC-014')
-
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cerrar' }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-
-    fireEvent.click(screen.getByRole('button', { name: 'Página siguiente de escenarios' }))
-    await waitFor(() => expect(getScenarios).toHaveBeenCalledWith(2))
-    expect(await screen.findByText('ESC-006')).toBeInTheDocument()
-    expect(screen.getByText('Mostrando 9 a 14 de 14 registros')).toBeInTheDocument()
-  })
-
-  it('enables the comparison only when exactly two scenarios are selected', async () => {
-    render(<SimulationScreen />)
-
-    await screen.findByText('ESC-014')
-    const compareButton = screen.getByRole('button', { name: 'Comparar Escenarios' })
-    expect(compareButton).toBeEnabled()
-
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar ESC-014 para comparar' }))
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar ESC-012 para comparar' }))
-    expect(compareButton).toBeDisabled()
-
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar ESC-014 para comparar' }))
-    expect(compareButton).toBeDisabled()
-
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar ESC-013 para comparar' }))
-    expect(compareButton).toBeEnabled()
-
-    fireEvent.click(compareButton)
-
-    const dialog = await screen.findByRole('dialog')
-    expect(
-      within(dialog).getByRole('heading', { name: 'Comparación de escenarios' }),
-    ).toBeInTheDocument()
-    const summary = within(dialog).getByRole('region', { name: 'Resumen comparativo' })
-    expect(within(summary).getByText('Mejor ingreso').parentElement).toHaveTextContent('ESC-013')
-    expect(within(summary).getByText('Menor costo operativo').parentElement).toHaveTextContent('ESC-014')
-    expect(within(summary).getByText('Mejor margen bruto').parentElement).toHaveTextContent('ESC-014')
-
-    const comparedScenarios = within(dialog).getByLabelText('Escenarios comparados')
-    const scenarioRows = within(comparedScenarios).getAllByText('Repartidor')
-    expect(scenarioRows).toHaveLength(2)
-    scenarioRows.forEach((label) => expect(label.parentElement).toHaveClass('flex', 'items-center', 'justify-between'))
-  })
-
-  it('renders route and history empty states with disabled primary actions', async () => {
-    getRoutes.mockResolvedValue({ items: [], page: 1, pageSize: 5, total: 0 })
-    getScenarios.mockResolvedValue({ items: [], page: 1, pageSize: 8, total: 0 })
-    getCatalog.mockResolvedValue({ available: [], included: [] })
-
-    render(<SimulationScreen />)
-
+  it('keeps empty route and scenario table headers and disables actions', async () => {
+    get.mockImplementation((url: string) => Promise.resolve({ data: url.endsWith('/routes') ? { ...routes, items: [], total: 0 } : url.endsWith('/catalog') ? catalog : { ...scenarios, items: [], total: 0 } }))
+    render(<SimulationPage />)
     expect(await screen.findByText('No hay rutas disponibles')).toBeInTheDocument()
     expect(screen.getByText('No hay escenarios registrados')).toBeInTheDocument()
-    expect(screen.getByText('Mostrando 0 de 0 rutas')).toBeInTheDocument()
-    expect(screen.getByText('Mostrando 0 de 0 registros')).toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'Rutas' })).toHaveTextContent('Repartidor')
+    expect(screen.getByRole('table', { name: 'Registros de Escenarios' })).toHaveTextContent('Margen Bruto')
     expect(screen.getByRole('button', { name: 'Simular' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Comparar Escenarios' })).toBeDisabled()
+    expect(screen.getByText('Mostrando 0 de 0 registros')).toBeInTheDocument()
   })
 
-  it('shows a retry state when routes cannot be loaded', async () => {
-    getRoutes.mockRejectedValue(new Error('offline'))
+  it('opens detail with loading state, sourced data, and closes on Escape', async () => {
+    let resolveDetail: (value: unknown) => void = () => {}
+    const pending = new Promise((resolve) => { resolveDetail = resolve })
+    get.mockImplementation((url: string) => url.endsWith('/ESC-014') ? pending : url.endsWith('/routes') ? Promise.resolve({ data: routes }) : url.endsWith('/catalog') ? Promise.resolve({ data: catalog }) : Promise.resolve({ data: scenarios }))
+    render(<SimulationPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver detalle ESC-014' }))
+    const dialog = screen.getByRole('dialog', { name: 'Detalle del Escenario' })
+    expect(within(dialog).getByRole('status')).toHaveTextContent('Cargando')
+    resolveDetail({ data: details[0] })
+    expect(await within(dialog).findByText('Juan Pérez')).toBeInTheDocument()
+    expect(within(dialog).getByRole('heading', { name: 'Productos incluidos en venta ambulatoria' })).toBeInTheDocument()
+    expect(within(dialog).getByText(/no ejecutan acciones reales automáticamente/i)).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
 
-    render(<SimulationScreen />)
+  it('limits selection to two and compares retrieved values including ties', async () => {
+    render(<SimulationPage />)
+    const compare = await screen.findByRole('button', { name: 'Comparar Escenarios' })
+    expect(compare).toBeDisabled()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar escenario ESC-014' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar escenario ESC-015' }))
+    expect(screen.getByRole('checkbox', { name: 'Seleccionar escenario ESC-016' })).toBeDisabled()
+    fireEvent.click(compare)
+    const dialog = screen.getByRole('dialog', { name: 'Comparar Escenarios' })
+    expect(await within(dialog).findByText('Empate')).toBeInTheDocument()
+    const scenarioPanel = within(dialog).getByText('María López').closest('section')
+    expect(scenarioPanel?.querySelectorAll('dt')).toHaveLength(8)
+    expect(within(scenarioPanel as HTMLElement).getByText('Vehículo')).toBeInTheDocument()
+    expect(within(dialog).getByText(/ESC-015:.*600\.000/)).toBeInTheDocument()
+    const incomeSummary = within(dialog).getByText('Mayor ingreso').parentElement
+    expect(incomeSummary).toHaveTextContent('ESC-015')
+    const marginSummary = within(dialog).getByText('Mayor margen bruto').parentElement
+    expect(marginSummary).toHaveTextContent('ESC-015')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cerrar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar escenario ESC-015' }))
+    expect(compare).toBeDisabled()
+  })
 
-    expect(await screen.findByText('No se pudieron cargar las rutas.')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Reintentar rutas' }))
-    await waitFor(() => expect(getRoutes).toHaveBeenCalledTimes(2))
+  it('shows comparison errors and retries detail requests', async () => {
+    get.mockImplementation((url: string) => url.endsWith('/routes') ? Promise.resolve({ data: routes }) : url.endsWith('/catalog') ? Promise.resolve({ data: catalog }) : url.endsWith('/scenarios') ? Promise.resolve({ data: scenarios }) : Promise.reject(new Error('unavailable')))
+    render(<SimulationPage />)
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Seleccionar escenario ESC-014' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar escenario ESC-015' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Comparar Escenarios' }))
+    const dialog = screen.getByRole('dialog')
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument()
+    setupGet()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reintentar' }))
+    expect(await within(dialog).findByText('Empate')).toBeInTheDocument()
+  })
+
+  it('preserves route, draft and scenario selection across pagination', async () => {
+    get.mockImplementation((url: string, config?: { params: { page: number } }) => {
+      const page = config?.params.page ?? 1
+      if (url.endsWith('/routes')) return Promise.resolve({ data: { ...routes, items: [routes.items[page - 1]], page, pageSize: 1, total: 2 } })
+      if (url.endsWith('/catalog')) return Promise.resolve({ data: catalog })
+      if (url.endsWith('/scenarios')) return Promise.resolve({ data: { ...scenarios, items: [scenarios.items[page - 1]], page, pageSize: 1, total: 3 } })
+      return Promise.reject(new Error('Unexpected endpoint'))
+    })
+    render(<SimulationPage />)
+    fireEvent.change(await screen.findByLabelText('Cantidad de Agua'), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar escenario ESC-014' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Página siguiente de rutas' }))
+    expect(await screen.findByRole('radio', { name: 'Seleccionar ruta R-002' })).not.toBeChecked()
+    expect(screen.getByLabelText('Cantidad de Agua')).toHaveValue(5)
+    fireEvent.click(screen.getByRole('button', { name: 'Simular' }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/simulation/demo/scenarios', expect.objectContaining({ routeId: 'R-001' })))
+    fireEvent.click(screen.getByRole('button', { name: 'Página siguiente de registros' }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Seleccionar escenario ESC-015' }))
+    expect(screen.getByRole('button', { name: 'Comparar Escenarios' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Página anterior de rutas' }))
+    expect(await screen.findByRole('radio', { name: 'Seleccionar ruta R-001' })).toBeChecked()
+    expect(screen.getByLabelText('Cantidad de Agua')).toHaveValue(5)
+  })
+
+  it('discards a detail response after the dialog closes', async () => {
+    let resolveDetail: (value: unknown) => void = () => {}
+    const pending = new Promise((resolve) => { resolveDetail = resolve })
+    get.mockImplementation((url: string) => url.endsWith('/ESC-014') ? pending : url.endsWith('/routes') ? Promise.resolve({ data: routes }) : url.endsWith('/catalog') ? Promise.resolve({ data: catalog }) : Promise.resolve({ data: scenarios }))
+    render(<SimulationPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver detalle ESC-014' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cerrar' }))
+    resolveDetail({ data: details[0] })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    setupGet()
+    fireEvent.click(screen.getByRole('button', { name: 'Ver detalle ESC-015' }))
+    expect(await within(screen.getByRole('dialog')).findByText('María López')).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog')).queryByText('Juan Pérez')).not.toBeInTheDocument()
+  })
+
+  it('shows detail errors within the dialog and retries', async () => {
+    get.mockImplementation((url: string) => url.endsWith('/routes') ? Promise.resolve({ data: routes }) : url.endsWith('/catalog') ? Promise.resolve({ data: catalog }) : url.endsWith('/scenarios') ? Promise.resolve({ data: scenarios }) : Promise.reject(new Error('unavailable')))
+    render(<SimulationPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver detalle ESC-014' }))
+    const dialog = screen.getByRole('dialog', { name: 'Detalle del Escenario' })
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument()
+    setupGet()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reintentar' }))
+    expect(await within(dialog).findByText('Juan Pérez')).toBeInTheDocument()
+  })
+
+  it('enforces read and write permissions and uses only demo endpoints', async () => {
+    permissions.splice(0, permissions.length, 'simulation:read')
+    const view = render(<SimulationPage />)
+    expect(await screen.findByRole('button', { name: 'Simular' })).toBeDisabled()
+    expect(post).not.toHaveBeenCalled()
+    expect(get.mock.calls.every(([url]) => String(url).startsWith('/simulation/demo/'))).toBe(true)
+    view.unmount()
+    get.mockClear()
+    permissions.splice(0, permissions.length)
+    render(<SimulationPage />)
+    expect(screen.getByRole('alert')).toHaveTextContent('simulation:read')
+    expect(get).not.toHaveBeenCalled()
   })
 })
 
 describe('Simulation HTTP adapter', () => {
   beforeEach(() => {
-    apiGet.mockReset()
-    apiPost.mockReset()
+    get.mockReset()
+    post.mockReset()
   })
 
   it('loads routes, products, and scenarios from the demo API endpoints', async () => {
     const { simulationService: service } = await vi.importActual<typeof import('@/services/simulation.service')>('@/services/simulation.service')
-    const routeResult = routesPage(1)
-    const catalogResult = catalog()
-    const scenarioResult = scenariosPage(1)
-    apiGet
+    const routeResult = routes
+    const catalogResult = catalog
+    const scenarioResult = scenarios
+    get
       .mockResolvedValueOnce({ data: routeResult })
       .mockResolvedValueOnce({ data: catalogResult })
       .mockResolvedValueOnce({ data: scenarioResult })
@@ -356,39 +256,39 @@ describe('Simulation HTTP adapter', () => {
     await expect(service.getCatalog()).resolves.toEqual(catalogResult)
     await expect(service.getScenarios(2)).resolves.toEqual(scenarioResult)
 
-    expect(apiGet).toHaveBeenNthCalledWith(1, '/simulation/demo/routes', { params: { page: 1 } })
-    expect(apiGet).toHaveBeenNthCalledWith(2, '/simulation/demo/catalog')
-    expect(apiGet).toHaveBeenNthCalledWith(3, '/simulation/demo/scenarios', { params: { page: 2 } })
+    expect(get).toHaveBeenNthCalledWith(1, '/simulation/demo/routes', { params: { page: 1 } })
+    expect(get).toHaveBeenNthCalledWith(2, '/simulation/demo/catalog')
+    expect(get).toHaveBeenNthCalledWith(3, '/simulation/demo/scenarios', { params: { page: 2 } })
   })
 
   it('loads scenario detail from its dedicated demo API endpoint', async () => {
     const { simulationService: service } = await vi.importActual<typeof import('@/services/simulation.service')>('@/services/simulation.service')
-    const detail = { ...scenario('ESC-014', 'R-001', 360_000), orderCount: 12, fuelLiters: 18.5, distanceKm: 102.4, durationHours: 6.5, parameters: { fuelPricePerLiter: 1250, includeSurplus: true, generalCosts: 25000, hourlyRate: 8000 }, products: catalog().included }
-    apiGet.mockResolvedValueOnce({ data: detail })
+    const detail = { ...scenarios.items[0], orderCount: 12, fuelLiters: 18.5, distanceKm: 102.4, durationHours: 6.5, parameters: { fuelPricePerLiter: 1250, includeSurplus: true, generalCosts: 25000, hourlyRate: 8000 }, products: catalog.included }
+    get.mockResolvedValueOnce({ data: detail })
 
-    await expect(service.getScenarioDetail('ESC-014')).resolves.toEqual(detail)
-    expect(apiGet).toHaveBeenCalledWith('/simulation/demo/scenarios/ESC-014')
+    await expect(service.getScenarioDetail('ESC/014')).resolves.toEqual(detail)
+    expect(get).toHaveBeenCalledWith('/simulation/demo/scenarios/ESC%2F014')
   })
 
   it('posts only the selected route, supported parameters, and product quantities, then propagates failures', async () => {
     const { simulationService: service } = await vi.importActual<typeof import('@/services/simulation.service')>('@/services/simulation.service')
     const input = {
-      route: route('R-002', 'Centro', 10, 'María López'),
+      route: routes.items[1],
       parameters: { fuelPricePerLiter: 1250, includeSurplus: true, generalCosts: 25000, hourlyRate: 8000 },
-      products: [{ ...product('p-1', 'Agua 500 ml', 120, 1200), quantity: 10 }],
+      products: [{ ...catalog.available[0], quantity: 10 }],
     }
-    const result = scenario('ESC-015', 'R-002', 341_000)
-    apiPost.mockResolvedValueOnce({ data: result })
+    const result = scenarios.items[1]
+    post.mockResolvedValueOnce({ data: result })
 
     await expect(service.simulate(input)).resolves.toEqual(result)
-    expect(apiPost).toHaveBeenCalledWith('/simulation/demo/scenarios', {
+    expect(post).toHaveBeenCalledWith('/simulation/demo/scenarios', {
       routeId: 'R-002',
       parameters: input.parameters,
-      products: [{ id: 'p-1', quantity: 10 }],
+      products: [{ id: 'agua', quantity: 10 }],
     })
 
     const failure = new Error('API unavailable')
-    apiPost.mockRejectedValueOnce(failure)
+    post.mockRejectedValueOnce(failure)
     await expect(service.simulate(input)).rejects.toBe(failure)
   })
 })
