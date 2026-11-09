@@ -17,4 +17,10 @@ describe('clientService geocoding', () => {
     await clientService.confirmLocation('client-1', { candidate })
     expect(post).toHaveBeenCalledWith('/client/client-1/location-confirmation', { candidate })
   })
+  it('sends manual coordinates without converting zero to missing', async () => {
+    post.mockResolvedValue({ data: { geocoding: { status: 'PENDING' } } })
+    const manualReference = { address: 'Calle 1', lat: 0, lng: 0 }
+    await expect(clientService.confirmLocation('client-1', { manualReference })).resolves.toEqual({ geocoding: { status: 'PENDING' } })
+    expect(post).toHaveBeenCalledWith('/client/client-1/location-confirmation', { manualReference })
+  })
 })

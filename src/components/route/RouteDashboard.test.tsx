@@ -124,6 +124,16 @@ describe('RouteDashboard selected-route detail', () => {
     expect(within(dialog).getByRole('table')).toHaveTextContent('Zona guardada')
   })
 
+  it('does not expose a sale identifier as an unnamed client in the location dialog', async () => {
+    useSessionAccess.mockReturnValue({ status: 'ready', permissions: ['read_route_plan', 'confirm_client_location'], gates: {} })
+    getDashboard.mockResolvedValue({ ...dashboard, candidates: { ...dashboard.candidates, blocked: [{ saleId: '507f1f77bcf86cd799439011', clientId: 'client-1', reasons: ['CLIENT_LOCATION_MISSING'] }] } })
+    render(<RouteDashboard />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Buscar ubicación' }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('Cliente sin nombre')
+    expect(dialog).not.toHaveTextContent('507f1f77bcf86cd799439011')
+  })
+
   it('does not fill missing historical fields from current candidates', async () => {
     useSessionAccess.mockReturnValue({ status: 'ready', permissions: ['read_route_plan'], gates: {} })
     getDashboard.mockResolvedValue({ ...dashboard, candidates: { ...dashboard.candidates, eligible: [{ saleId: 'sale-1', clientId: 'client-1', displayName: 'Nombre actual', addressSummary: 'Calle actual', zoneName: 'Zona actual' }] } })
@@ -216,6 +226,18 @@ describe('RouteDashboard selected-route detail', () => {
     rerender(<RouteDashboard />)
     expect(screen.getByRole('button', { name: 'Configurar ubicaciones' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Generar rutas' })).not.toBeInTheDocument()
+  })
+
+  it('requires the location permission independently from depot configuration', async () => {
+    getDashboard.mockResolvedValue({ ...dashboard, candidates: { ...dashboard.candidates, blocked: [{ saleId: 's1', clientId: 'c1', displayName: 'Cliente', reasons: ['CLIENT_LOCATION_MISSING'] }] } })
+    useSessionAccess.mockReturnValue({ status: 'ready', permissions: ['read_route_plan', 'manage_route_config'], gates: {} })
+    const { rerender } = render(<RouteDashboard />)
+    await screen.findByText('Cliente')
+    expect(screen.queryByRole('button', { name: 'Buscar ubicación' })).not.toBeInTheDocument()
+    useSessionAccess.mockReturnValue({ status: 'ready', permissions: ['read_route_plan', 'confirm_client_location'], gates: {} })
+    rerender(<RouteDashboard />)
+    expect(screen.getByRole('button', { name: 'Buscar ubicación' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Configurar ubicaciones' })).toBeInTheDocument()
   })
 
   it('ignores an outstanding dashboard response after read access is revoked', async () => {
