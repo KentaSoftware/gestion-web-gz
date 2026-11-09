@@ -33,6 +33,7 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
   const canRead = access.status === SESSION_STATUS.READY && access.permissions.includes(Permission.READ_ROUTE_PLAN)
   const canCreate = canRead && access.permissions.includes(Permission.CREATE_ROUTE_PLAN)
   const canManageConfig = canRead && access.permissions.includes('manage_route_config')
+  const canConfirmLocation = canRead && access.permissions.includes('confirm_client_location')
   const [dashboard, setDashboard] = useState<RouteDashboardData | null>(null)
   const [clientPage, setClientPage] = useState(1)
   const [clientQuery, setClientQuery] = useState('')
@@ -54,6 +55,10 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
   const scopedDate = zoneCode && serviceDate ? serviceDate : ''
   const scopedZone = scopedDate ? zoneCode : undefined
   const previousScope = useRef('')
+
+  useEffect(() => {
+    if (!canConfirmLocation) setGeocodingClient(null)
+  }, [canConfirmLocation])
 
   useEffect(() => {
     if (!canRead) {
@@ -179,7 +184,7 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {canManageConfig && <Button type="button" variant="secondary" onClick={() => setConfigOpen(true)}><Settings aria-hidden="true" /> Configurar ubicaciones</Button>}
+          {(canManageConfig || canConfirmLocation) && <Button type="button" variant="secondary" onClick={() => setConfigOpen(true)}><Settings aria-hidden="true" /> Configurar ubicaciones</Button>}
           <Button
             type="button"
             variant="secondary"
@@ -327,7 +332,7 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
                                 {hasDistance ? `${(distanceMeters / 1000).toLocaleString('es-AR', { maximumFractionDigits: 1 })} km` : 'Distancia no disponible'}
                               </p>
                               {blocked && <p className="mt-1 text-xs text-state-warning">{reasonLabel}</p>}
-                              {canManageConfig && blocked && candidate.clientId !== undefined && (candidate.reasons.includes('CLIENT_LOCATION_MISSING') || candidate.reasons.includes('CLIENT_LOCATION_UNCONFIRMED')) && <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={() => setGeocodingClient({ id: candidate.clientId as string, name: candidate.displayName ?? candidate.saleId, address: candidate.addressSummary })}>Buscar ubicación</Button>}
+                              {canConfirmLocation && blocked && candidate.clientId !== undefined && (candidate.reasons.includes('CLIENT_LOCATION_MISSING') || candidate.reasons.includes('CLIENT_LOCATION_UNCONFIRMED')) && <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={() => setGeocodingClient({ id: candidate.clientId as string, name: candidate.displayName?.trim() || 'Cliente sin nombre', address: candidate.addressSummary })}>Buscar ubicación</Button>}
                             </div>
                           </div>
                         </li>
@@ -393,8 +398,8 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
           <div className="flex justify-end"><DialogClose asChild><Button type="button" variant="secondary">Cerrar</Button></DialogClose></div>
         </DialogContent>
       </Dialog>
-      {canManageConfig && configOpen && <RouteConfigDialog open onOpenChange={setConfigOpen} />}
-      {canManageConfig && geocodingClient !== null && <GeocodingDialog open clientId={geocodingClient.id} clientName={geocodingClient.name} address={geocodingClient.address} onOpenChange={(open) => { if (!open) setGeocodingClient(null) }} onConfirmed={() => { setGeocodingClient(null); setReloadToken((token) => token + 1) }} />}
+      {(canManageConfig || canConfirmLocation) && configOpen && <RouteConfigDialog open onOpenChange={setConfigOpen} canManageConfig={canManageConfig} canConfirmLocation={canConfirmLocation} clients={Array.from(new globalThis.Map(clientCandidates.filter(({ candidate }) => candidate.clientId !== undefined).map(({ candidate }) => [candidate.clientId as string, { id: candidate.clientId as string, name: candidate.displayName ?? 'Cliente', address: candidate.addressSummary }])).values())} onLocationSaved={() => setReloadToken((token) => token + 1)} />}
+      {canConfirmLocation && geocodingClient !== null && <GeocodingDialog open clientId={geocodingClient.id} clientName={geocodingClient.name} address={geocodingClient.address} onOpenChange={(open) => { if (!open) setGeocodingClient(null) }} onConfirmed={() => { setGeocodingClient(null); setReloadToken((token) => token + 1) }} />}
     </section>
   )
 }
