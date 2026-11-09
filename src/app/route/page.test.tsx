@@ -24,6 +24,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, refresh: vi.fn(), back: vi.fn() }),
 }))
 vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess }))
+vi.mock('@/components/route/RouteMap', () => ({ RouteMap: () => <div>Mapa simulado</div> }))
 vi.mock('@/hooks/usePermission', () => ({ usePermission }))
 vi.mock('@/config/moduleRegistry', () => ({
   MODULE_FLAGS: moduleFlags,
@@ -69,7 +70,7 @@ import Dashboard from '@/components/Dashboard'
 
 const access = (overrides: Partial<SessionAccess> = {}): SessionAccess => ({
   status: SESSION_STATUS.READY,
-  permissions: [],
+  permissions: ['read_route_plan', 'create_route_plan', 'manage_route_config'],
   gates: { route: true, stock: false, finance: false, simulation: false },
   ...overrides,
 })
@@ -127,6 +128,19 @@ describe('RouteScreen', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
+  })
+
+  it('closes the planner when creation permission is revoked', async () => {
+    const { rerender } = render(<RouteScreen />)
+    const date = await screen.findByLabelText('Fecha de servicio')
+    fireEvent.change(date, { target: { value: '2026-10-15' } })
+    fireEvent.change(screen.getByLabelText('Zona de entrega'), { target: { value: 'a'.repeat(24) } })
+    fireEvent.click(screen.getByRole('button', { name: 'Generar rutas' }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    useSessionAccess.mockReturnValue(access({ permissions: ['read_route_plan'] }))
+    rerender(<RouteScreen />)
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Generar rutas' })).not.toBeInTheDocument()
   })
 
   it('passes dashboard planning values to the planner as initial props', async () => {
@@ -200,13 +214,14 @@ describe('RouteScreen', () => {
     expect(screen.queryByRole('heading', { level: 1, name: 'Rutas' })).not.toBeInTheDocument()
   })
 
-  it('renders the route planning shell without route-specific permissions', () => {
+  it('denies the route dashboard without read permission', () => {
     useSessionAccess.mockReturnValue(access({ permissions: [] }))
     usePermission.mockReturnValue({ hasPermission: () => false, hasAnyPermission: () => false })
 
     render(<RouteScreen />)
 
-    expect(screen.getByRole('heading', { level: 2, name: 'Optimización de Rutas' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('No tenés permiso')
+    expect(getDashboard).not.toHaveBeenCalled()
   })
 
   it('redirects anonymous sessions home without rendering the shell', () => {

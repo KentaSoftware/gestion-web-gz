@@ -8,6 +8,8 @@ const { getActiveDeliveryZones, getDashboard } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/services/routePlan.service', () => ({ routePlanService: { getActiveDeliveryZones, getDashboard } }))
+vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess: () => ({ status: 'ready', permissions: ['read_route_plan', 'create_route_plan', 'manage_route_config'], gates: {} }) }))
+vi.mock('@/components/route/RouteMap', () => ({ RouteMap: () => <div>Mapa simulado</div> }))
 
 const dashboard = {
   filters: {},
@@ -30,17 +32,18 @@ describe('RouteDashboard', () => {
     getDashboard.mockResolvedValue(dashboard)
   })
 
-  it('loads filters and renders exactly four physical route KPIs', async () => {
+  it('loads filters and renders four route KPIs without inventing a fuel price', async () => {
     render(<RouteDashboard />)
 
     await waitFor(() => expect(screen.getByText('Rutas activas')).toBeInTheDocument())
     expect(getDashboard).toHaveBeenCalledWith({})
     expect(screen.getByText('Pedidos pendientes')).toBeInTheDocument()
     expect(screen.getByText('Distancia total')).toBeInTheDocument()
-    expect(screen.getByText('Combustible estimado')).toBeInTheDocument()
+    expect(screen.getByText('Costo combustible est.')).toBeInTheDocument()
     expect(within(screen.getByRole('region', { name: 'Indicadores de rutas' })).getAllByRole('article')).toHaveLength(4)
-    expect(within(screen.getByRole('region', { name: 'Indicadores de rutas' })).getByText('3,75 L')).toBeInTheDocument()
-    expect(screen.queryByText(/\$|USD|costo|precio/i)).not.toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Indicadores de rutas' })).getByText('Consumo estimado: 3,75 L')).toBeInTheDocument()
+    expect(screen.getByLabelText('Costo combustible est.: No disponible')).toBeInTheDocument()
+    expect(screen.queryByText(/\$|USD/i)).not.toBeInTheDocument()
   })
 
   it('shows a retryable API error', async () => {

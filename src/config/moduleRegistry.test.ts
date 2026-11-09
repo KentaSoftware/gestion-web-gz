@@ -51,12 +51,13 @@ describe('MODULE_REGISTRY', () => {
     expect(repartidorAccess.permissions).not.toContain(Permission.REFUND_SALE)
   })
 
-  it('enables Rutas for any authenticated session without route permissions', () => {
+  it('enables Rutas only with its read permission', () => {
     const route = MODULE_REGISTRY.find((entry) => entry.id === 'route')
 
     expect(route).toBeDefined()
-    expect(route).toMatchObject({ flag: null, gate: null, requiredPermissions: [] })
-    expect(isModuleEnabled(route!, repartidorAccess)).toBe(true)
+    expect(route).toMatchObject({ flag: null, gate: null, requiredPermissions: [Permission.READ_ROUTE_PLAN] })
+    expect(isModuleEnabled(route!, repartidorAccess)).toBe(false)
+    expect(isModuleEnabled(route!, { ...repartidorAccess, permissions: [Permission.READ_ROUTE_PLAN] })).toBe(true)
   })
 
   it('enables Stock inteligente for any authenticated session without stock permissions', () => {
@@ -67,11 +68,11 @@ describe('MODULE_REGISTRY', () => {
     expect(isModuleEnabled(stock!, repartidorAccess)).toBe(true)
   })
 
-  it('does not reintroduce route-specific permission requirements', () => {
+  it('does not grant route navigation for an unrelated permission', () => {
     const route = MODULE_REGISTRY.find((entry) => entry.id === 'route')
 
     expect(route).toBeDefined()
-    expect(isModuleEnabled(route!, { ...repartidorAccess, permissions: ['unrelated_permission'] })).toBe(true)
+    expect(isModuleEnabled(route!, { ...repartidorAccess, permissions: ['unrelated_permission'] })).toBe(false)
   })
 
   it('does not expose modules while the session is hydrating', () => {

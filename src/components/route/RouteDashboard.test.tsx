@@ -2,16 +2,20 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RouteDashboard } from './RouteDashboard'
 
-const { getActiveDeliveryZones, getDashboard } = vi.hoisted(() => ({
+const { getActiveDeliveryZones, getDashboard, useSessionAccess } = vi.hoisted(() => ({
   getActiveDeliveryZones: vi.fn(),
   getDashboard: vi.fn(),
+  useSessionAccess: vi.fn(),
 }))
 
 vi.mock('@/services/routePlan.service', () => ({ routePlanService: { getActiveDeliveryZones, getDashboard } }))
+vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess }))
+vi.mock('./RouteMap', () => ({ RouteMap: () => <div>Mapa simulado</div> }))
 
 const scrollIntoView = vi.fn()
 
 beforeEach(() => {
+  useSessionAccess.mockReturnValue({ status: 'ready', permissions: ['read_route_plan', 'create_route_plan', 'manage_route_config'], gates: {} })
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     callback(0)
     return 1
@@ -47,6 +51,68 @@ const dashboard = {
 }
 
 describe('RouteDashboard selected-route detail', () => {
+  it('does not request dashboard data while hydrating or without read permission', () => {
+    useSessionAccess.mockReturnValue({ status: 'hydrating', permissions: [], gates: {} })
+    const { rerender } = render(<RouteDashboard />)
+    expect(screen.getByRole('status')).toHaveTextContent('Verificando el acceso')
+    expect(getDashboard).not.toHaveBeenCalled()
+    useSessionAccess.mockReturnValue({ status: 'ready', permissions: [], gates: {} })
+    rerender(<RouteDashboard />)
+    expect(screen.getByRole('alert')).toHaveTextContent('No tenés permiso')
+    expect(getDashboard).not.toHaveBeenCalled()
+    expect(getActiveDeliveryZones).not.toHaveBeenCalled()
+  })
+
+  it('lets a read-only driver view routes without creation or configuration actions', async () => {
+    useSessionAccess.mockReturnValue({ status: 'ready', permissions: ['read_route_plan'], gates: {} })
+    getDashboard.mockResolvedValue(dashboard)
+    render(<RouteDashboard />)
+    expect(await screen.findByRole('heading', { name: 'Rutas planificadas (2)' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Generar rutas' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Configurar ubicaciones' })).not.toBeInTheDocument()
+    expect(getActiveDeliveryZones).not.toHaveBeenCalled()
+  })
+
+  it('gates creation and configuration independently', async () => {
+    useSessionAccess.mockReturnValue({ status: 'ready', permissions: ['read_route_plan', 'create_route_plan'], gates: {} })
+    getDashboard.mockResolvedValue(dashboard)
+    getActiveDeliveryZones.mockResolvedValue([])
+    const { rerender } = render(<RouteDashboard />)
+    expect(await screen.findByRole('button', { name: 'Generar rutas' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Configurar ubicaciones' })).not.toBeInTheDocument()
+    useSessionAccess.mockReturnValue({ status: 'ready', permissions: ['read_route_plan', 'manage_route_config'], gates: {} })
+    rerender(<RouteDashboard />)
+    expect(screen.getByRole('button', { name: 'Configurar ubicaciones' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Generar rutas' })).not.toBeInTheDocument()
+  })
+
+  it('ignores an outstanding dashboard response after read access is revoked', async () => {
+    let resolveDashboard: (value: typeof dashboard) => void = () => {}
+    getDashboard.mockReturnValue(new Promise((resolve) => { resolveDashboard = resolve }))
+    getActiveDeliveryZones.mockResolvedValue([])
+    const { rerender } = render(<RouteDashboard />)
+    expect(getDashboard).toHaveBeenCalledTimes(1)
+    useSessionAccess.mockReturnValue({ status: 'ready', permissions: [], gates: {} })
+    rerender(<RouteDashboard />)
+    resolveDashboard(dashboard)
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('No tenés permiso'))
+    expect(screen.queryByRole('heading', { name: 'Rutas planificadas (2)' })).not.toBeInTheDocument()
+  })
+
+  it('retains a selected route on refresh and clears it if it disappears', async () => {
+    getActiveDeliveryZones.mockResolvedValue([])
+    getDashboard.mockResolvedValueOnce(dashboard).mockResolvedValueOnce(dashboard).mockResolvedValueOnce({ ...dashboard, routes: [dashboard.routes[0]] })
+    const { rerender } = render(<RouteDashboard refreshToken={0} />)
+    await screen.findByRole('heading', { name: 'Rutas planificadas (2)' })
+    fireEvent.click(screen.getByRole('button', { name: 'Seleccionar ruta route-2' }))
+    rerender(<RouteDashboard refreshToken={1} />)
+    await waitFor(() => expect(getDashboard).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Seleccionar ruta route-2' })).toHaveAttribute('aria-pressed', 'true'))
+    rerender(<RouteDashboard refreshToken={2} />)
+    await screen.findByRole('heading', { name: 'Rutas planificadas (1)' })
+    expect(screen.getByRole('button', { name: 'Seleccionar ruta route-1' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.queryByRole('heading', { name: 'Vista de ruta' })).not.toBeInTheDocument()
+  })
   it('refetches on the parent refresh token and keeps both sections above lower regions', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     const updatedDashboard = { ...dashboard, routes: [{ ...dashboard.routes[0], id: 'route-new' }] }
@@ -62,7 +128,7 @@ describe('RouteDashboard selected-route detail', () => {
     const plannedRoutes = screen.getByRole('heading', { name: 'Rutas planificadas (1)' })
     const clients = screen.getByRole('heading', { name: 'Clientes con pedidos (0)' })
     const map = screen.getByRole('heading', { name: 'Mapa interactivo' })
-    const detail = screen.getByRole('heading', { name: 'Detalle de ruta' })
+    const detail = screen.getByRole('heading', { name: 'Vista de ruta' })
     const dashboardRoot = screen.getByRole('region', { name: 'Optimización de Rutas' })
     const lowerPanels = screen.getByTestId('route-lower-panels')
     const mapPanel = document.getElementById('route-map-region')
@@ -112,6 +178,8 @@ describe('RouteDashboard selected-route detail', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(toggle).toHaveAttribute('aria-controls', 'route-planning-bar')
     expect(screen.getByRole('group', { name: 'Planificación de rutas' })).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Fecha de servicio'), { target: { value: '2026-10-15' } })
+    fireEvent.change(screen.getByLabelText('Zona de entrega'), { target: { value: 'zone-1' } })
 
     fireEvent.click(toggle)
 
@@ -122,38 +190,41 @@ describe('RouteDashboard selected-route detail', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mostrar filtros' }))
 
     expect(screen.getByRole('group', { name: 'Planificación de rutas' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Fecha de servicio')).toHaveValue('2026-10-15')
+    expect(screen.getByLabelText('Zona de entrega')).toHaveValue('zone-1')
     expect(getDashboard).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps map and detail hidden until a route action is used', async () => {
+  it('shows the first route by default and focuses the requested panel', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     getDashboard.mockResolvedValue(dashboard)
     render(<RouteDashboard />)
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (2)' })).toBeInTheDocument())
-    expect(screen.queryByRole('heading', { name: 'Mapa interactivo' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Detalle de ruta' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Mapa interactivo' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Vista de ruta' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /seleccionar ruta route-1/i })).toHaveAttribute('aria-pressed', 'true')
 
     fireEvent.click(screen.getByRole('button', { name: /seleccionar ruta route-2/i }))
 
-    expect(screen.queryByRole('heading', { name: 'Mapa interactivo' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Detalle de ruta' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Mapa interactivo' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Vista de ruta' })).toBeInTheDocument()
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Ver mapa' })[1])
     expect(screen.getByRole('heading', { name: 'Mapa interactivo' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Detalle de ruta' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Vista de ruta' })).toBeInTheDocument()
     expect(document.activeElement).toBe(document.getElementById('route-map-region'))
     expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: 'smooth', block: 'start' })
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Previsualizar' })[1])
     expect(screen.getByRole('heading', { name: 'Mapa interactivo' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Detalle de ruta' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Vista de ruta' })).toBeInTheDocument()
     expect(document.activeElement).toBe(document.getElementById('route-detail-region'))
     expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: 'smooth', block: 'start' })
     expect(scrollIntoView).toHaveBeenCalledTimes(2)
   })
 
-  it('reveals only the requested panel from each route action', async () => {
+  it('focuses the preview panel without hiding the map', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     getDashboard.mockResolvedValue(dashboard)
     render(<RouteDashboard />)
@@ -161,8 +232,8 @@ describe('RouteDashboard selected-route detail', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (2)' })).toBeInTheDocument())
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Previsualizar' })[0])
-    expect(screen.getByRole('heading', { name: 'Detalle de ruta' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Mapa interactivo' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Vista de ruta' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Mapa interactivo' })).toBeInTheDocument()
     expect(document.activeElement).toBe(document.getElementById('route-detail-region'))
   })
 
@@ -177,7 +248,7 @@ describe('RouteDashboard selected-route detail', () => {
     expect(screen.getByText('No existen rutas planificadas para el usuario')).toBeInTheDocument()
     expect(screen.queryByText('No hay rutas ni clientes pendientes para la fecha y zona seleccionadas.')).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Mapa interactivo' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Detalle de ruta' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Vista de ruta' })).not.toBeInTheDocument()
   })
 
   it('passes planning values to route generation without reloading the dashboard', async () => {
@@ -298,7 +369,10 @@ describe('RouteDashboard selected-route detail', () => {
     getDashboard.mockResolvedValue({
       ...dashboard,
       candidates: {
-        eligible: [{ saleId: 'eligible-geo', displayName: 'Cliente geográfico', addressSummary: 'Dirección confirmada', latitude: -34.6, longitude: -58.4, distanceMeters: 1250 }],
+        eligible: [
+          { saleId: 'eligible-geo', displayName: 'Cliente geográfico', addressSummary: 'Dirección confirmada', latitude: -34.6, longitude: -58.4, distanceMeters: 1250 },
+          { saleId: 'invalid-geo', displayName: 'Coordenadas inválidas', latitude: 100, longitude: -58.4 },
+        ],
         blocked: [
           { saleId: 'blocked-missing', displayName: 'Cliente sin ubicación', reasons: ['CLIENT_LOCATION_MISSING'] },
           { saleId: 'blocked-unconfirmed', displayName: 'Cliente sin confirmar', reasons: ['CLIENT_LOCATION_UNCONFIRMED'] },
@@ -311,8 +385,9 @@ describe('RouteDashboard selected-route detail', () => {
     await waitFor(() => expect(screen.getByText('Cliente geográfico')).toBeInTheDocument())
     expect(screen.getByText(/1,3 km/)).toBeInTheDocument()
     expect(screen.getByText(/Ubicación confirmada/)).toBeInTheDocument()
-    expect(screen.getByText(/No posee coordenadas/)).toBeInTheDocument()
+    expect(screen.getAllByText(/No posee coordenadas/)).toHaveLength(2)
     expect(screen.getByText(/Ubicación no confirmada/)).toBeInTheDocument()
-    expect(screen.getAllByText(/Distancia no disponible/)).toHaveLength(2)
+    expect(screen.getAllByText(/Distancia no disponible/)).toHaveLength(3)
+    expect(screen.getByText('Coordenadas inválidas').closest('li')).toHaveTextContent('No posee coordenadas')
   })
 })
