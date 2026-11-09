@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Filter, Loader2, Map, MapPin, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -46,6 +46,10 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
   const [zoneStatus, setZoneStatus] = useState<ZoneStatus>('loading')
   const [zoneReloadToken, setZoneReloadToken] = useState(0)
   const [planningVisible, setPlanningVisible] = useState(true)
+  const zoneCode = zones.find((zone) => zone._id === deliveryZoneId)?.code
+  const scopedDate = zoneCode && serviceDate ? serviceDate : ''
+  const scopedZone = scopedDate ? zoneCode : undefined
+  const previousScope = useRef('')
 
   useEffect(() => {
     if (!canRead) {
@@ -54,13 +58,16 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
       return
     }
     let cancelled = false
+    const scope = `${scopedDate}:${scopedZone ?? ''}`
+    const scopeChanged = previousScope.current !== scope
+    previousScope.current = scope
     setStatus('loading')
     setFocusRegionId(null)
-    void routePlanService.getDashboard({}).then((result) => {
+    void routePlanService.getDashboard(scopedDate && scopedZone ? { serviceDate: scopedDate, zoneCode: scopedZone } : {}).then((result) => {
       if (cancelled) return
       setDashboard(result)
       setClientPage(1)
-      setSelectedRouteId((current) => current === null
+      setSelectedRouteId((current) => current === null || (scopeChanged && !result.routes.some((route) => route.id === current))
         ? result.routes[0]?.id ?? null
         : result.routes.some((route) => route.id === current) ? current : null)
       setStatus('ready')
@@ -71,10 +78,10 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
       }
     })
     return () => { cancelled = true }
-  }, [canRead, reloadToken, refreshToken])
+  }, [canRead, reloadToken, refreshToken, scopedDate, scopedZone])
 
   useEffect(() => {
-    if (!canCreate) return
+    if (!canRead) return
     let cancelled = false
     setZoneStatus('loading')
     void routePlanService.getActiveDeliveryZones().then((activeZones) => {
@@ -87,7 +94,7 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
       setZoneStatus('error')
     })
     return () => { cancelled = true }
-  }, [canCreate, zoneReloadToken])
+  }, [canRead, zoneReloadToken])
 
   const loadZones = () => {
     setZoneReloadToken((token) => token + 1)
@@ -188,9 +195,10 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
           <Button type="button" variant="secondary" size="sm" onClick={() => setReloadToken((token) => token + 1)}>Reintentar</Button>
         </div>
       )}
-      {status === 'ready' && dashboard !== null && (
-        <>
-          <RouteKpiCards kpis={dashboard.kpis} />
+      {status === 'ready' && dashboard !== null && <>
+        <p className="text-sm text-text-secondary">{scopedDate ? 'Vista filtrada por fecha y zona.' : 'Vista global. Seleccioná fecha y zona para filtrar el dashboard.'}</p>
+        <RouteKpiCards kpis={dashboard.kpis} />
+      </>}
           {planningVisible && (
             <div id="route-planning-bar" role="group" aria-label="Planificación de rutas" className="rounded-lg border border-border-subtle bg-surface-base p-4">
               <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
@@ -211,7 +219,7 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
                     id="dashboard-delivery-zone"
                     name="deliveryZoneId"
                     value={deliveryZoneId}
-                    disabled={!canCreate || zoneStatus === 'loading'}
+                    disabled={zoneStatus !== 'ready'}
                     onChange={(event) => setDeliveryZoneId(event.target.value)}
                     className="h-10 rounded-md border border-border-subtle bg-surface-base px-3 text-sm text-text-primary focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-state-focus disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -221,9 +229,9 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
                 </div>
                  {canCreate && <Button type="button" disabled={zoneStatus !== 'ready' || serviceDate === '' || deliveryZoneId === ''} onClick={() => onGenerateRoutes?.(serviceDate, deliveryZoneId)}>Generar rutas</Button>}
               </div>
-              {canCreate && zoneStatus === 'loading' && <p role="status" className="mt-3 text-sm text-text-secondary">Cargando zonas…</p>}
-              {canCreate && zoneStatus === 'ready' && zones.length === 0 && <p role="status" className="mt-3 text-sm text-text-secondary">No hay zonas de entrega disponibles.</p>}
-              {canCreate && zoneStatus === 'error' && (
+              {zoneStatus === 'loading' && <p role="status" className="mt-3 text-sm text-text-secondary">Cargando zonas…</p>}
+              {zoneStatus === 'ready' && zones.length === 0 && <p role="status" className="mt-3 text-sm text-text-secondary">No hay zonas de entrega disponibles.</p>}
+              {zoneStatus === 'error' && (
                 <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-state-error">
                   <span>No se pudieron cargar las zonas de entrega.</span>
                   <Button type="button" variant="secondary" size="sm" onClick={loadZones}>Reintentar</Button>
@@ -231,6 +239,8 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
               )}
             </div>
           )}
+      {status === 'ready' && dashboard !== null && (
+        <>
           <div className="grid gap-4 lg:grid-cols-2">
               <section aria-labelledby="planned-routes-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
                  <div className="flex flex-wrap items-start justify-between gap-3">

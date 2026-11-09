@@ -181,6 +181,9 @@ describe('RouteScreen', () => {
       filters: {}, kpis: { activeRoutes: 0, pendingOrders: 0, totalDistanceMeters: 0, estimatedFuelLiters: 0 }, routes: [],
       candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' }, warnings: [],
     }).mockResolvedValueOnce({
+      filters: { serviceDate: '2026-10-15', zoneCode: 'NORTE' }, kpis: { activeRoutes: 0, pendingOrders: 0, totalDistanceMeters: 0, estimatedFuelLiters: 0 }, routes: [],
+      candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' }, warnings: [],
+    }).mockResolvedValueOnce({
       filters: {}, kpis: { activeRoutes: 1, pendingOrders: 0, totalDistanceMeters: 1000, estimatedFuelLiters: 0.1 }, routes: [{ id: 'route-new', status: 'PENDING', zoneCode: 'NORTE', selectedSaleIds: [saleA, saleB], clientCount: 2, metrics: { distanceMeters: 1000, durationSeconds: 600, fuelLiters: 0.1 }, assignments: { driverId: 'driver-1', vehicleId: 'vehicle-1' }, warnings: [], stale: false }],
       candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' }, warnings: [],
     })
@@ -201,7 +204,10 @@ describe('RouteScreen', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (1)' })).toBeInTheDocument())
-    expect(getDashboard).toHaveBeenCalledTimes(2)
+    expect(getDashboard).toHaveBeenCalledTimes(3)
+    expect(getDashboard).toHaveBeenNthCalledWith(1, {})
+    expect(getDashboard).toHaveBeenNthCalledWith(2, { serviceDate: '2026-10-15', zoneCode: 'NORTE' })
+    expect(getDashboard).toHaveBeenNthCalledWith(3, { serviceDate: '2026-10-15', zoneCode: 'NORTE' })
     expect(push).not.toHaveBeenCalledWith(expect.stringContaining('/route/'))
   })
 
