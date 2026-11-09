@@ -76,7 +76,7 @@ export interface ModuleRegistryEntry {
 }
 
 /**
- * Legacy navigation and Rutas are authenticated navigation entries. The
+ * Legacy navigation entries require authentication; Rutas also requires read access. The
  * remaining Phase 0 modules are registered with a flag and a gate so they stay
  * hidden while unapproved. Permission requirements remain for unrelated modules.
  */
@@ -89,7 +89,7 @@ export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
   { id: 'buy-smart-upload', href: '/buy/smart-upload', label: 'Carga inteligente', icon: Upload, flag: null, requiredPermissions: [], gate: null },
   { id: 'expense', href: '/expense', label: 'Egresos', icon: CircleDollarSign, flag: null, requiredPermissions: [], gate: null },
   { id: 'cashflow', href: '/cashflow', label: 'Flujo de caja', icon: LineChart, flag: null, requiredPermissions: [], gate: null },
-  { id: 'route', href: '/route', label: 'Rutas', icon: Route, flag: null, requiredPermissions: [], gate: null },
+  { id: 'route', href: '/route', label: 'Rutas', icon: Route, flag: null, requiredPermissions: [Permission.READ_ROUTE_PLAN], gate: null },
   { id: 'stock', href: '/stock', label: 'Stock', icon: Boxes, flag: MODULE_FLAG.STOCK, requiredPermissions: [Permission.ADJUST_STOCK], gate: MODULE_GATE.STOCK },
   { id: 'finance', href: '/finance', label: 'Finanzas', icon: Wallet, flag: MODULE_FLAG.FINANCE, requiredPermissions: [Permission.READ_CASHFLOW], gate: MODULE_GATE.FINANCE },
   /** Simulation stays visible for the authorized demo while its flag/gate remain reserved for activation. */
