@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Filter, Loader2, Map, MapPin, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { routePlanService } from '@/services/routePlan.service'
 import type { DeliveryZone, RouteDashboard as RouteDashboardData } from '@/interfaces/routePlan.interface'
 import { RouteKpiCards } from './RouteKpiCards'
-import { PlannedRouteCard } from './PlannedRouteCard'
+import { PlannedRouteCard, statusLabel } from './PlannedRouteCard'
+import { RouteTabs } from './RoutePreview'
 import { RouteConfigDialog } from './RouteConfigDialog'
 import { GeocodingDialog } from './GeocodingDialog'
 import { RouteMap } from './RouteMap'
@@ -36,6 +38,8 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
   const [clientQuery, setClientQuery] = useState('')
   const [status, setStatus] = useState<LoadStatus>('loading')
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
+  const [previewRouteId, setPreviewRouteId] = useState<string | null>(null)
+  const previewTrigger = useRef<HTMLButtonElement | null>(null)
   const [focusRegionId, setFocusRegionId] = useState<string | null>(null)
   const [configOpen, setConfigOpen] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
@@ -55,12 +59,14 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
     if (!canRead) {
       setDashboard(null)
       setSelectedRouteId(null)
+      setPreviewRouteId(null)
       return
     }
     let cancelled = false
     const scope = `${scopedDate}:${scopedZone ?? ''}`
     const scopeChanged = previousScope.current !== scope
     previousScope.current = scope
+    if (scopeChanged) setPreviewRouteId(null)
     setStatus('loading')
     setFocusRegionId(null)
     void routePlanService.getDashboard(scopedDate && scopedZone ? { serviceDate: scopedDate, zoneCode: scopedZone } : {}).then((result) => {
@@ -152,6 +158,7 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
         encodedPolyline: selectedRoute.encodedPolyline ?? '',
       }
     : null
+  const selectedRouteIndex = dashboard?.routes.findIndex((route) => route.id === selectedRouteId) ?? -1
 
   if (access.status === SESSION_STATUS.HYDRATING) {
     return <p role="status">Verificando el acceso a Rutas…</p>
@@ -256,28 +263,29 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
                         <p role="status" className="flex min-h-32 items-center justify-center rounded-md border border-border-subtle bg-background-subtle p-4 text-center text-sm text-text-secondary">
                           No existen rutas planificadas para el usuario
                         </p>
-                      ) : dashboard.routes.map((route) => (
+                      ) : dashboard.routes.map((route, index) => (
                         <PlannedRouteCard
                           key={route.id}
                           route={route}
+                          index={index + 1}
                           selected={selectedRoute?.id === route.id}
                           onSelect={() => setSelectedRouteId(route.id)}
                           onViewMap={() => handleRouteAction(route.id, 'route-map-region')}
-                          onPreview={() => handleRouteAction(route.id, 'route-detail-region')}
+                          onPreview={(event) => { previewTrigger.current = event.currentTarget; setSelectedRouteId(route.id); setPreviewRouteId(route.id) }}
                         />
                       ))}
                     </div>
                 </section>
              <section aria-labelledby="dashboard-clients-title" className="rounded-lg border border-border-subtle bg-surface-base p-5">
-                <h3 id="dashboard-clients-title" className="text-base font-semibold text-text-primary">Clientes con pedidos ({clientCandidates.length})</h3>
-                <p className="mt-1 text-sm text-text-secondary">{dashboard.candidates.eligible.length} elegibles · {dashboard.candidates.blocked.length} bloqueados{clientQuery.trim() !== '' ? ` · ${filteredClientCandidates.length} coincidencias` : ''}</p>
+                 <h3 id="dashboard-clients-title" className="text-base font-semibold text-text-primary">Clientes con pedidos ({clientCandidates.length})</h3>
+                 <p className="mt-1 text-xs text-text-secondary">{dashboard.candidates.eligible.length} elegibles · {dashboard.candidates.blocked.length} bloqueados{clientQuery.trim() !== '' ? ` · ${filteredClientCandidates.length} coincidencias` : ''}</p>
                  {clientCandidates.length === 0 ? (
                    <p role="status" className="mt-4 rounded-md border border-border-subtle bg-background-subtle p-3 text-sm text-text-secondary">
                      No hay clientes pendientes para asignar a una ruta.
                    </p>
                  ) : <>
                    <div className="mt-4 flex flex-col gap-2">
-                     <Label htmlFor="dashboard-client-search">Buscar cliente o dirección…</Label>
+                     <Label htmlFor="dashboard-client-search" className="sr-only">Buscar cliente o dirección…</Label>
                      <input
                        id="dashboard-client-search"
                        type="search"
@@ -307,11 +315,11 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
                         : hasCoordinates ? 'Ubicación confirmada' : 'No posee coordenadas'
                       const reasonLabel = blocked ? candidate.reasons.map((reason) => reason === 'CLIENT_LOCATION_MISSING' ? 'La ubicación del cliente no está disponible' : reason === 'CLIENT_LOCATION_UNCONFIRMED' ? 'La ubicación necesita confirmación' : reason).join(' · ') : ''
                       return (
-                        <li key={candidate.saleId} className={`rounded-md border p-3 ${blocked ? 'border-state-warning' : 'border-border-subtle'}`}>
+                        <li key={candidate.saleId} className={`rounded-md border p-2 ${blocked ? 'border-state-warning' : 'border-border-subtle'}`}>
                           <div className="flex items-start gap-2">
                             <MapPin className={`mt-0.5 size-4 shrink-0 ${blocked ? 'text-state-warning' : hasCoordinates ? 'text-state-success' : 'text-state-warning'}`} aria-hidden="true" />
                             <div className="min-w-0 flex-1">
-                              <p className="font-medium text-text-primary">{candidate.displayName ?? candidate.saleId}</p>
+                              <p className="font-medium text-text-primary">{candidate.displayName ?? 'Cliente no disponible'}</p>
                             <p className="text-xs text-text-secondary">{candidate.addressSummary ?? 'Dirección no disponible'}{candidate.zoneName ? ` · ${candidate.zoneName}` : ''}</p>
                               <p className={`mt-1 text-xs ${blocked ? 'text-state-warning' : hasCoordinates ? 'text-state-success' : 'text-state-warning'}`}>
                                 {locationStatus ?? reasonLabel}
@@ -339,7 +347,6 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
             {selectedRoute !== undefined && <div data-testid="route-lower-panels" className="grid w-full min-w-0 flex-1 min-h-0 items-stretch gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
               <section id="route-map-region" tabIndex={-1} aria-labelledby="route-map-title" className="w-full min-w-0 rounded-lg border border-border-subtle bg-surface-base p-5">
                <h3 id="route-map-title" className="flex items-center gap-2 text-base font-semibold text-text-primary"><Map aria-hidden="true" /> Mapa interactivo</h3>
-              <p className="mt-3 rounded-md border border-border-subtle bg-background-subtle p-4 text-sm text-text-secondary">El mapa es complementario. La secuencia textual de la ruta seleccionada permanece disponible aunque el proveedor o la API de mapas no estén disponibles.</p>
               {selectedRoutePreview !== null ? <RouteMap route={selectedRoutePreview} mapLocations={dashboard.mapLocations ?? []} /> : <p role="status" className="mt-3 text-sm text-text-secondary">No hay detalle geográfico disponible para esta ruta.</p>}
               {dashboard.routes.some((route) => route.stale) && <p role="status" className="mt-3 rounded-md border border-state-warning p-3 text-sm text-state-warning">Hay snapshots desactualizados. Se muestran en modo solo lectura; generá una nueva ruta para actualizar.</p>}
              </section>
@@ -347,18 +354,20 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
               <h3 id="route-detail-title" className="text-base font-semibold text-text-primary">Vista de ruta</h3>
               {selectedRoute === undefined ? <p className="mt-3 text-sm text-text-secondary">No hay una ruta seleccionada.</p> : (
                 <>
-                  <p className="mt-3 text-sm text-text-secondary">Ruta {selectedRoute.id} · {selectedRoute.status}</p>
+                  <p className="mt-3 text-sm text-text-secondary">Ruta {selectedRouteIndex + 1} · Zona {selectedRoute.zoneCode} · {statusLabel[selectedRoute.status]}</p>
                   <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                    <div><dt className="text-text-secondary">Repartidor</dt><dd>{selectedRoute.assignments.driverId ?? 'Sin asignar'}</dd></div>
-                    <div><dt className="text-text-secondary">Vehículo</dt><dd>{selectedRoute.assignments.vehicleId ?? 'Sin asignar'}</dd></div>
+                    <div><dt className="text-text-secondary">Repartidor</dt><dd>{selectedRoute.assignments.driverName?.trim() || 'Repartidor no disponible'}</dd></div>
+                    <div><dt className="text-text-secondary">Vehículo</dt><dd>{selectedRoute.assignments.vehicleName?.trim() || 'Vehículo no disponible'}</dd></div>
                     <div><dt className="text-text-secondary">Distancia</dt><dd>{(selectedRoute.metrics.distanceMeters / 1000).toLocaleString('es-AR', { maximumFractionDigits: 1 })} km</dd></div>
                     <div><dt className="text-text-secondary">Duración</dt><dd>{Math.round(selectedRoute.metrics.durationSeconds / 60)} min</dd></div>
                     <div><dt className="text-text-secondary">Combustible</dt><dd>{selectedRoute.metrics.fuelLiters === null ? 'No disponible' : `${selectedRoute.metrics.fuelLiters.toLocaleString('es-AR')} L`}</dd></div>
                     <div><dt className="text-text-secondary">Paradas/clientes</dt><dd>{selectedRoute.clientCount}</dd></div>
                   </dl>
-                   {selectedRoutePreview !== null ? <div className="mt-5"><RouteStopTimeline stops={selectedRoutePreview.stops.map((stop) => { const candidate = dashboard.candidates.eligible.find((entry) => entry.clientId === stop.clientId || stop.saleIds.includes(entry.saleId)); return { ...stop, displayName: candidate?.displayName, addressSummary: candidate?.addressSummary } }) as readonly RouteStopTimelineStop[]} segments={selectedRoutePreview.segments} estimates={selectedRoute.stopEstimates} depot={{ name: selectedRoute.depot?.name ?? 'el depósito', address: selectedRoute.depot?.address }} /></div> : <p role="status" className="mt-3 text-sm text-text-secondary">La secuencia de paradas no está disponible para esta ruta.</p>}
-                  {selectedRoute.saleReferences && selectedRoute.saleReferences.length > 0 && <p className="mt-3 text-xs text-text-secondary">Pedidos vinculados: {selectedRoute.saleReferences.map((reference) => reference.saleId).join(', ')}</p>}
-                  {selectedRoute.metrics.fuelLiters === null && <p role="status" className="mt-3 text-sm text-state-warning">Litros de combustible no disponibles: falta el consumo del vehículo asignado.</p>}
+                   {selectedRoutePreview !== null ? <div className="mt-5"><RouteStopTimeline stops={selectedRoutePreview.stops.map((stop) => {
+                     const reference = selectedRoute.saleReferences?.find((entry) => stop.saleIds.includes(entry.saleId))
+                     return { ...stop, displayName: reference?.clientName, addressSummary: reference?.address }
+                   }) as readonly RouteStopTimelineStop[]} segments={selectedRoutePreview.segments} estimates={selectedRoute.stopEstimates} depot={{ name: selectedRoute.depot?.name ?? 'el depósito', address: selectedRoute.depot?.address }} /></div> : <p role="status" className="mt-3 text-sm text-text-secondary">La secuencia de paradas no está disponible para esta ruta.</p>}
+                  {selectedRoute.metrics.fuelLiters === null && <p role="status" className="mt-3 text-sm text-state-warning">Litros de combustible no disponibles para esta ruta.</p>}
                   {selectedRoute.stopEstimates === undefined && <p role="status" className="mt-3 text-sm text-state-warning">Horarios estimados no disponibles para esta ruta.</p>}
                   {selectedRoute.stale && <p role="status" className="mt-3 text-sm text-state-warning">Esta ruta está desactualizada y es de solo lectura; generá una nueva ruta para actualizarla.</p>}
                 </>
@@ -367,6 +376,23 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
            </div>}
         </>
       )}
+      <Dialog open={previewRouteId !== null && selectedRoute?.id === previewRouteId} onOpenChange={(open) => { if (!open) setPreviewRouteId(null) }}>
+        <DialogContent className="flex max-h-[90vh] w-[calc(100%-2rem)] max-w-5xl flex-col gap-3 overflow-y-auto bg-surface-raised" onCloseAutoFocus={(event) => { event.preventDefault(); previewTrigger.current?.focus() }}>
+          <DialogTitle>Previsualización de ruta</DialogTitle>
+          <DialogDescription>Recorrido guardado en modo de solo lectura.</DialogDescription>
+          {selectedRoute && selectedRoutePreview ? <>
+            <p className="text-sm text-text-secondary">Ruta {selectedRouteIndex + 1} · Zona {selectedRoute.zoneCode} · {statusLabel[selectedRoute.status]}</p>
+            <dl className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-text-secondary">
+              <div><dt className="inline">Distancia: </dt><dd className="inline">{(selectedRoute.metrics.distanceMeters / 1000).toLocaleString('es-AR', { maximumFractionDigits: 1 })} km</dd></div>
+              <div><dt className="inline">Duración: </dt><dd className="inline">{Math.round(selectedRoute.metrics.durationSeconds / 60)} min</dd></div>
+              <div><dt className="inline">Clientes: </dt><dd className="inline">{selectedRoute.clientCount}</dd></div>
+              <div><dt className="inline">Combustible: </dt><dd className="inline">{selectedRoute.metrics.fuelLiters === null ? 'No disponible' : `${selectedRoute.metrics.fuelLiters.toLocaleString('es-AR')} L`}</dd></div>
+            </dl>
+            <RouteTabs route={selectedRoutePreview} estimates={selectedRoute.stopEstimates} saleReferences={selectedRoute.saleReferences} stale={selectedRoute.stale} />
+          </> : <p role="status" className="text-sm text-text-secondary">La secuencia de paradas no está disponible para esta ruta.</p>}
+          <div className="flex justify-end"><DialogClose asChild><Button type="button" variant="secondary">Cerrar</Button></DialogClose></div>
+        </DialogContent>
+      </Dialog>
       {canManageConfig && configOpen && <RouteConfigDialog open onOpenChange={setConfigOpen} />}
       {canManageConfig && geocodingClient !== null && <GeocodingDialog open clientId={geocodingClient.id} clientName={geocodingClient.name} address={geocodingClient.address} onOpenChange={(open) => { if (!open) setGeocodingClient(null) }} onConfirmed={() => { setGeocodingClient(null); setReloadToken((token) => token + 1) }} />}
     </section>

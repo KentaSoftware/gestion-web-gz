@@ -58,7 +58,7 @@ describe('RouteDashboard', () => {
     render(<RouteDashboard />)
 
     expect(await screen.findByRole('heading', { name: /Rutas planificadas \(\d+\)/ })).toBeInTheDocument()
-    expect(screen.getByText('Ruta route-1')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Ruta 1 · Zona/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /Clientes con pedidos \(\d+\)/ })).toBeInTheDocument()
     expect(screen.getByText('Almacén Sur')).toBeInTheDocument()
     expect(screen.getByText('Kiosco Norte')).toBeInTheDocument()

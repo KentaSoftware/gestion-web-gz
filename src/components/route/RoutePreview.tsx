@@ -1,7 +1,8 @@
  'use client'
 
-import { useState } from 'react'
-import { Loader2, Package } from 'lucide-react'
+import { useId, useState } from 'react'
+import { CircleAlert, Loader2, Package } from 'lucide-react'
+import { routePlanErrorMessage } from '@/interfaces/routePlan.interface'
 import {
   type CandidateEntry,
   type RouteSaleReference,
@@ -77,12 +78,14 @@ const saleStatusClass = (reference: RouteSaleReference | undefined): string => {
 
 const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, candidateEntries = [], stale = false, readWarnings = [] }: RouteTabsProps) => {
   const [activeTab, setActiveTab] = useState('map')
+  const instanceId = useId()
   const tabs = [
     { id: 'map', label: 'Mapa de la ruta' },
     { id: 'sequence', label: 'Secuencia de paradas' },
     { id: 'sales', label: 'Pedidos vinculados' },
   ]
-  const panelId = (id: string) => `route-tabpanel-${id}`
+  const panelId = (id: string) => `${instanceId}-panel-${id}`
+  const tabId = (id: string) => `${instanceId}-tab-${id}`
 
   return (
     <div className="mt-5">
@@ -94,23 +97,32 @@ const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, 
             role="tab"
             aria-selected={activeTab === tab.id}
             aria-controls={panelId(tab.id)}
-            id={`route-tab-${tab.id}`}
+            id={tabId(tab.id)}
             tabIndex={activeTab === tab.id ? 0 : -1}
             className="border-b-2 border-transparent px-3 py-2 text-sm text-text-secondary aria-selected:border-brand-primary aria-selected:text-brand-primary"
             onClick={() => setActiveTab(tab.id)}
+            onKeyDown={(event) => {
+              if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return
+              event.preventDefault()
+              const index = tabs.findIndex((item) => item.id === activeTab)
+              const next = tabs[(index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]
+              setActiveTab(next.id)
+              document.getElementById(tabId(next.id))?.focus()
+            }}
           >
             {tab.label}
           </button>
         ))}
       </div>
-      <div role="tabpanel" id={panelId('map')} aria-labelledby="route-tab-map" hidden={activeTab !== 'map'} className="pt-4">
+      <div role="tabpanel" id={panelId('map')} aria-labelledby={tabId('map')} hidden={activeTab !== 'map'} className="pt-4">
         <RouteMap route={route} minimal />
       </div>
-      <div role="tabpanel" id={panelId('sequence')} aria-labelledby="route-tab-sequence" hidden={activeTab !== 'sequence'} className="pt-4">
+      <div role="tabpanel" id={panelId('sequence')} aria-labelledby={tabId('sequence')} hidden={activeTab !== 'sequence'} className="pt-4">
         <RouteStopTimeline
           stops={route.stops.map((stop) => {
             const candidate = candidateEntries.find((entry) => entry.clientId === stop.clientId || stop.saleIds.includes(entry.saleId))
-            return { ...stop, displayName: candidate?.displayName, addressSummary: candidate?.addressSummary }
+            const reference = saleReferences?.find((entry) => stop.saleIds.includes(entry.saleId))
+            return { ...stop, displayName: reference?.clientName ?? candidate?.displayName, addressSummary: reference?.address ?? candidate?.addressSummary }
           }) as readonly RouteStopTimelineStop[]}
           segments={route.segments}
           estimates={estimates}
@@ -118,7 +130,7 @@ const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, 
           showHeader={false}
         />
       </div>
-      <div role="tabpanel" id={panelId('sales')} aria-labelledby="route-tab-sales" hidden={activeTab !== 'sales'} className="pt-4">
+      <div role="tabpanel" id={panelId('sales')} aria-labelledby={tabId('sales')} hidden={activeTab !== 'sales'} className="pt-4">
         <h4 className="text-sm font-semibold text-text-primary">Pedidos vinculados</h4>
         <div className="mt-3 overflow-x-auto">
           <table aria-label="Pedidos vinculados" className="w-full min-w-[48rem] border-collapse text-left text-xs">
@@ -136,7 +148,7 @@ const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, 
               {route.stops.flatMap((stop) => stop.saleIds).map((saleId, index) => {
                 const reference = saleReferences?.find((candidate) => candidate.saleId === saleId)
                 const candidate = candidateEntries.find((entry) => entry.saleId === saleId)
-                const clientName = reference?.clientName ?? candidate?.displayName ?? saleId
+                const clientName = reference?.clientName ?? candidate?.displayName ?? NO_DATA
                 const address = reference?.address ?? candidate?.addressSummary
                 const location = [address, reference?.zoneName ?? candidate?.zoneName].filter(Boolean).join(' · ') || NO_DATA
                 const items = formatSaleItems(reference)
@@ -144,7 +156,7 @@ const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, 
                   <tr key={saleId} className="border-b border-border-subtle last:border-b-0">
                     <td className="px-3 py-3 align-middle"><span aria-label={`Pedido ${index + 1}`} className="inline-flex size-6 items-center justify-center rounded-full bg-brand-primary text-xs font-semibold text-text-inverse">{index + 1}</span></td>
                     <td className="px-3 py-3 align-middle font-medium text-text-primary">{clientName}</td>
-                    <td className="px-3 py-3 align-middle text-text-secondary">{saleId}</td>
+                    <td className="px-3 py-3 align-middle text-text-secondary">{NO_DATA}</td>
                     <td className="px-3 py-3 align-middle text-text-secondary">{location}</td>
                     <td className="px-3 py-3 align-middle text-text-secondary">
                       <div className="flex items-start gap-2">
@@ -156,9 +168,7 @@ const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, 
                       </div>
                     </td>
                     <td className="px-3 py-3 align-middle">
-                      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${saleStatusClass(reference)}`}>
-                        {formatSaleStatus(reference)}
-                      </span>
+                      {reference?.currentStatus || reference?.statusAtSave ? <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${saleStatusClass(reference)}`}>{formatSaleStatus(reference)}</span> : NO_DATA}
                     </td>
                   </tr>
                 )
@@ -201,7 +211,7 @@ const formatLiters = (liters: number | null): string => liters === null ? 'No di
  * hidden. The client must never reorder `route.stops`; the backend already
  * returns them in route order.
  */
-export function RoutePreview({ status, preview, candidateEntries = [] }: RoutePreviewProps) {
+export function RoutePreview({ status, preview, errorCode, candidateEntries = [] }: RoutePreviewProps) {
   if (status === 'idle') return null
 
   if (status === 'loading') {
@@ -215,11 +225,14 @@ export function RoutePreview({ status, preview, candidateEntries = [] }: RoutePr
 
   if (status === 'error') {
     return (
-      <div
-        role="alert"
-        className="flex min-h-[38rem] items-center justify-center rounded-lg border border-state-error bg-surface-base p-4 text-center text-sm text-state-error shadow-md"
-      >
-        Tuvimos inconvenientes a generar la ruta, por favor cerrar la ventana e intentar nuevamente
+      <div className="flex min-h-[20rem] items-center justify-center p-4">
+        <div role="alert" className="flex max-w-lg items-start gap-3 rounded-lg border border-state-error bg-state-error/10 p-4 text-sm text-state-error">
+          <CircleAlert className="size-5 shrink-0" aria-hidden="true" />
+          <div>
+            <p className="font-semibold">No pudimos generar la ruta</p>
+            <p className="mt-1">{routePlanErrorMessage(errorCode, 'Intentá nuevamente más tarde.')}</p>
+          </div>
+        </div>
       </div>
     )
   }

@@ -62,7 +62,7 @@ describe('RouteSnapshot', () => {
     expect(orderedStops[0]).toHaveTextContent('Av. Central 123')
     expect(orderedStops[1]).toHaveTextContent('Parada 1')
     expect(orderedStops[1]).toHaveTextContent('2 pedidos')
-    expect(orderedStops[1]).toHaveTextContent('client-1')
+    expect(orderedStops[1]).toHaveTextContent('Cliente: No disponible')
     expect(orderedStops[2]).toHaveTextContent('Parada 2')
     expect(orderedStops[2]).toHaveTextContent('1 pedido')
   })
