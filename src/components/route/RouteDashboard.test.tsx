@@ -2,19 +2,23 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RouteDashboard } from './RouteDashboard'
 
-const { getActiveDeliveryZones, getDashboard, useSessionAccess } = vi.hoisted(() => ({
+const { getActiveDeliveryZones, getDashboard, getAssignmentOptions, useSessionAccess } = vi.hoisted(() => ({
   getActiveDeliveryZones: vi.fn(),
   getDashboard: vi.fn(),
+  getAssignmentOptions: vi.fn(),
   useSessionAccess: vi.fn(),
 }))
 
-vi.mock('@/services/routePlan.service', () => ({ routePlanService: { getActiveDeliveryZones, getDashboard } }))
+vi.mock('@/services/routePlan.service', () => ({ routePlanService: { getActiveDeliveryZones, getDashboard, getAssignmentOptions } }))
 vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess }))
 vi.mock('./RouteMap', () => ({ RouteMap: () => <div>Mapa simulado</div> }))
 
 const scrollIntoView = vi.fn()
 
 beforeEach(() => {
+  getDashboard.mockReset()
+  getActiveDeliveryZones.mockReset().mockResolvedValue([])
+  getAssignmentOptions.mockReset()
   useSessionAccess.mockReturnValue({ status: 'ready', permissions: ['read_route_plan', 'create_route_plan', 'manage_route_config'], gates: {} })
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     callback(0)
@@ -51,6 +55,43 @@ const dashboard = {
 }
 
 describe('RouteDashboard selected-route detail', () => {
+  it('keeps incomplete selections global, scopes paired filters, and resets to global for a reader', async () => {
+    useSessionAccess.mockReturnValue({ status: 'ready', permissions: ['read_route_plan'], gates: {} })
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValue(dashboard)
+    render(<RouteDashboard />)
+    await screen.findByRole('option', { name: 'Zona Norte' })
+    const date = screen.getByLabelText('Fecha de servicio')
+    const zone = screen.getByLabelText('Zona de entrega')
+    fireEvent.change(zone, { target: { value: 'zone-1' } })
+    expect(getDashboard).toHaveBeenCalledTimes(1)
+    expect(screen.getByText(/Vista global/)).toBeInTheDocument()
+    fireEvent.change(date, { target: { value: '2026-10-15' } })
+    await waitFor(() => expect(getDashboard).toHaveBeenLastCalledWith({ serviceDate: '2026-10-15', zoneCode: 'NORTE' }))
+    await screen.findByText(/Vista filtrada/)
+    fireEvent.change(zone, { target: { value: '' } })
+    await waitFor(() => expect(getDashboard).toHaveBeenLastCalledWith({}))
+    await screen.findByText(/Vista global/)
+    expect(date).toHaveValue('2026-10-15')
+    expect(getDashboard).toHaveBeenCalledTimes(3)
+    expect(getAssignmentOptions).not.toHaveBeenCalled()
+  })
+
+  it('ignores stale filtered responses after a faster filter change', async () => {
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    let resolveOld: (value: typeof dashboard) => void = () => {}
+    getDashboard.mockResolvedValueOnce(dashboard)
+      .mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve }))
+      .mockResolvedValueOnce({ ...dashboard, routes: [] })
+    render(<RouteDashboard />)
+    await screen.findByRole('option', { name: 'Zona Norte' })
+    fireEvent.change(screen.getByLabelText('Fecha de servicio'), { target: { value: '2026-10-15' } })
+    fireEvent.change(screen.getByLabelText('Zona de entrega'), { target: { value: 'zone-1' } })
+    fireEvent.change(screen.getByLabelText('Fecha de servicio'), { target: { value: '2026-10-16' } })
+    await screen.findByRole('heading', { name: 'Rutas planificadas (0)' })
+    resolveOld(dashboard)
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (0)' })).toBeInTheDocument())
+  })
   it('does not request dashboard data while hydrating or without read permission', () => {
     useSessionAccess.mockReturnValue({ status: 'hydrating', permissions: [], gates: {} })
     const { rerender } = render(<RouteDashboard />)
@@ -70,7 +111,7 @@ describe('RouteDashboard selected-route detail', () => {
     expect(await screen.findByRole('heading', { name: 'Rutas planificadas (2)' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Generar rutas' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Configurar ubicaciones' })).not.toBeInTheDocument()
-    expect(getActiveDeliveryZones).not.toHaveBeenCalled()
+    expect(getActiveDeliveryZones).toHaveBeenCalled()
   })
 
   it('gates creation and configuration independently', async () => {
@@ -185,14 +226,14 @@ describe('RouteDashboard selected-route detail', () => {
 
     expect(screen.getByRole('button', { name: 'Mostrar filtros' })).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByRole('group', { name: 'Planificación de rutas' })).not.toBeInTheDocument()
-    expect(getDashboard).toHaveBeenCalledTimes(1)
+    expect(getDashboard).toHaveBeenCalledTimes(2)
 
     fireEvent.click(screen.getByRole('button', { name: 'Mostrar filtros' }))
 
     expect(screen.getByRole('group', { name: 'Planificación de rutas' })).toBeInTheDocument()
     expect(screen.getByLabelText('Fecha de servicio')).toHaveValue('2026-10-15')
     expect(screen.getByLabelText('Zona de entrega')).toHaveValue('zone-1')
-    expect(getDashboard).toHaveBeenCalledTimes(1)
+    expect(getDashboard).toHaveBeenCalledTimes(2)
   })
 
   it('shows the first route by default and focuses the requested panel', async () => {
@@ -264,7 +305,7 @@ describe('RouteDashboard selected-route detail', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generar rutas' }))
 
     expect(onGenerateRoutes).toHaveBeenCalledWith('2026-10-15', 'zone-1')
-    expect(getDashboard).toHaveBeenCalledTimes(1)
+    expect(getDashboard).toHaveBeenCalledTimes(2)
   })
 
   it('renders planned-route parity controls and selects from route actions', async () => {
