@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useId, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { routePlanService } from '@/services/routePlan.service'
@@ -92,12 +92,14 @@ interface RoutePlannerProps {
   initialDeliveryZoneId?: string
   onClose?: () => void
   onSaved?: (plan: RoutePlan) => void
+  onSavingChange?: (pending: boolean) => void
 }
 
-export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = '', onClose, onSaved }: RoutePlannerProps = {}) {
+export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = '', onClose, onSaved, onSavingChange }: RoutePlannerProps = {}) {
   const dateFieldId = useId()
   const zoneFieldId = useId()
   const selectionFieldId = useId()
+  const previewVersion = useRef(0)
 
   const [zones, setZones] = useState<DeliveryZone[]>([])
   const [assignmentOptions, setAssignmentOptions] = useState<RouteAssignmentOptions>({ drivers: [], vehicles: [] })
@@ -144,6 +146,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
   }, [loadZones])
 
   const resetPreview = useCallback(() => {
+    previewVersion.current += 1
     setSelectedSaleIds([])
     setSelectionError(null)
     setPreviewStatus('idle')
@@ -154,6 +157,17 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
     setSaveErrorCode(null)
     setSaveErrorMessage(null)
   }, [])
+
+  useEffect(() => () => { previewVersion.current += 1 }, [])
+
+  const invalidatePreview = () => {
+    previewVersion.current += 1
+    setPreviewData(null)
+    setPreviewStatus('idle')
+    setSaveStatus('idle')
+    setSaveErrorCode(null)
+    setSaveErrorMessage(null)
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -229,6 +243,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
   }
 
   const toggleClient = (group: CandidateGroup, checked: boolean) => {
+    invalidatePreview()
     setSelectionError(null)
     setSelectedSaleIds((previous) => {
       const saleIds = group.eligible.map((candidate) => candidate.saleId)
@@ -238,16 +253,18 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
   }
 
   const selectAll = () => {
+    invalidatePreview()
     setSelectionError(null)
     setSelectedSaleIds(candidates?.eligible.map((candidate) => candidate.saleId) ?? [])
   }
 
   const clearSelection = () => {
+    invalidatePreview()
     setSelectionError(null)
     setSelectedSaleIds([])
   }
 
-  const handlePreview = async () => {
+  const handlePreview = async (clientOrder?: string[]) => {
     setSelectionError(null)
     setSaveStatus('idle')
     setSaveErrorCode(null)
@@ -261,20 +278,32 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
       return
     }
 
+    const version = ++previewVersion.current
     setPreviewData(null)
     setPreviewErrorCode(null)
     setPreviewErrorMessage(null)
     setPreviewStatus('loading')
     try {
-       const result = await routePlanService.preview({ serviceDate, deliveryZoneId, saleIds: selectedSaleIds, driverId, vehicleId })
+      const result = await routePlanService.preview({ serviceDate, deliveryZoneId, saleIds: selectedSaleIds, driverId, vehicleId, ...(clientOrder ? { clientOrder } : {}) })
+      if (version !== previewVersion.current) return
       setPreviewData(result)
       setPreviewStatus('ready')
     } catch (error) {
+      if (version !== previewVersion.current) return
       const parsed = extractPreviewError(error)
       setPreviewErrorCode(parsed?.code ?? null)
       setPreviewErrorMessage(parsed?.message ?? null)
       setPreviewStatus('error')
     }
+  }
+
+  const handleMove = (index: number, direction: number) => {
+    if (previewStatus !== 'ready' || previewData === null || saveStatus === 'saving') return
+    const order = previewData.route.stops.map((stop) => stop.clientId)
+    const target = index + direction
+    if (target < 0 || target >= order.length) return
+    ;[order[index], order[target]] = [order[target], order[index]]
+    void handlePreview(order)
   }
 
   const handleSave = async () => {
@@ -286,16 +315,22 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
     setSaveErrorCode(null)
     setSaveErrorMessage(null)
 
-    if (previewData === null || selectedSaleIds.length === 0) {
+    if (previewStatus !== 'ready' || !previewData?.receipt || selectedSaleIds.length === 0) {
       setSelectionError('Calculá un recorrido válido antes de guardar el plan.')
       return
     }
 
+    onSavingChange?.(true)
     setSaveStatus('saving')
+    const version = previewVersion.current
     try {
-       const saved = await routePlanService.save({ serviceDate, deliveryZoneId, saleIds: selectedSaleIds, driverId, vehicleId })
+      const saved = await routePlanService.save({ receipt: previewData.receipt })
       const savedId = routePlanId(saved)
       if (savedId === '') {
+        if (version !== previewVersion.current) {
+          toast.error('No se pudo verificar la ruta guardada. Revisá las rutas antes de intentarlo nuevamente.')
+          return
+        }
         setSaveErrorMessage('No se pudo obtener el identificador del plan guardado.')
         setSaveStatus('error')
         return
@@ -303,10 +338,21 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
       toast.success('Ruta guardada correctamente.')
       onSaved?.(saved)
     } catch (error) {
+      if (version !== previewVersion.current) {
+        toast.error('No se pudo guardar la ruta. Revisá las rutas antes de intentarlo nuevamente.')
+        return
+      }
       const parsed = extractPreviewError(error)
+      if (parsed?.code === 'PREVIEW_RECEIPT_CONFLICT') {
+        previewVersion.current += 1
+        setPreviewData(null)
+        setPreviewStatus('idle')
+      }
       setSaveErrorCode(parsed?.code ?? null)
       setSaveErrorMessage(parsed?.message ?? null)
       setSaveStatus('error')
+    } finally {
+      onSavingChange?.(false)
     }
   }
 
@@ -326,7 +372,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
     candidates.eligible.length > 0 &&
     selectedSaleIds.length === candidates.eligible.length
   const noneSelected = selectedSaleIds.length === 0
-  const hasValidPreview = previewStatus === 'ready' && previewData !== null && selectedSaleIds.length > 0
+  const hasValidPreview = previewStatus === 'ready' && Boolean(previewData?.receipt) && selectedSaleIds.length > 0
   const isSaving = saveStatus === 'saving'
   const hasAssignments = driverId !== '' && vehicleId !== ''
   const canPreview = hasAssignments && selectedClientCount >= 2
@@ -392,6 +438,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
               value={serviceDate}
               disabled={isLoading}
               onChange={(event) => {
+                invalidatePreview()
                 setServiceDate(event.target.value)
                 setValidationError(null)
               }}
@@ -406,6 +453,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
               value={deliveryZoneId}
               disabled={zoneStatus !== 'ready' || isLoading}
               onChange={(event) => {
+                invalidatePreview()
                 setDeliveryZoneId(event.target.value)
                 setValidationError(null)
               }}
@@ -537,8 +585,8 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
             <h3 id="route-configuration-title" className="text-sm font-semibold text-brand-primary">Configuración de la ruta</h3>
             <div className="flex flex-col gap-3">
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="flex flex-col gap-2"><Label htmlFor="route-driver">Repartidor</Label><select id="route-driver" value={driverId} onChange={(event) => setDriverId(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un repartidor</option>{assignmentOptions.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.nickname}</option>)}</select></div>
-                <div className="flex flex-col gap-2"><Label htmlFor="route-vehicle">Vehículo</Label><select id="route-vehicle" value={vehicleId} onChange={(event) => setVehicleId(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un vehículo</option>{assignmentOptions.vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.code} · {vehicle.fuelConsumptionLitersPer100Km} L/100 km</option>)}</select></div>
+                <div className="flex flex-col gap-2"><Label htmlFor="route-driver">Repartidor</Label><select id="route-driver" value={driverId} onChange={(event) => { invalidatePreview(); setDriverId(event.target.value) }} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un repartidor</option>{assignmentOptions.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.nickname}</option>)}</select></div>
+                <div className="flex flex-col gap-2"><Label htmlFor="route-vehicle">Vehículo</Label><select id="route-vehicle" value={vehicleId} onChange={(event) => { invalidatePreview(); setVehicleId(event.target.value) }} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un vehículo</option>{assignmentOptions.vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.code} · {vehicle.fuelConsumptionLitersPer100Km} L/100 km</option>)}</select></div>
               </div>
               {(!hasAssignments || selectedClientCount < 2) && <p role="status" className="text-sm text-text-secondary">Seleccioná un repartidor, un vehículo y al menos dos clientes aptos.</p>}
               <div className="flex flex-wrap items-center gap-3">
@@ -566,7 +614,9 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
         errorCode={previewErrorCode}
         errorMessage={previewErrorMessage}
         candidateEntries={candidates?.eligible}
+        onMove={isSaving ? undefined : handleMove}
       />
+      {previewStatus === 'error' && <Button type="button" variant="secondary" onClick={() => void handlePreview()}>Reintentar</Button>}
 
       <footer className="flex flex-col-reverse items-stretch gap-3 border-t border-border-subtle pt-4 sm:flex-row sm:items-center sm:justify-end">
         {saveStatus === 'error' && (
@@ -574,7 +624,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
             {routePlanErrorMessage(saveErrorCode, saveErrorMessage ?? undefined)}
           </p>
         )}
-        <Button type="button" variant="secondary" onClick={onClose}>
+        <Button type="button" variant="secondary" disabled={isSaving} onClick={() => { if (isSaving) return; invalidatePreview(); onClose?.() }}>
           Cancelar
         </Button>
         {hasValidPreview && (

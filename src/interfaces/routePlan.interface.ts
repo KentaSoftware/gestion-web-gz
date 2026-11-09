@@ -369,10 +369,10 @@ export interface RoutePreviewMetrics {
 /**
  * Deterministic route preview returned by `POST /routePlan/preview`.
  *
- * `route.stops` is already ordered by the backend heuristic; the client must
- * render it as received and never reorder it.
+ * `route.stops` is ordered by the backend and must be rendered as received.
  */
 export interface RoutePreview {
+  receipt?: string
   route: {
     depot: RoutePreviewDepot
     stops: RoutePreviewStop[]
@@ -398,6 +398,7 @@ export interface RoutePreviewRequest {
   saleIds: string[]
   driverId?: string
   vehicleId?: string
+  clientOrder?: string[]
 }
 
 /**
@@ -480,15 +481,15 @@ export interface RoutePlan {
 }
 
 /** Body accepted by the save endpoint (`POST /routePlan`). */
-export type RoutePlanSaveRequest = RoutePreviewRequest
+export interface RoutePlanSaveRequest { receipt: string }
 
 /**
  * Stable error codes emitted by the backend when saving or reading a snapshot.
- * Save can also surface any {@link ROUTE_PREVIEW_ERROR} code because the backend
- * recomputes the preview before persisting.
+ * Saving consumes a previously issued preview receipt.
  */
 export const ROUTE_PLAN_ERROR = {
   ROUTE_PLAN_NOT_FOUND: 'ROUTE_PLAN_NOT_FOUND',
+  PREVIEW_RECEIPT_CONFLICT: 'PREVIEW_RECEIPT_CONFLICT',
 } as const
 
 export type RoutePlanErrorCode = (typeof ROUTE_PLAN_ERROR)[keyof typeof ROUTE_PLAN_ERROR]
@@ -497,6 +498,7 @@ export type RoutePlanErrorCode = (typeof ROUTE_PLAN_ERROR)[keyof typeof ROUTE_PL
 export const ROUTE_PLAN_ERROR_LABEL: Readonly<Record<string, string>> = {
   ...ROUTE_PREVIEW_ERROR_LABEL,
   ROUTE_PLAN_NOT_FOUND: 'No encontramos el plan de ruta guardado.',
+  PREVIEW_RECEIPT_CONFLICT: 'La previsualización ya no está vigente. Generá la ruta otra vez.',
 }
 
 /**

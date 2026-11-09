@@ -27,6 +27,7 @@ export interface RouteStopTimelineProps {
   estimates?: readonly RouteStopEstimateLike[]
   depot?: RouteStopTimelineDepot
   showHeader?: boolean
+  onMove?: (index: number, direction: number) => void
 }
 
 const DATE_TIME_FORMAT = new Intl.DateTimeFormat('es-AR', {
@@ -66,7 +67,7 @@ const formatDuration = (seconds: number): string => {
 const decimal = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
 
 /** Ordered, provider-independent representation of a route's stops. */
-export function RouteStopTimeline({ stops, segments = [], estimates = [], depot = { name: 'el depósito' }, showHeader = true }: RouteStopTimelineProps) {
+export function RouteStopTimeline({ stops, segments = [], estimates = [], depot = { name: 'el depósito' }, showHeader = true, onMove }: RouteStopTimelineProps) {
   const titleId = useId()
   const estimateBySequence = new Map(estimates.map((estimate) => [estimate.sequence, estimate]))
   const segmentByDestination = new Map(segments.map((segment) => [segment.toId, segment]))
@@ -118,6 +119,10 @@ export function RouteStopTimeline({ stops, segments = [], estimates = [], depot 
                 <div className="min-w-0">
                   <p className="break-words text-sm font-semibold text-text-primary"><span className="sr-only">Parada {index + 1}: </span>Cliente: {stop.displayName ?? 'No disponible'}</p>
                   <p className="mt-1 break-words text-xs text-text-secondary">{stop.addressSummary ?? unavailableAddress}</p>
+                  {onMove && <div className="mt-2 flex gap-2">
+                    <button type="button" className="rounded border border-border-subtle px-2 py-1 text-xs disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-state-focus" aria-label={`Subir parada ${index + 1}: ${stop.displayName ?? 'Cliente'}`} disabled={index === 0} onClick={() => onMove(index, -1)}>Subir</button>
+                    <button type="button" className="rounded border border-border-subtle px-2 py-1 text-xs disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-state-focus" aria-label={`Bajar parada ${index + 1}: ${stop.displayName ?? 'Cliente'}`} disabled={index === stops.length - 1} onClick={() => onMove(index, 1)}>Bajar</button>
+                  </div>}
                   <dl className="sr-only">
                     <div><dt>Llegada estimada</dt><dd>{formatArrival(estimate?.arrival)}</dd></div>
                     {estimate?.serviceWindow && <div><dt>Ventana de servicio</dt><dd>{estimate.serviceWindow}</dd></div>}
