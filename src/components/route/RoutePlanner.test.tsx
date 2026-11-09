@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RoutePreview as RoutePreviewData } from '@/interfaces/routePlan.interface'
 
@@ -12,6 +13,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }))
 vi.mock('sonner', () => ({ toast: { success: toastSuccess } }))
 
 import { RoutePlanner } from './RoutePlanner'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 
 const ZONE_ID = 'a'.repeat(24)
 const CLIENT_A = 'b'.repeat(24)
@@ -42,6 +44,7 @@ const manyClientCandidates = {
 }
 
 const previewData: RoutePreviewData = {
+  receipt: 'a'.repeat(64),
   route: { depot: { id: 'deposito_1', name: 'Depósito Central', latitude: -34.6, longitude: -58.4 }, stops: [{ clientId: CLIENT_A, saleIds: [SALE_A1, SALE_A2], latitude: -34.61, longitude: -58.41 }, { clientId: CLIENT_B, saleIds: [SALE_B1], latitude: -34.62, longitude: -58.42 }], segments: [], encodedPolyline: '' },
   metrics: { distanceMeters: 3500, durationSeconds: 900, stopCount: 2, fuelLiters: 0.3 },
   warnings: ['TIME_WINDOWS_NOT_CONSIDERED'], factorsConsidered: ['DISTANCE'], algorithmVersion: 'nearest-neighbor-2opt-v1', algorithmProvider: 'google-routes', routingConfigRevision: 3, ruleVersion: 'candidate-eligibility-v1',
@@ -172,8 +175,49 @@ describe('RoutePlanner', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'Kiosco Norte' }))
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Confirmar y guardar' }))
+    expect(save).toHaveBeenCalledWith({ receipt: 'a'.repeat(64) })
     expect(push).not.toHaveBeenCalled()
     expect(toastSuccess).toHaveBeenCalledWith('Ruta guardada correctamente.')
+  })
+
+  it('recalculates the grouped client order before enabling save', async () => {
+    let resolveReorder!: (value: RoutePreviewData) => void
+    preview.mockResolvedValueOnce(previewData).mockReturnValueOnce(new Promise<RoutePreviewData>((resolve) => { resolveReorder = resolve }))
+    await renderLoaded()
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    await userEvent.click(await screen.findByRole('tab', { name: 'Secuencia de paradas' }))
+    await userEvent.click(screen.getByRole('button', { name: /Bajar.*Almacén Sur/ }))
+    expect(preview).toHaveBeenLastCalledWith({ serviceDate: '2026-10-04', deliveryZoneId: ZONE_ID, saleIds: [SALE_A1, SALE_A2, SALE_B1], driverId: 'driver-1', vehicleId: 'vehicle-1', clientOrder: [CLIENT_B, CLIENT_A] })
+    expect(screen.queryByRole('button', { name: 'Confirmar y guardar' })).not.toBeInTheDocument()
+    resolveReorder({ ...previewData, receipt: 'b'.repeat(64), route: { ...previewData.route, stops: [...previewData.route.stops].reverse() } })
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirmar y guardar' }))
+    expect(save).toHaveBeenCalledWith({ receipt: 'b'.repeat(64) })
+  })
+
+  it('does not restore a preview resolved after cancellation', async () => {
+    let resolvePreview!: (value: RoutePreviewData) => void
+    preview.mockReturnValue(new Promise<RoutePreviewData>((resolve) => { resolvePreview = resolve }))
+    await renderLoaded()
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    resolvePreview(previewData)
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Confirmar y guardar' })).not.toBeInTheDocument())
+    expect(screen.queryByRole('heading', { name: 'Recorrido propuesto' })).not.toBeInTheDocument()
+  })
+
+  it('reports receipt conflicts and preserves the selected clients', async () => {
+    preview.mockResolvedValue(previewData)
+    save.mockRejectedValue({ response: { data: { code: 'PREVIEW_RECEIPT_CONFLICT' } } })
+    await renderLoaded()
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirmar y guardar' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('La previsualización ya no está vigente. Generá la ruta otra vez.')
+    expect(screen.getByRole('checkbox', { name: 'Almacén Sur' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Kiosco Norte' })).toBeChecked()
+    expect(screen.queryByRole('button', { name: 'Confirmar y guardar' })).not.toBeInTheDocument()
   })
 
   it('loads candidates after submitting a valid fallback scope', async () => {
@@ -352,6 +396,49 @@ describe('RoutePlanner', () => {
     resolveSave({ _id: '8'.repeat(24) })
     expect(push).not.toHaveBeenCalled()
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Ruta guardada correctamente.'))
+  })
+
+  it('disables cancellation during save and restores it after failure', async () => {
+    let rejectSave!: (error: Error) => void
+    const onClose = vi.fn()
+    preview.mockResolvedValue(previewData)
+    save.mockReturnValue(new Promise((_, reject) => { rejectSave = reject }))
+    getCandidates.mockResolvedValue(candidates)
+    render(<RoutePlanner initialServiceDate="2026-10-04" initialDeliveryZoneId={ZONE_ID} onClose={onClose} />)
+    await screen.findByRole('heading', { name: 'Pedidos pendientes' })
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirmar y guardar' }))
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+    expect(screen.getByText('Guardando plan de ruta…')).toBeInTheDocument()
+    rejectSave(new Error('network'))
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it.each(['close button', 'escape'] as const)('reconciles save completion after dialog %s', async (method) => {
+    let resolveSave!: (value: { _id: string }) => void
+    const onSaved = vi.fn()
+    preview.mockResolvedValue(previewData)
+    save.mockReturnValue(new Promise((resolve) => { resolveSave = resolve }))
+    getCandidates.mockResolvedValue(candidates)
+    function Harness() {
+      const [open, setOpen] = useState(true)
+      return <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogTitle>Planificador</DialogTitle><DialogDescription>Planificar</DialogDescription>{open && <RoutePlanner initialServiceDate="2026-10-04" initialDeliveryZoneId={ZONE_ID} onSaved={onSaved} />}</DialogContent></Dialog>
+    }
+    render(<Harness />)
+    await screen.findByRole('heading', { name: 'Pedidos pendientes' })
+    await selectAssignmentsAndClients()
+    await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirmar y guardar' }))
+    if (method === 'escape') await userEvent.keyboard('{Escape}')
+    else await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    const saved = { _id: '8'.repeat(24) }
+    resolveSave(saved)
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(saved))
+    expect(toastSuccess).toHaveBeenCalledWith('Ruta guardada correctamente.')
   })
 
   it('renders a known save error without navigating', async () => {

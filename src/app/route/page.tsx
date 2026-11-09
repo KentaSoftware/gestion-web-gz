@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { PageContainer } from '@/components/layout/PageLayout'
 import { Spinner } from '@/components/ui/spinner'
@@ -16,6 +16,9 @@ import {
 import { useState } from 'react'
 import { useSessionAccess } from '@/hooks/useSessionAccess'
 import { Permission, SESSION_STATUS } from '@/interfaces/auth.interface'
+
+// Survives a page unmount while the submitted request is still settling.
+let routeSavePending = false
 
 /**
  * Route planning page shell (T-F.1 / T-F.C1) with candidate review (T-F.3).
@@ -33,17 +36,21 @@ function RoutePlanningContent() {
   const [dashboardRefreshToken, setDashboardRefreshToken] = useState(0)
   const [plannerDefaults, setPlannerDefaults] = useState({ serviceDate: '', deliveryZoneId: '' })
 
+  useEffect(() => {
+    if (!canCreate) setPlannerOpen(false)
+  }, [canCreate])
+
   return (
     <PageContainer className="flex-1 min-h-0 w-full min-w-0">
       <RouteDashboard
         refreshToken={dashboardRefreshToken}
         onGenerateRoutes={(serviceDate, deliveryZoneId) => {
-          if (!canCreate) return
+          if (!canCreate || routeSavePending) return
           setPlannerDefaults({ serviceDate, deliveryZoneId })
           setPlannerOpen(true)
         }}
       />
-      <Dialog open={plannerOpen && canCreate} onOpenChange={setPlannerOpen}>
+      <Dialog open={plannerOpen && canCreate} onOpenChange={(open) => { if (!routeSavePending) setPlannerOpen(open) }}>
          <DialogContent className="max-h-[calc(100vh-2rem)] max-w-[84rem] overflow-hidden">
           <DialogHeader>
            <DialogTitle>Generador de ruta optimizada</DialogTitle>
@@ -55,6 +62,7 @@ function RoutePlanningContent() {
             <RoutePlanner
               initialServiceDate={plannerDefaults.serviceDate}
               initialDeliveryZoneId={plannerDefaults.deliveryZoneId}
+              onSavingChange={(pending) => { routeSavePending = pending }}
               onClose={() => setPlannerOpen(false)}
               onSaved={() => {
                 setPlannerOpen(false)

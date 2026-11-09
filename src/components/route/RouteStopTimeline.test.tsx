@@ -1,8 +1,22 @@
 import { render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { RouteStopTimeline } from './RouteStopTimeline'
 
 describe('RouteStopTimeline', () => {
+  it('exposes keyboard accessible bounded movement only when editable', async () => {
+    const move = vi.fn()
+    const stops = [{ clientId: 'a', saleIds: ['1', '2'], latitude: 0, longitude: 0, displayName: 'Uno' }, { clientId: 'b', saleIds: ['3'], latitude: 0, longitude: 0, displayName: 'Dos' }]
+    const { rerender } = render(<RouteStopTimeline stops={stops} onMove={move} />)
+    expect(screen.getByRole('button', { name: 'Subir parada 1: Uno' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Bajar parada 2: Dos' })).toBeDisabled()
+    const button = screen.getByRole('button', { name: 'Subir parada 2: Dos' })
+    button.focus()
+    await userEvent.keyboard('{Enter}')
+    expect(move).toHaveBeenCalledWith(1, -1)
+    rerender(<RouteStopTimeline stops={stops} />)
+    expect(screen.queryByRole('button', { name: /Subir parada/ })).not.toBeInTheDocument()
+  })
   it('keeps stop labels in a full-width content column and metrics below', () => {
     render(<RouteStopTimeline stops={[{ clientId: 'client-1', saleIds: [], latitude: 0, longitude: 0, displayName: 'Nombre de cliente largo', addressSummary: 'Una dirección larga' }]} />)
     const row = within(screen.getByRole('list', { name: 'Paradas del recorrido' })).getAllByRole('listitem')[1]

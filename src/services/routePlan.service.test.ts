@@ -86,6 +86,13 @@ describe('routePlanService', () => {
     })
   })
 
+  it('sends the requested client permutation without route metrics', async () => {
+    post.mockResolvedValue({ data: {} })
+    const request = { serviceDate: '2026-10-04', deliveryZoneId: ZONE_ID, saleIds: [SALE_ID], clientOrder: ['client-b', 'client-a'] }
+    await routePlanService.preview(request)
+    expect(post).toHaveBeenCalledWith('/routePlan/preview', request)
+  })
+
   it('propagates request failures to the caller instead of swallowing them', async () => {
     get.mockRejectedValue(new Error('network down'))
 
@@ -151,14 +158,12 @@ describe('routePlanService', () => {
     }
     post.mockResolvedValue({ data: saved })
 
-    const params = { serviceDate: '2026-10-04', deliveryZoneId: ZONE_ID, saleIds: [SALE_ID] }
+    const params = { receipt: 'a'.repeat(64) }
 
     await expect(routePlanService.save(params)).resolves.toEqual(saved)
     expect(post).toHaveBeenCalledTimes(1)
     expect(post).toHaveBeenCalledWith('/routePlan', {
-      serviceDate: '2026-10-04',
-      deliveryZoneId: ZONE_ID,
-      saleIds: [SALE_ID],
+      receipt: 'a'.repeat(64),
     })
   })
 
@@ -166,7 +171,7 @@ describe('routePlanService', () => {
     post.mockRejectedValue(new Error('save down'))
 
     await expect(
-      routePlanService.save({ serviceDate: '2026-10-04', deliveryZoneId: ZONE_ID, saleIds: [SALE_ID] })
+      routePlanService.save({ receipt: 'a'.repeat(64) })
     ).rejects.toThrow('save down')
   })
 

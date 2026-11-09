@@ -172,11 +172,13 @@ describe('RouteScreen', () => {
     })
     getAssignmentOptions.mockResolvedValue({ drivers: [{ id: 'driver-1', nickname: 'Ana', isActive: true }], vehicles: [{ id: 'vehicle-1', code: 'AA123BB', fuelConsumptionLitersPer100Km: 10, attributes: {}, availability: true }] })
     preview.mockResolvedValue({
+      receipt: 'a'.repeat(64),
       route: { depot: { id: 'depot', name: 'Depósito', latitude: -34.6, longitude: -58.4 }, stops: [], segments: [], encodedPolyline: '' },
       metrics: { distanceMeters: 1000, durationSeconds: 600, stopCount: 2, fuelLiters: 0.1 },
       warnings: [], factorsConsidered: [], algorithmVersion: 'test', algorithmProvider: 'test', routingConfigRevision: 1, ruleVersion: 'test',
     })
-    save.mockResolvedValue({ _id: 'f'.repeat(24) })
+    let resolveSave!: (value: { _id: string }) => void
+    save.mockReturnValue(new Promise((resolve) => { resolveSave = resolve }))
     getDashboard.mockResolvedValueOnce({
       filters: {}, kpis: { activeRoutes: 0, pendingOrders: 0, totalDistanceMeters: 0, estimatedFuelLiters: 0 }, routes: [],
       candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' }, warnings: [],
@@ -184,7 +186,7 @@ describe('RouteScreen', () => {
       filters: { serviceDate: '2026-10-15', zoneCode: 'NORTE' }, kpis: { activeRoutes: 0, pendingOrders: 0, totalDistanceMeters: 0, estimatedFuelLiters: 0 }, routes: [],
       candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' }, warnings: [],
     }).mockResolvedValueOnce({
-      filters: {}, kpis: { activeRoutes: 1, pendingOrders: 0, totalDistanceMeters: 1000, estimatedFuelLiters: 0.1 }, routes: [{ id: 'route-new', status: 'PENDING', zoneCode: 'NORTE', selectedSaleIds: [saleA, saleB], clientCount: 2, metrics: { distanceMeters: 1000, durationSeconds: 600, fuelLiters: 0.1 }, assignments: { driverId: 'driver-1', vehicleId: 'vehicle-1' }, warnings: [], stale: false }],
+      filters: { serviceDate: '2026-10-15', zoneCode: 'NORTE' }, kpis: { activeRoutes: 1, pendingOrders: 0, totalDistanceMeters: 1000, estimatedFuelLiters: 0.1 }, routes: [{ id: 'route-new', status: 'PENDING', zoneCode: 'NORTE', selectedSaleIds: [saleA, saleB], clientCount: 2, metrics: { distanceMeters: 1000, durationSeconds: 600, fuelLiters: 0.1 }, assignments: { driverId: 'driver-1', vehicleId: 'vehicle-1' }, warnings: [], stale: false }],
       candidates: { eligible: [], blocked: [], ruleVersion: 'candidate-eligibility-v1' }, warnings: [],
     })
 
@@ -201,6 +203,14 @@ describe('RouteScreen', () => {
     await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Cliente Dos' }))
     await userEvent.click(within(dialog).getByRole('button', { name: 'Generar ruta' }))
     await userEvent.click(await within(dialog).findByRole('button', { name: 'Confirmar y guardar' }))
+    expect(save).toHaveBeenCalledWith({ receipt: 'a'.repeat(64) })
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(save).toHaveBeenCalledTimes(1)
+    resolveSave({ _id: 'f'.repeat(24) })
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (1)' })).toBeInTheDocument())
@@ -209,6 +219,37 @@ describe('RouteScreen', () => {
     expect(getDashboard).toHaveBeenNthCalledWith(2, { serviceDate: '2026-10-15', zoneCode: 'NORTE' })
     expect(getDashboard).toHaveBeenNthCalledWith(3, { serviceDate: '2026-10-15', zoneCode: 'NORTE' })
     expect(push).not.toHaveBeenCalledWith(expect.stringContaining('/route/'))
+  })
+
+  it('reconciles a pending save after creation permission is revoked', async () => {
+    let resolveSave!: (value: { _id: string }) => void
+    save.mockReturnValue(new Promise((resolve) => { resolveSave = resolve }))
+    getCandidates.mockResolvedValue({ eligible: [
+      { saleId: 'b'.repeat(24), clientId: 'd'.repeat(24), displayName: 'Cliente Uno' },
+      { saleId: 'c'.repeat(24), clientId: 'e'.repeat(24), displayName: 'Cliente Dos' },
+    ], blocked: [], ruleVersion: 'test' })
+    getAssignmentOptions.mockResolvedValue({ drivers: [{ id: 'driver-1', nickname: 'Ana' }], vehicles: [{ id: 'vehicle-1', code: 'AA123BB', fuelConsumptionLitersPer100Km: 10 }] })
+    preview.mockResolvedValue({ receipt: 'a'.repeat(64), route: { depot: { id: 'depot', name: 'Depósito', latitude: 0, longitude: 0 }, stops: [], segments: [], encodedPolyline: '' }, metrics: { distanceMeters: 0, durationSeconds: 0, stopCount: 2, fuelLiters: 0 }, warnings: [] })
+    const { rerender } = render(<RouteScreen />)
+    const date = await screen.findByLabelText('Fecha de servicio')
+    fireEvent.change(date, { target: { value: '2026-10-15' } })
+    fireEvent.change(screen.getByLabelText('Zona de entrega'), { target: { value: 'a'.repeat(24) } })
+    fireEvent.click(screen.getByRole('button', { name: 'Generar rutas' }))
+    const dialog = await screen.findByRole('dialog')
+    await within(dialog).findByRole('heading', { name: 'Pedidos pendientes' })
+    await userEvent.selectOptions(within(dialog).getByLabelText('Repartidor'), 'driver-1')
+    await userEvent.selectOptions(within(dialog).getByLabelText('Vehículo'), 'vehicle-1')
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Cliente Uno' }))
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Cliente Dos' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Generar ruta' }))
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Confirmar y guardar' }))
+    useSessionAccess.mockReturnValue(access({ permissions: ['read_route_plan'] }))
+    rerender(<RouteScreen />)
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    const before = getDashboard.mock.calls.length
+    resolveSave({ _id: 'f'.repeat(24) })
+    await waitFor(() => expect(getDashboard.mock.calls.length).toBeGreaterThan(before))
+    expect(save).toHaveBeenCalledTimes(1)
   })
 
   it('announces loading while the session is hydrating', () => {

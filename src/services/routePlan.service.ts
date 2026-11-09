@@ -105,6 +105,7 @@ export const routePlanService = {
     saleIds,
     driverId,
     vehicleId,
+    clientOrder,
   }: RoutePreviewRequest): Promise<RoutePreview> => {
     const response = await apiClient.post<RoutePreview>(PREVIEW_URL, {
       serviceDate,
@@ -112,29 +113,17 @@ export const routePlanService = {
       saleIds,
       ...(driverId !== undefined ? { driverId } : {}),
       ...(vehicleId !== undefined ? { vehicleId } : {}),
+      ...(clientOrder !== undefined ? { clientOrder } : {}),
     })
     return response.data
   },
 
   /**
    * Persists the current preview as an immutable snapshot and returns it.
-   * The backend recomputes and validates the preview before saving; there is no
-    * partial save. Requires an authenticated API session.
+   * The backend validates the receipt before saving. Requires an authenticated API session.
    */
-  save: async ({
-    serviceDate,
-    deliveryZoneId,
-    saleIds,
-    driverId,
-    vehicleId,
-  }: RoutePlanSaveRequest): Promise<RoutePlan> => {
-    const response = await apiClient.post<RoutePlan>(ROUTE_PLAN_URL, {
-      serviceDate,
-      deliveryZoneId,
-      saleIds,
-      ...(driverId !== undefined ? { driverId } : {}),
-      ...(vehicleId !== undefined ? { vehicleId } : {}),
-    })
+  save: async ({ receipt }: RoutePlanSaveRequest): Promise<RoutePlan> => {
+    const response = await apiClient.post<RoutePlan>(ROUTE_PLAN_URL, { receipt })
     return response.data
   },
 

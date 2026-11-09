@@ -24,6 +24,7 @@ interface RoutePreviewProps {
   errorMessage?: string | null
   /** Candidate data already loaded by the planner, used for stop labels. */
   candidateEntries?: readonly CandidateEntry[]
+  onMove?: (index: number, direction: number) => void
 }
 
 interface PreviewDashboardFields {
@@ -40,6 +41,7 @@ interface RouteTabsProps {
   candidateEntries?: readonly CandidateEntry[]
   stale?: boolean
   readWarnings?: readonly string[]
+  onMove?: (index: number, direction: number) => void
 }
 
 const NO_DATA = 'No disponible'
@@ -76,7 +78,7 @@ const saleStatusClass = (reference: RouteSaleReference | undefined): string => {
   return 'bg-background-subtle text-text-secondary'
 }
 
-const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, candidateEntries = [], stale = false, readWarnings = [] }: RouteTabsProps) => {
+const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, candidateEntries = [], stale = false, readWarnings = [], onMove }: RouteTabsProps) => {
   const [activeTab, setActiveTab] = useState('map')
   const instanceId = useId()
   const tabs = [
@@ -128,6 +130,7 @@ const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, 
           estimates={estimates}
           depot={{ name: depotName ?? route.depot.name, address: depotAddress ?? route.depot.address }}
           showHeader={false}
+          onMove={onMove}
         />
       </div>
       <div role="tabpanel" id={panelId('sales')} aria-labelledby={tabId('sales')} hidden={activeTab !== 'sales'} className="pt-4">
@@ -208,10 +211,10 @@ const formatLiters = (liters: number | null): string => liters === null ? 'No di
  * backend does not flag the map as unavailable, `RouteMap` is rendered as a
  * progressive enhancement; it keeps its own accessible fallback when the key or
  * API is unavailable, so metrics, warnings and the ordered list are never
- * hidden. The client must never reorder `route.stops`; the backend already
- * returns them in route order.
+ * hidden. Reordering requests a new backend preview rather than modifying
+ * the displayed route locally.
  */
-export function RoutePreview({ status, preview, errorCode, candidateEntries = [] }: RoutePreviewProps) {
+export function RoutePreview({ status, preview, errorCode, candidateEntries = [], onMove }: RoutePreviewProps) {
   if (status === 'idle') return null
 
   if (status === 'loading') {
@@ -296,6 +299,7 @@ export function RoutePreview({ status, preview, errorCode, candidateEntries = []
         depotName={preview.route.depot.name}
         depotAddress={preview.route.depot.address}
         candidateEntries={candidateEntries}
+        onMove={onMove}
       />
     </section>
   )
