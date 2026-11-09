@@ -71,9 +71,9 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
     const scope = `${scopedDate}:${scopedZone ?? ''}`
     const scopeChanged = previousScope.current !== scope
     previousScope.current = scope
-    if (scopeChanged) setPreviewRouteId(null)
     setStatus('loading')
     setFocusRegionId(null)
+    setPreviewRouteId(null)
     void routePlanService.getDashboard(scopedDate && scopedZone ? { serviceDate: scopedDate, zoneCode: scopedZone } : {}).then((result) => {
       if (cancelled) return
       setDashboard(result)
