@@ -3,6 +3,14 @@ import { describe, expect, it } from 'vitest'
 import { RouteStopTimeline } from './RouteStopTimeline'
 
 describe('RouteStopTimeline', () => {
+  it('keeps stop labels in a full-width content column and metrics below', () => {
+    render(<RouteStopTimeline stops={[{ clientId: 'client-1', saleIds: [], latitude: 0, longitude: 0, displayName: 'Nombre de cliente largo', addressSummary: 'Una dirección larga' }]} />)
+    const row = within(screen.getByRole('list', { name: 'Paradas del recorrido' })).getAllByRole('listitem')[1]
+    const name = within(row).getByText(/Nombre de cliente largo/)
+    expect(name).not.toHaveClass('truncate')
+    expect(within(row).getByText('Una dirección larga')).not.toHaveClass('truncate')
+    expect(row).not.toHaveClass('md:grid-cols-[2.25rem_minmax(0,1fr)_6rem_6rem_6rem]')
+  })
   it('renders the depot marker first with zero metrics and each arriving segment', () => {
     render(
       <RouteStopTimeline
@@ -52,9 +60,9 @@ describe('RouteStopTimeline', () => {
     expect(row).toHaveTextContent('No disponible')
   })
 
-  it('falls back to identifiers and unavailable addresses', () => {
+  it('uses neutral fallbacks for unavailable names and addresses', () => {
     render(<RouteStopTimeline stops={[{ clientId: 'client-legacy', saleIds: [], latitude: 0, longitude: 0 }]} />)
     expect(screen.getAllByText(/Dirección no disponible/).length).toBeGreaterThan(0)
-    expect(screen.getByText(/client-legacy/)).toBeInTheDocument()
+    expect(screen.getByText(/Cliente: No disponible/)).toBeInTheDocument()
   })
 })

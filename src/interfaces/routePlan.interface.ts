@@ -98,6 +98,8 @@ export interface RouteDashboardKpis {
 export interface RouteOperationalAssignment {
   driverId?: string
   vehicleId?: string
+  driverName?: string
+  vehicleName?: string
 }
 
 export const ROUTE_METRIC_AVAILABILITY = {

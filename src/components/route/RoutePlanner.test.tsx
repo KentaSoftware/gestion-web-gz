@@ -304,15 +304,15 @@ describe('RoutePlanner', () => {
     await renderLoaded()
     await selectAssignmentsAndClients()
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Tuvimos inconvenientes a generar la ruta, por favor cerrar la ventana e intentar nuevamente')
+    expect(await screen.findByRole('alert')).toHaveTextContent('El proveedor de rutas no está disponible')
   })
 
-  it('preserves an unknown preview error message', async () => {
+  it('uses a safe message for an unknown preview error', async () => {
     preview.mockRejectedValue({ response: { data: { code: 'NEW_PREVIEW_ERROR', message: 'Servicio temporalmente pausado' } } })
     await renderLoaded()
     await selectAssignmentsAndClients()
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Tuvimos inconvenientes a generar la ruta, por favor cerrar la ventana e intentar nuevamente')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Intentá nuevamente más tarde')
   })
 
   it('uses a generic message for an unstructured preview failure', async () => {
@@ -320,7 +320,7 @@ describe('RoutePlanner', () => {
     await renderLoaded()
     await selectAssignmentsAndClients()
     await userEvent.click(screen.getByRole('button', { name: 'Generar ruta' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Tuvimos inconvenientes a generar la ruta, por favor cerrar la ventana e intentar nuevamente')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Intentá nuevamente más tarde')
     expect(screen.getByRole('button', { name: 'Cancelar' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Confirmar y guardar' })).not.toBeInTheDocument()
   })

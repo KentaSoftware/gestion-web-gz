@@ -2,14 +2,14 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RouteDashboard } from './RouteDashboard'
 
-const { getActiveDeliveryZones, getDashboard, getAssignmentOptions, useSessionAccess } = vi.hoisted(() => ({
+const { getActiveDeliveryZones, getAssignmentOptions, getDashboard, useSessionAccess } = vi.hoisted(() => ({
   getActiveDeliveryZones: vi.fn(),
-  getDashboard: vi.fn(),
   getAssignmentOptions: vi.fn(),
+  getDashboard: vi.fn(),
   useSessionAccess: vi.fn(),
 }))
 
-vi.mock('@/services/routePlan.service', () => ({ routePlanService: { getActiveDeliveryZones, getDashboard, getAssignmentOptions } }))
+vi.mock('@/services/routePlan.service', () => ({ routePlanService: { getActiveDeliveryZones, getAssignmentOptions, getDashboard } }))
 vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess }))
 vi.mock('./RouteMap', () => ({ RouteMap: () => <div>Mapa simulado</div> }))
 
@@ -55,6 +55,20 @@ const dashboard = {
 }
 
 describe('RouteDashboard selected-route detail', () => {
+  it('closes the saved preview when the dashboard scope changes', async () => {
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValue(dashboard)
+    render(<RouteDashboard />)
+    await screen.findByRole('option', { name: 'Zona Norte' })
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Previsualizar' }))[0])
+    expect(screen.getByRole('dialog', { name: 'Previsualización de ruta' })).toBeInTheDocument()
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Fecha de servicio'), { target: { value: '2026-10-15' } })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Previsualizar' })[0])
+    fireEvent.change(screen.getByLabelText('Zona de entrega'), { target: { value: 'zone-1' } })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
   it('keeps incomplete selections global, scopes paired filters, and resets to global for a reader', async () => {
     useSessionAccess.mockReturnValue({ status: 'ready', permissions: ['read_route_plan'], gates: {} })
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
@@ -91,6 +105,83 @@ describe('RouteDashboard selected-route detail', () => {
     await screen.findByRole('heading', { name: 'Rutas planificadas (0)' })
     resolveOld(dashboard)
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (0)' })).toBeInTheDocument())
+  })
+  it('uses only saved client information in both historical views', async () => {
+    useSessionAccess.mockReturnValue({ status: 'ready', permissions: ['read_route_plan'], gates: {} })
+    getDashboard.mockResolvedValue({ ...dashboard, routes: [{ ...dashboard.routes[0], saleReferences: [{ saleId: 'sale-1', clientName: 'Nombre guardado', address: 'Calle guardada', zoneName: 'Zona guardada' }] }], candidates: { ...dashboard.candidates, eligible: [{ saleId: 'new-sale', clientId: 'client-1', displayName: 'Nombre actual', addressSummary: 'Calle actual' }] } })
+    render(<RouteDashboard />)
+    await screen.findByRole('heading', { name: 'Rutas planificadas (1)' })
+    const inline = document.getElementById('route-detail-region') as HTMLElement
+    expect(inline).toHaveTextContent('Nombre guardado')
+    expect(inline).toHaveTextContent('Calle guardada')
+    expect(inline).not.toHaveTextContent('Nombre actual')
+    fireEvent.click(screen.getByRole('button', { name: 'Previsualizar' }))
+    const dialog = screen.getByRole('dialog', { name: 'Previsualización de ruta' })
+    fireEvent.click(within(dialog).getByRole('tab', { name: 'Secuencia de paradas' }))
+    expect(within(dialog).getByRole('tabpanel', { name: 'Secuencia de paradas' })).toHaveTextContent('Nombre guardado')
+    expect(within(dialog).getByRole('tabpanel', { name: 'Secuencia de paradas' })).toHaveTextContent('Calle guardada')
+    fireEvent.click(within(dialog).getByRole('tab', { name: 'Pedidos vinculados' }))
+    expect(within(dialog).getByRole('table')).toHaveTextContent('Zona guardada')
+  })
+
+  it('does not fill missing historical fields from current candidates', async () => {
+    useSessionAccess.mockReturnValue({ status: 'ready', permissions: ['read_route_plan'], gates: {} })
+    getDashboard.mockResolvedValue({ ...dashboard, candidates: { ...dashboard.candidates, eligible: [{ saleId: 'sale-1', clientId: 'client-1', displayName: 'Nombre actual', addressSummary: 'Calle actual', zoneName: 'Zona actual' }] } })
+    render(<RouteDashboard />)
+    await screen.findByRole('heading', { name: 'Rutas planificadas (2)' })
+    const inline = document.getElementById('route-detail-region') as HTMLElement
+    expect(inline).not.toHaveTextContent('Nombre actual')
+    expect(inline).not.toHaveTextContent('Calle actual')
+    expect(inline).toHaveTextContent('Dirección no disponible')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Previsualizar' })[0])
+    const dialog = screen.getByRole('dialog', { name: 'Previsualización de ruta' })
+    fireEvent.click(within(dialog).getByRole('tab', { name: 'Secuencia de paradas' }))
+    expect(within(dialog).getByRole('tabpanel', { name: 'Secuencia de paradas' })).not.toHaveTextContent('Nombre actual')
+    fireEvent.click(within(dialog).getByRole('tab', { name: 'Pedidos vinculados' }))
+    const table = within(dialog).getByRole('table')
+    expect(table).toHaveTextContent('No disponible')
+    expect(table).not.toHaveTextContent('Nombre actual')
+    expect(table).not.toHaveTextContent('Calle actual')
+    expect(table).not.toHaveTextContent('Zona actual')
+  })
+  it('opens the saved route in a read-only three-tab dialog and restores focus', async () => {
+    useSessionAccess.mockReturnValue({ status: 'ready', permissions: ['read_route_plan'], gates: {} })
+    getDashboard.mockResolvedValue(dashboard)
+    render(<RouteDashboard />)
+    await screen.findByRole('heading', { name: 'Rutas planificadas (2)' })
+    const preview = screen.getAllByRole('button', { name: 'Previsualizar' })[0]
+    preview.focus()
+    fireEvent.click(preview)
+    const dialog = await screen.findByRole('dialog', { name: /previsualización de ruta/i })
+    expect(within(dialog).getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Mapa de la ruta', 'Secuencia de paradas', 'Pedidos vinculados',
+    ])
+    expect(within(dialog).queryByRole('button', { name: /guardar/i })).not.toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('tab', { name: 'Secuencia de paradas' }))
+    expect(within(dialog).getByRole('list', { name: 'Paradas del recorrido' })).toHaveTextContent('Parada 1')
+    fireEvent.click(within(dialog).getByRole('tab', { name: 'Pedidos vinculados' }))
+    expect(within(dialog).getByRole('table', { name: 'Pedidos vinculados' })).not.toHaveTextContent('sale-1')
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(preview).toHaveFocus())
+    expect(getActiveDeliveryZones).toHaveBeenCalled()
+    expect(getAssignmentOptions).not.toHaveBeenCalled()
+  })
+
+  it('uses assignment labels and neutral fallbacks without displaying identifiers', async () => {
+    getActiveDeliveryZones.mockResolvedValue([])
+    getDashboard.mockResolvedValue({ ...dashboard, routes: [
+      { ...dashboard.routes[0], assignments: { driverId: 'private-driver', vehicleId: 'private-vehicle', driverName: 'Ana López', vehicleName: 'Camión 1' } },
+      { ...dashboard.routes[1], assignments: { driverId: 'other-driver', vehicleId: 'other-vehicle' } },
+    ] })
+    render(<RouteDashboard />)
+    await screen.findByRole('heading', { name: 'Rutas planificadas (2)' })
+    expect(screen.getAllByText('Ana López').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Camión 1').length).toBeGreaterThan(0)
+    expect(screen.getByText('Repartidor no disponible')).toBeInTheDocument()
+    expect(screen.getByText('Vehículo no disponible')).toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent('private-driver')
+    expect(document.body).not.toHaveTextContent('PENDING')
   })
   it('does not request dashboard data while hydrating or without read permission', () => {
     useSessionAccess.mockReturnValue({ status: 'hydrating', permissions: [], gates: {} })
@@ -165,7 +256,6 @@ describe('RouteDashboard selected-route detail', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (1)' })).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: 'Ver mapa' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Previsualizar' }))
     const plannedRoutes = screen.getByRole('heading', { name: 'Rutas planificadas (1)' })
     const clients = screen.getByRole('heading', { name: 'Clientes con pedidos (0)' })
     const map = screen.getByRole('heading', { name: 'Mapa interactivo' })
@@ -257,15 +347,11 @@ describe('RouteDashboard selected-route detail', () => {
     expect(document.activeElement).toBe(document.getElementById('route-map-region'))
     expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: 'smooth', block: 'start' })
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Previsualizar' })[1])
-    expect(screen.getByRole('heading', { name: 'Mapa interactivo' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Vista de ruta' })).toBeInTheDocument()
-    expect(document.activeElement).toBe(document.getElementById('route-detail-region'))
-    expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: 'smooth', block: 'start' })
-    expect(scrollIntoView).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
   })
 
-  it('focuses the preview panel without hiding the map', async () => {
+  it('opens the preview dialog while retaining the map in the document', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     getDashboard.mockResolvedValue(dashboard)
     render(<RouteDashboard />)
@@ -273,9 +359,10 @@ describe('RouteDashboard selected-route detail', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Rutas planificadas (2)' })).toBeInTheDocument())
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Previsualizar' })[0])
-    expect(screen.getByRole('heading', { name: 'Vista de ruta' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Previsualización de ruta' })).toBeInTheDocument()
+    expect(document.getElementById('route-map-region')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar' }))
     expect(screen.getByRole('heading', { name: 'Mapa interactivo' })).toBeInTheDocument()
-    expect(document.activeElement).toBe(document.getElementById('route-detail-region'))
   })
 
   it('keeps the planned-routes panel visible when no routes exist', async () => {
@@ -326,10 +413,10 @@ describe('RouteDashboard selected-route detail', () => {
     expect(selection).toHaveAttribute('aria-pressed', 'true')
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Ver mapa' })[1])
-    expect(screen.getByText('Ruta route-2')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Ruta 2 · Zona NORTE' })).toBeInTheDocument()
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Previsualizar' })[1])
-    expect(screen.getByText('Ruta route-2')).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Previsualización de ruta' })).toHaveTextContent('La secuencia de paradas no está disponible')
   })
 
   it('paginates combined eligible and blocked clients', async () => {

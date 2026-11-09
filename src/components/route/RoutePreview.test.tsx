@@ -53,10 +53,12 @@ describe('RoutePreview', () => {
       />
     )
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Tuvimos inconvenientes a generar la ruta, por favor cerrar la ventana e intentar nuevamente')
+    expect(screen.getByRole('alert')).toHaveTextContent('No pudimos generar la ruta')
+    expect(screen.getByRole('alert')).toHaveTextContent('El proveedor de rutas no está disponible')
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Raw provider message')
   })
 
-  it('falls back to the backend message for an unknown error code', () => {
+  it('does not expose an unknown backend error message', () => {
     render(
       <RoutePreview
         status="error"
@@ -66,7 +68,8 @@ describe('RoutePreview', () => {
       />
     )
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Tuvimos inconvenientes a generar la ruta, por favor cerrar la ventana e intentar nuevamente')
+    expect(screen.getByRole('alert')).toHaveTextContent('Intentá nuevamente')
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Mensaje del backend')
   })
 
   it('renders metrics and ordered stops through the dedicated sequence tab', () => {
@@ -163,10 +166,15 @@ describe('RoutePreview', () => {
     const tabs = screen.getAllByRole('tab')
     expect(tabs.map((tab) => tab.textContent)).toEqual(['Mapa de la ruta', 'Secuencia de paradas', 'Pedidos vinculados'])
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
+    tabs[0].focus()
+    fireEvent.keyDown(tabs[0], { key: 'ArrowRight' })
+    expect(tabs[1]).toHaveFocus()
+    expect(tabs[1]).toHaveAttribute('aria-selected', 'true')
 
     fireEvent.click(tabs[2])
     expect(tabs[2]).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('tabpanel', { name: 'Pedidos vinculados' })).toHaveTextContent('sale-3')
+    expect(screen.getByRole('tabpanel', { name: 'Pedidos vinculados' })).toHaveTextContent('No disponible')
+    expect(screen.getByRole('tabpanel', { name: 'Pedidos vinculados' })).not.toHaveTextContent('sale-3')
   })
 
   it('announces unavailable arrival estimates without fabricating timing data', () => {
@@ -208,9 +216,9 @@ describe('RoutePreview', () => {
     ])
     const rows = within(table).getAllByRole('row')
     expect(rows[1]).toHaveTextContent('Cliente Uno')
-    expect(rows[1]).toHaveTextContent('sale-1')
+    expect(rows[1]).not.toHaveTextContent('sale-1')
     expect(rows[1]).toHaveTextContent('1 ítem')
-    expect(rows[2]).toHaveTextContent('sale-2')
+    expect(rows[2]).not.toHaveTextContent('sale-2')
     expect(rows[2]).toHaveTextContent('No disponible')
     expect(rows[3]).toHaveTextContent('Comercio Dos')
     expect(rows[3]).toHaveTextContent('2 productos')
