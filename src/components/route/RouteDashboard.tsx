@@ -30,10 +30,10 @@ interface RouteDashboardProps {
 
 export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDashboardProps = {}) {
   const access = useSessionAccess()
-  const canRead = access.status === SESSION_STATUS.READY && access.permissions.includes(Permission.READ_ROUTE_PLAN)
-  const canCreate = canRead && access.permissions.includes(Permission.CREATE_ROUTE_PLAN)
-  const canManageConfig = canRead && access.permissions.includes('manage_route_config')
-  const canConfirmLocation = canRead && access.permissions.includes('confirm_client_location')
+  const canRead = access.status === SESSION_STATUS.READY && (access.isAdmin || access.permissions.includes(Permission.READ_ROUTE_PLAN))
+  const canCreate = canRead && (access.isAdmin || access.permissions.includes(Permission.CREATE_ROUTE_PLAN))
+  const canManageConfig = canRead && (access.isAdmin || access.permissions.includes('manage_route_config'))
+  const canConfirmLocation = canRead && (access.isAdmin || access.permissions.includes('confirm_client_location'))
   const [dashboard, setDashboard] = useState<RouteDashboardData | null>(null)
   const [clientPage, setClientPage] = useState(1)
   const [clientQuery, setClientQuery] = useState('')

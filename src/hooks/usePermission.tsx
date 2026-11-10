@@ -29,7 +29,7 @@ import { useSessionAccess } from '@/hooks/useSessionAccess';
  * ```
  */
 export const usePermission = () => {
-  const { status, permissions } = useSessionAccess();
+  const { status, permissions, isAdmin } = useSessionAccess();
   const hydrating = status === SESSION_STATUS.HYDRATING;
 
   /**
@@ -38,8 +38,8 @@ export const usePermission = () => {
    * @returns true si el usuario tiene el permiso, false en caso contrario
    */
   const hasPermission = useCallback(
-    (permission: Permission | string): boolean => permissions.includes(permission),
-    [permissions]
+    (permission: Permission | string): boolean => isAdmin || permissions.includes(permission),
+    [permissions, isAdmin]
   );
 
   /**
@@ -49,8 +49,8 @@ export const usePermission = () => {
    */
   const hasAnyPermission = useCallback(
     (required: (Permission | string)[]): boolean =>
-      required.some((permission) => permissions.includes(permission)),
-    [permissions]
+      required.some((permission) => isAdmin || permissions.includes(permission)),
+    [permissions, isAdmin]
   );
 
   /**
@@ -60,8 +60,8 @@ export const usePermission = () => {
    */
   const hasAllPermissions = useCallback(
     (required: (Permission | string)[]): boolean =>
-      required.every((permission) => permissions.includes(permission)),
-    [permissions]
+      required.every((permission) => isAdmin || permissions.includes(permission)),
+    [permissions, isAdmin]
   );
 
   // Helpers específicos para egresos (shortcuts)

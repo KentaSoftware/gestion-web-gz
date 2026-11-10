@@ -3,9 +3,9 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SimulationPage from './page'
 
-const { get, post, permissions } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), permissions: ['simulation:read', 'simulation:write'] as string[] }))
+const { get, post, permissions, session } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), permissions: ['simulation:read', 'simulation:write'] as string[], session: { isAdmin: false } }))
 vi.mock('@/utils/client', () => ({ default: { get, post } }))
-vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess: () => ({ status: 'ready', permissions }) }))
+vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess: () => ({ status: 'ready', permissions, isAdmin: session.isAdmin }) }))
 vi.mock('@/components/ProtectedRoute', () => ({ default: ({ children }: { children: ReactNode }) => <div>{children}</div> }))
 
 const routes = { items: [
@@ -34,6 +34,7 @@ describe('Simulation workspace', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     permissions.splice(0, permissions.length, 'simulation:read', 'simulation:write')
+    session.isAdmin = false
     setupGet()
     post.mockResolvedValue({ data: scenarios.items[0] })
   })
@@ -219,6 +220,14 @@ describe('Simulation workspace', () => {
     setupGet()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Reintentar' }))
     expect(await within(dialog).findByText('Juan Pérez')).toBeInTheDocument()
+  })
+
+  it('loads simulation for a verified administrator without permissions', async () => {
+    permissions.splice(0, permissions.length)
+    session.isAdmin = true
+    render(<SimulationPage />)
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/simulation/demo/routes', expect.anything()))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('enforces read and write permissions and uses only demo endpoints', async () => {

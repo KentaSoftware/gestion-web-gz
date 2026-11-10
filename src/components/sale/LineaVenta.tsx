@@ -16,8 +16,11 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { ShoppingCart } from 'lucide-react';
 import { AnimatedNumber } from '../AnimatedNumber';
-import { getSale, onChangeClientSale, onChangePrecioUnitarioSale } from '@/redux/saleSlice';
+import { clearClientSaleSelection, getSale, onChangeClientSale, selectClientSale } from '@/redux/saleSlice';
 import ListLineaVenta from './ListLineaVenta';
+import { clientService } from '@/services/client.service';
+import type { SaleClientOption } from '@/interfaces/client.interface';
+import axios from 'axios';
 
 export default function LineaVenta({edit}:{edit?: boolean}) {
 
@@ -27,13 +30,35 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
     const dispatch = useAppDispatch();
     const router: AppRouterInstance = useRouter()
     const [valueStorage , setValue] = useLocalStorage("user", "")
+    const [options, setOptions] = useState<SaleClientOption[]>([])
+    const [searchState, setSearchState] = useState<'idle' | 'loading' | 'ready' | 'forbidden' | 'error'>('idle')
+    const [retry, setRetry] = useState(0)
 
     useEffect(()=>{
       if (sale.createdAt) {
         const newDate = new Date(sale.createdAt)
         setDate(prevData=>newDate)
       }
-    }, [sale])
+    }, [sale.createdAt])
+
+    useEffect(() => {
+      const query = sale.cliente.trim()
+      let current = true
+      setOptions([])
+      if (edit || sale.idCliente || query.length < 2 || query.length > 100) {
+        setSearchState('idle')
+        return () => { current = false }
+      }
+      setSearchState('loading')
+      const timer = setTimeout(() => {
+        clientService.saleOptions(query).then((clients) => {
+          if (current) { setOptions(clients); setSearchState('ready') }
+        }).catch((error: unknown) => {
+          if (current) setSearchState(axios.isAxiosError(error) && error.response?.status === 403 ? 'forbidden' : 'error')
+        })
+      }, 250)
+      return () => { current = false; clearTimeout(timer) }
+    }, [edit, sale.cliente, sale.idCliente, retry])
 
   return (
     <div className="flex flex-1 min-w-[50%] flex-col max-[940px]:w-full max-[940px]:h-full">
@@ -43,8 +68,21 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
           <ListLineaVenta edit={edit} />
         </div>
         <div className="px-4">
-          <Input label='Cliente' name='cliente' value={sale.cliente} onChange={(e:ChangeEvent<HTMLInputElement>)=>dispatch(onChangeClientSale({client: e.target.value}))} type='text' />
+          <Input label='Cliente' name='cliente' value={sale.cliente} readOnly={Boolean(edit && sale.idCliente)} onChange={(e:ChangeEvent<HTMLInputElement>)=>{ if (!edit) dispatch(clearClientSaleSelection()); dispatch(onChangeClientSale({client: e.target.value})) }} type='text' />
+          {!edit && <div aria-live="polite" className="text-sm text-text-secondary">
+            {sale.cliente.trim().length < 2 && !sale.idCliente && <p>Ingresá al menos 2 caracteres para buscar un cliente activo.</p>}
+            {sale.cliente.trim().length > 100 && <p>La búsqueda admite hasta 100 caracteres.</p>}
+            {searchState === 'loading' && <p>Buscando clientes...</p>}
+            {searchState === 'ready' && options.length === 0 && <p>No se encontraron clientes activos.</p>}
+            {searchState === 'forbidden' && <p>Necesitás el permiso read_client para seleccionar un cliente. Contactá a un administrador.</p>}
+            {searchState === 'error' && <p>No se pudieron buscar clientes. <button type="button" onClick={() => setRetry(retry + 1)}>Reintentar</button></p>}
+            {options.length > 0 && <>
+              <p>Si los datos no alcanzan para identificar al cliente, verificá su identidad antes de seleccionarlo.</p>
+              <ul>{options.map(option => <li key={option.id}><button type="button" onClick={() => dispatch(selectClientSale(option))}>{option.name} · {option.address?.trim() || 'Sin dirección'} · ID: {option.id}</button></li>)}</ul>
+            </>}
+          </div>}
           <div className="flex justify-around">
+            <span>Fecha de venta</span>
             <Popover open={dateOpen} onOpenChange={setDateOpen}>
               <PopoverTrigger asChild>
                 <button
@@ -84,9 +122,13 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
                 toast.warning('No se ingreso ningun cliente')
                 return
               }
+              if (!edit && !sale.idCliente) {
+                toast.warning('Seleccioná un cliente activo de los resultados')
+                return
+              }
               dispatch(setLoading(true))
               !edit?
-              apiClient.post('/sale', {itemsSale: sale.itemsSale, cliente: sale.cliente, total: sale.total, estado: 'Creado', createdAt: date, porcentaje: sale.porcentaje},{
+              apiClient.post('/sale', {itemsSale: sale.itemsSale, idCliente: sale.idCliente, total: sale.total, estado: 'Creado', createdAt: date, porcentaje: sale.porcentaje},{
                 headers: {
                   Authorization: `Bearer ${valueStorage.token}` 
                 }
@@ -97,11 +139,10 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
                 router.back()
               })
               .catch((e)=>{
-                console.log(e)
                 dispatch(setLoading(false))
                 toast.error(e.response.data.error)
               }):
-              apiClient.patch(`/sale/${sale._id}`, {itemsSale: sale.itemsSale, cliente: sale.cliente, total: sale.total, estado: 'Modificado', createdAt: sale.createdAt, porcentaje: sale.porcentaje},{
+              apiClient.patch(`/sale/${sale._id}`, {itemsSale: sale.itemsSale, cliente: sale.cliente, total: sale.total, estado: sale.estado === 'Cancelado' ? sale.estado : 'Modificado', createdAt: sale.createdAt, porcentaje: sale.porcentaje},{
                 headers: {
                   Authorization: `Bearer ${valueStorage.token}` 
                 }
@@ -112,7 +153,6 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
                 router.back()
               })
               .catch((e)=>{
-                console.log(e.response)
                 dispatch(setLoading(false))
                 toast.error(e.response.data.error)
               })

@@ -60,6 +60,16 @@ describe('MODULE_REGISTRY', () => {
     expect(isModuleEnabled(route!, { ...repartidorAccess, permissions: [Permission.READ_ROUTE_PLAN] })).toBe(true)
   })
 
+  it('allows a verified administrator with empty grants without bypassing feature flags', () => {
+    const route = MODULE_REGISTRY.find((entry) => entry.id === 'route')!
+    const stock = MODULE_REGISTRY.find((entry) => entry.id === 'stock')!
+    const admin = { ...repartidorAccess, isAdmin: true }
+
+    expect(isModuleEnabled(route, admin)).toBe(true)
+    expect(isModuleEnabled(stock, admin)).toBe(false)
+    expect(isModuleEnabled(route, { ...admin, status: SESSION_STATUS.HYDRATING })).toBe(false)
+  })
+
   it('enables Stock inteligente for any authenticated session without stock permissions', () => {
     const stock = MODULE_REGISTRY.find((entry) => entry.id === 'stock-smart')
 

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { act } from 'react'
 import { hydrateRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
@@ -7,15 +7,16 @@ import { SESSION_STATUS } from '@/interfaces/auth.interface'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { REPARTIDOR_ACCESS } from '@/test/fixtures/sessionAccess'
 
-const { useSessionAccess, isModuleEnabled, useLocalStorage } = vi.hoisted(() => ({
+const { useSessionAccess, isModuleEnabled, useLocalStorage, dispatch, push, clearStorage } = vi.hoisted(() => ({
   useSessionAccess: vi.fn(),
   isModuleEnabled: vi.fn(),
   useLocalStorage: vi.fn((): [unknown, () => void, () => void] => ['', vi.fn(), vi.fn()]),
+  dispatch: vi.fn(), push: vi.fn(), clearStorage: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/home',
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push }),
 }))
 vi.mock('next/link', () => ({
   default: ({ children, href, prefetch, ...props }: { children: React.ReactNode; href: string; prefetch?: boolean }) => (
@@ -24,6 +25,13 @@ vi.mock('next/link', () => ({
 }))
 vi.mock('next-themes', () => ({ useTheme: () => ({ theme: 'light', setTheme: vi.fn() }) }))
 vi.mock('react-redux', () => ({ useSelector: () => ({ nickname: '' }) }))
+vi.mock('@/redux/hook', () => ({ useAppDispatch: () => dispatch }))
+vi.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuItem: ({ children, onClick }: { children: React.ReactNode; onClick: () => void }) => <button onClick={onClick}>{children}</button>,
+}))
 vi.mock('@/hooks/useLocalStorage', () => ({ default: useLocalStorage }))
 vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess }))
 vi.mock('@/config/moduleRegistry', async (importOriginal) => {
@@ -35,6 +43,16 @@ import AppSidebar from './AppSidebar'
 
 describe('AppSidebar', () => {
   const routeEnabledForRepartidor = (entry: { id: string }) => entry.id === 'home' || entry.id === 'route'
+
+  it('clears the current session when the logout item is clicked', () => {
+    useSessionAccess.mockReturnValue(REPARTIDOR_ACCESS)
+    useLocalStorage.mockReturnValue(['', vi.fn(), clearStorage])
+    render(<SidebarProvider><AppSidebar /></SidebarProvider>)
+    fireEvent.click(screen.getByText(/Cerrar sesi/))
+    expect(dispatch).toHaveBeenCalledWith({ type: 'user/clearUser', payload: undefined })
+    expect(clearStorage).toHaveBeenCalled()
+    expect(push).toHaveBeenCalledWith('/')
+  })
 
   it('hides blocked modules and disables prefetch for enabled navigation', () => {
     useSessionAccess.mockReturnValue({

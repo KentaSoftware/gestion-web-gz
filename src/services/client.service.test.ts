@@ -1,26 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-const { post } = vi.hoisted(() => ({ post: vi.fn() }))
-vi.mock('@/utils/client', () => ({ default: { post } }))
 import { clientService } from './client.service'
+import apiClient from '@/utils/client'
+
+vi.mock('@/utils/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 
 describe('clientService geocoding', () => {
-  beforeEach(() => post.mockReset())
+  beforeEach(() => vi.mocked(apiClient.post).mockReset())
   it('searches candidates through the backend contract', async () => {
-    post.mockResolvedValue({ data: { candidates: [] } })
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { candidates: [] } })
     await expect(clientService.geocode('client-1', 'Calle 1')).resolves.toEqual({ candidates: [] })
-    expect(post).toHaveBeenCalledWith('/client/client-1/geocode', { address: 'Calle 1' })
+    expect(apiClient.post).toHaveBeenCalledWith('/client/client-1/geocode', { address: 'Calle 1' })
   })
   it('confirms an explicit candidate', async () => {
     const candidate = { formattedAddress: 'Calle 1', placeId: 'place-1', precision: 'ROOFTOP' as const, lat: -34, lng: -58 }
-    post.mockResolvedValue({ data: { _id: 'client-1' } })
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { _id: 'client-1' } })
     await clientService.confirmLocation('client-1', { candidate })
-    expect(post).toHaveBeenCalledWith('/client/client-1/location-confirmation', { candidate })
+    expect(apiClient.post).toHaveBeenCalledWith('/client/client-1/location-confirmation', { candidate })
   })
   it('sends manual coordinates without converting zero to missing', async () => {
-    post.mockResolvedValue({ data: { geocoding: { status: 'PENDING' } } })
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { geocoding: { status: 'PENDING' } } })
     const manualReference = { address: 'Calle 1', lat: 0, lng: 0 }
     await expect(clientService.confirmLocation('client-1', { manualReference })).resolves.toEqual({ geocoding: { status: 'PENDING' } })
-    expect(post).toHaveBeenCalledWith('/client/client-1/location-confirmation', { manualReference })
+    expect(apiClient.post).toHaveBeenCalledWith('/client/client-1/location-confirmation', { manualReference })
+  })
+})
+
+describe('sale client options', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('requests the bounded authenticated lookup with a trimmed literal prefix', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { clients: [{ id: '123', name: 'Ana', address: 'Calle 1' }] } })
+    await expect(clientService.saleOptions(' Ana ')).resolves.toEqual([{ id: '123', name: 'Ana', address: 'Calle 1' }])
+    expect(apiClient.get).toHaveBeenCalledWith('/client/sale-options', { params: { q: 'Ana' } })
   })
 })

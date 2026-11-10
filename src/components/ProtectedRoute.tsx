@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { usePermission } from '@/hooks/usePermission';
 import { useSessionAccess } from '@/hooks/useSessionAccess';
@@ -71,48 +71,22 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const pathname = usePathname();
   const { status } = useSessionAccess();
   const { hasPermission, hasAnyPermission } = usePermission();
-  const [isChecking, setIsChecking] = useState(true);
-  const [hasAccess, setHasAccess] = useState(false);
-
-  const hydrating = status === SESSION_STATUS.HYDRATING;
+  const hydrating = status !== SESSION_STATUS.READY && status !== SESSION_STATUS.ANONYMOUS;
   const anonymous = status === SESSION_STATUS.ANONYMOUS;
+  const hasAccess = !requiredPermission || (Array.isArray(requiredPermission)
+    ? hasAnyPermission(requiredPermission)
+    : hasPermission(requiredPermission));
 
   useEffect(() => {
-    // While the session is hydrating, never evaluate access: show loading only.
-    if (hydrating) {
-      setIsChecking(true);
-      return;
-    }
-
-    // Require authentication when configured; a genuinely absent session
-    // redirects, it does not flash the forbidden UI.
+    if (hydrating) return;
     if (requireAuth && anonymous) {
-      setIsChecking(false);
-      setHasAccess(false);
       router.push('/');
       return;
     }
-
-    // Si no se especificó permiso, solo verificar auth
-    if (!requiredPermission) {
-      setHasAccess(true);
-      setIsChecking(false);
-      return;
-    }
-
-    // Verificar permisos
-    const permitted = Array.isArray(requiredPermission)
-      ? hasAnyPermission(requiredPermission)
-      : hasPermission(requiredPermission);
-
-    setHasAccess(permitted);
-    setIsChecking(false);
-
-    // Si no tiene acceso y se especificó redirección
-    if (!permitted && redirectTo) {
+    if (!hasAccess && redirectTo) {
       router.push(redirectTo);
     }
-  }, [hydrating, anonymous, requiredPermission, redirectTo, requireAuth, hasPermission, hasAnyPermission, router]);
+  }, [hydrating, anonymous, hasAccess, redirectTo, requireAuth, router]);
 
   const moduleEntry = [...MODULE_REGISTRY]
     .sort((first, second) => second.href.length - first.href.length)
@@ -124,7 +98,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   let content: ReactNode;
 
   // Mostrar loading mientras se verifica o durante la hidratación de sesión
-  if (hydrating || isChecking) {
+  if (hydrating) {
     content = (
       <div className="flex items-center justify-center p-8">
         <Spinner className="size-12 text-brand-primary" />

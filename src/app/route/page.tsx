@@ -30,8 +30,8 @@ let routeSavePending = false
 function RoutePlanningContent() {
   const access = useSessionAccess()
   const canCreate = access.status === SESSION_STATUS.READY &&
-    access.permissions.includes(Permission.READ_ROUTE_PLAN) &&
-    access.permissions.includes(Permission.CREATE_ROUTE_PLAN)
+    (access.isAdmin || (access.permissions.includes(Permission.READ_ROUTE_PLAN) &&
+    access.permissions.includes(Permission.CREATE_ROUTE_PLAN)))
   const [plannerOpen, setPlannerOpen] = useState(false)
   const [dashboardRefreshToken, setDashboardRefreshToken] = useState(0)
   const [plannerDefaults, setPlannerDefaults] = useState({ serviceDate: '', deliveryZoneId: '' })

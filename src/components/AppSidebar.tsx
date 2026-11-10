@@ -8,7 +8,8 @@ import useLocalStorage from '@/hooks/useLocalStorage'
 import { useSessionAccess } from '@/hooks/useSessionAccess'
 import { SESSION_STATUS } from '@/interfaces/auth.interface'
 import { isModuleEnabled, MODULE_REGISTRY } from '@/config/moduleRegistry'
-import { getUser } from '@/redux/userSlice'
+import { clearUser, getUser } from '@/redux/userSlice'
+import { useAppDispatch } from '@/redux/hook'
 import {
   Sidebar,
   SidebarHeader,
@@ -33,6 +34,7 @@ import { LogOut, ChevronUp, Sun, Moon } from 'lucide-react'
 export default function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const dispatch = useAppDispatch()
   const user: any = useSelector(getUser)
   const [valueStorage, , clearValue] = useLocalStorage('user', '')
   const [hasMounted, setHasMounted] = useState(false)
@@ -53,6 +55,7 @@ export default function AppSidebar() {
   }
 
   function handleLogout() {
+    dispatch(clearUser())
     clearValue()
     router.push('/')
   }

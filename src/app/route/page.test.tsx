@@ -57,7 +57,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
 vi.mock('@/hooks/useLocalStorage', () => ({ default: () => [{ nickname: '', token: '' }, vi.fn(), vi.fn()] }))
 vi.mock('@/redux/hook', () => ({ useAppDispatch: () => vi.fn() }))
 vi.mock('@/redux/userSlice', () => ({ clearUser: vi.fn(), getUser: vi.fn(), setUser: vi.fn() }))
-vi.mock('react-redux', () => ({ useSelector: () => ({ nickname: '', token: '' }) }))
+vi.mock('react-redux', () => ({ useSelector: () => ({ nickname: '', token: '', sessionStatus: 'ready' }), useDispatch: () => vi.fn() }))
 vi.mock('@/components/AppSidebar', () => ({ default: () => null }))
 vi.mock('@/components/ui/sidebar', () => ({
   SidebarProvider: ({ children, className }: { children: ReactNode; className?: string }) => <div className={className}>{children}</div>,
@@ -269,6 +269,13 @@ describe('RouteScreen', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('No tenés permiso')
     expect(getDashboard).not.toHaveBeenCalled()
+  })
+
+  it('allows a verified administrator without explicit route permissions', async () => {
+    useSessionAccess.mockReturnValue(access({ permissions: [], isAdmin: true }))
+    render(<RouteScreen />)
+    expect(await screen.findByRole('button', { name: 'Generar rutas' })).toBeInTheDocument()
+    await waitFor(() => expect(getDashboard).toHaveBeenCalled())
   })
 
   it('redirects anonymous sessions home without rendering the shell', () => {
