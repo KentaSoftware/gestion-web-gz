@@ -37,3 +37,12 @@ export interface ClientLocationConfirmationResponse {
   lng?: number
   geocoding?: ClientGeocodingStatus
 }
+export interface SaleClientOption {
+  id: string
+  name: string
+  address?: string
+}
+
+export interface SaleClientOptionsResponse {
+  clients: SaleClientOption[]
+}

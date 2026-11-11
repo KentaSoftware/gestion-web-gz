@@ -186,9 +186,9 @@ function ComparisonContent({ details }: { details: SimulationScenarioDetail[] })
 }
 
 function SimulationWorkspace() {
-  const { status, permissions } = useSessionAccess()
-  const canRead = permissions.includes('simulation:read')
-  const canWrite = permissions.includes('simulation:write')
+  const { status, permissions, isAdmin } = useSessionAccess()
+  const canRead = status === SESSION_STATUS.READY && (isAdmin || permissions.includes('simulation:read'))
+  const canWrite = status === SESSION_STATUS.READY && (isAdmin || permissions.includes('simulation:write'))
   const [data, setData] = useState<WorkspaceData | null>(null)
   const [routePage, setRoutePage] = useState(1)
   const [scenarioPage, setScenarioPage] = useState(1)

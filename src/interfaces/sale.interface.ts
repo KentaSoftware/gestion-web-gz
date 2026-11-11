@@ -5,6 +5,7 @@ export interface Sale {
   estado: string
   user?: ObjectId
   cliente: string
+  idCliente?: string
   total: number
   createdAt: string
   /** ISO date string when cobro was confirmed; absent/null = unpaid */

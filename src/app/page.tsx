@@ -39,21 +39,9 @@ export default function Home() {
           dispatch(setLoading(false))
           return
         }
-        // Decode JWT to extract role.permissions required by usePermission
-        const token = r.data.token;
-        let decodedToken: any = null;
-        try {
-          decodedToken = jwtDecode(token);
-        } catch (decodeError) {
-          console.error('Error decoding token:', decodeError);
-        }
-
         const userData: UserWithToken = {
-          nickname: r.data.nickname || r.data.name || '',
-          token: token,
-          id: decodedToken?.id || r.data.id || '',
-          email: decodedToken?.email || r.data.email || '',
-          role: decodedToken?.role || r.data.role || undefined,
+          nickname: r.data.nickname || '',
+          token: r.data.token,
         };
 
         setValue(userData);

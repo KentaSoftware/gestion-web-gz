@@ -119,7 +119,7 @@ export const isModuleEnabled = (entry: ModuleRegistryEntry, access: SessionAcces
   }
 
   if (entry.requiredPermissions.length > 0) {
-    return entry.requiredPermissions.every((permission) => access.permissions.includes(permission))
+    return access.isAdmin === true || entry.requiredPermissions.every((permission) => access.permissions.includes(permission))
   }
 
   return true

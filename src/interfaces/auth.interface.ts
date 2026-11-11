@@ -15,6 +15,22 @@ export interface UserWithToken {
   id?: string
   email?: string
   role?: Role
+  sessionStatus?: SessionStatus
+  isAdmin?: boolean
+  requestId?: string
+}
+
+export interface AuthMeRole {
+  id: string
+  name: string
+}
+
+export interface AuthMe {
+  id: string
+  nickname: string
+  role: AuthMeRole
+  permissions: string[]
+  isAdmin: boolean
 }
 
 // Permisos disponibles en el sistema (según backend)
@@ -61,6 +77,7 @@ export interface SessionAccess {
   status: SessionStatus
   /** Permissions granted to the current session. Empty until hydrated. */
   permissions: string[]
+  isAdmin?: boolean
   /** Gate evidence per module key. All gates start unmet. */
   gates: Readonly<Record<string, boolean>>
 }

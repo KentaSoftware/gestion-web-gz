@@ -1,75 +1,75 @@
-import { ReactNode, useEffect } from 'react'
+import { type ReactNode, useEffect, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import useLocalStorage from '@/hooks/useLocalStorage'
-import { clearUser, getUser, setUser } from '@/redux/userSlice'
-import { useAppDispatch } from '@/redux/hook'
-import { useSelector } from 'react-redux'
+import { clearUser, getUser, hydrateSession, setUser } from '@/redux/userSlice'
+import { SESSION_STATUS } from '@/interfaces/auth.interface'
+import type { AppDispatch } from '@/redux/store'
+import { useDispatch, useSelector } from 'react-redux'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import AppSidebar from './AppSidebar'
 
 export default function Dashboard({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const user: any = useSelector(getUser)
-  const [valueStorage, setValue, clearValue] = useLocalStorage('user', '')
-  const dispatch = useAppDispatch()
+  const user = useSelector(getUser)
+  const tokenRef = useRef(user.token)
+  tokenRef.current = user.token
+  const dispatch = useDispatch<AppDispatch>()
   const router = useRouter()
 
   useEffect(() => {
-    console.log('siempre estoy en dashboard')
-    const isLogIn = async () => {
-      if (
-        valueStorage.nickname !== '' &&
-        valueStorage.token !== '' &&
-        valueStorage.nickname !== undefined &&
-        valueStorage.token !== undefined
-      ) {
-        if (pathname === '/') {
-          router.push('/home')
-          return
-        }
-        return
+    try {
+      const stored: unknown = JSON.parse(window.localStorage.getItem('user') || 'null')
+      if (stored && typeof stored === 'object' && 'token' in stored && typeof stored.token === 'string' && stored.token) {
+        dispatch(setUser({ token: stored.token, nickname: 'nickname' in stored && typeof stored.nickname === 'string' ? stored.nickname : '' }))
+      } else {
+        dispatch(clearUser())
       }
-      if (pathname === '/') {
-        return
-      }
-      router.push('/')
-      return
+    } catch {
+      dispatch(clearUser())
     }
-    if (valueStorage !== undefined && valueStorage !== '') {
-      isLogIn()
-    } else {
-      if (pathname !== '/') {
-        router.push('/')
-        return
-      }
-    }
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router])
+  }, [dispatch])
 
   useEffect(() => {
-    const saveLogIn = async () => {
-      if (user.nickname === '' && user.token === '' && valueStorage.nickname !== '' && valueStorage.token !== '') {
-        // 🔧 MIGRACIÓN EG11: Verificar que el usuario tenga estructura actualizada con role
-        if (!valueStorage.role) {
-          console.warn('⚠️ Usuario en localStorage sin campo "role". Forzando re-login para actualizar estructura.')
-          console.warn('📋 Datos actuales:', valueStorage)
-
-          // Limpiar sesión para forzar re-login
-          clearValue()
-          dispatch(clearUser())
-          router.push('/')
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== 'user' && event.key !== null) return
+      try {
+        const stored: unknown = JSON.parse(event.newValue || 'null')
+        if (stored && typeof stored === 'object' && 'token' in stored && typeof stored.token === 'string' && stored.token) {
+          tokenRef.current = stored.token
+          dispatch(setUser({ token: stored.token, nickname: 'nickname' in stored && typeof stored.nickname === 'string' ? stored.nickname : '' }))
           return
         }
-
-        dispatch(setUser({ ...valueStorage }))
+      } catch {
+        // Invalid storage is treated as an absent session.
       }
+      tokenRef.current = ''
+      dispatch(clearUser())
     }
-    if (valueStorage !== undefined) {
-      saveLogIn()
+    const revalidate = () => {
+      if (tokenRef.current) dispatch(hydrateSession(tokenRef.current))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, valueStorage])
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') revalidate()
+    }
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('focus', revalidate)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('focus', revalidate)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [dispatch])
+
+  useEffect(() => {
+    if (user.token && user.sessionStatus === SESSION_STATUS.HYDRATING && !user.requestId) {
+      dispatch(hydrateSession(user.token))
+    }
+  }, [dispatch, user.token, user.sessionStatus, user.requestId])
+
+  useEffect(() => {
+    if (user.sessionStatus === SESSION_STATUS.READY && pathname === '/') router.push('/home')
+    if (user.sessionStatus === SESSION_STATUS.ANONYMOUS && pathname !== '/') router.push('/')
+  }, [user.sessionStatus, pathname, router])
 
   if (pathname === '/') {
     return (
@@ -78,6 +78,8 @@ export default function Dashboard({ children }: { children: ReactNode }) {
       </main>
     )
   }
+
+  if (user.sessionStatus !== SESSION_STATUS.READY) return null
 
   return (
     <>

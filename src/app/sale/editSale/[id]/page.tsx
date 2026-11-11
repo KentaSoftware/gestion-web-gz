@@ -50,7 +50,7 @@ export default function EditSale({ params }: { params: { id: string } }) {
       .then(({ data }: { data: ResponseSale }) => {
         console.log('data', data)
         dispatch(setLoading(false));
-        dispatch(setSale({ sale: { _id: id, cliente: data.r.cliente, createdAt: data.r.createdAt, estado: data.r.estado, total: data.r.total, itemsSale: data.itemsSale } }));
+        dispatch(setSale({ sale: { _id: id, cliente: data.r.cliente, idCliente: data.r.idCliente, createdAt: data.r.createdAt, estado: data.r.estado, total: data.r.total, porcentaje: data.r.porcentaje, itemsSale: data.itemsSale } }));
       })
       .catch((e) => {
         console.log(e);
