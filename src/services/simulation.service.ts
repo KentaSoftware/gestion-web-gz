@@ -116,3 +116,68 @@ export const simulationService: SimulationService = {
     return response.data
   },
 }
+
+export interface CursorPage<T> {
+  items: T[]
+  hasMore: boolean
+  nextCursor: string | null
+}
+
+export interface RealRoute {
+  _id: string
+  planningDate: string
+  zoneSnapshot: { name: string }
+  metrics?: { fuelLiters?: number; durationSeconds?: number; distanceMeters?: number }
+}
+
+export interface RealProduct {
+  id: string
+  name: string
+  stock: number
+  precioUnitario: number
+}
+
+export interface RealCatalogPage extends CursorPage<RealProduct> {
+  excludedCount: number
+}
+
+export interface RealScenarioInput {
+  routeId: string
+  parameters: SimulationParameters
+  products: Array<{ id: string; quantity: number }>
+}
+
+export interface RealScenario {
+  id: string
+  routeId: string
+  routeMetrics: { fuelLiters: number; durationHours: number }
+  parameters: SimulationParameters
+  products: Array<{ id: string; name: string; unitPrice: number; quantity: number; stock: number }>
+  estimatedRevenue: number
+  operatingCost: number
+  grossMargin: number
+}
+
+export const realSimulationService = {
+  routes: async (cursor?: string) => (await apiClient.get<CursorPage<RealRoute>>('/simulation/routes', { params: cursor ? { cursor } : {} })).data,
+  catalog: async (cursor?: string) => (await apiClient.get<RealCatalogPage>('/simulation/route-catalog', { params: cursor ? { cursor } : {} })).data,
+  simulate: async (input: RealScenarioInput) => (await apiClient.post<RealScenario>('/simulation/route-scenarios', input)).data,
+  getScenario: async (id: string) => (await apiClient.get<RealScenario>(`/simulation/route-scenarios/${encodeURIComponent(id)}`)).data,
+}
+
+export async function collectRealCatalog(): Promise<{ items: RealProduct[]; excludedCount: number }> {
+  const items: RealProduct[] = []
+  const seen = new Set<string>()
+  let cursor: string | undefined
+  let excludedCount = 0
+  do {
+    const page = await realSimulationService.catalog(cursor)
+    items.push(...page.items)
+    excludedCount += page.excludedCount
+    if (!page.hasMore) return { items, excludedCount }
+    if (!page.nextCursor || seen.has(page.nextCursor)) throw new Error('Paginación del catálogo inválida')
+    seen.add(page.nextCursor)
+    cursor = page.nextCursor
+  } while (seen.size < 10000)
+  throw new Error('Se excedió el límite de páginas del catálogo')
+}

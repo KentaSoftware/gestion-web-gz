@@ -30,6 +30,12 @@ function setupGet() {
   })
 }
 
+function renderDemo() {
+  const view = render(<SimulationPage />)
+  fireEvent.click(screen.getByRole('button', { name: 'Datos de muestra' }))
+  return view
+}
+
 describe('Simulation workspace', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -40,7 +46,7 @@ describe('Simulation workspace', () => {
   })
 
   it('renders reference headings, switch, route columns and zero transfer draft', async () => {
-    render(<SimulationPage />)
+    renderDemo()
     expect(await screen.findByRole('heading', { name: 'Registros de Escenarios' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Simulación de Escenarios' })).toBeInTheDocument()
     expect(screen.queryByText(/modo de demostración/i)).not.toBeInTheDocument()
@@ -55,7 +61,7 @@ describe('Simulation workspace', () => {
   })
 
   it('transfers valid quantities independently and returns selected included product', async () => {
-    render(<SimulationPage />)
+    renderDemo()
     const input = await screen.findByLabelText('Cantidad de Agua')
     const add = screen.getByRole('button', { name: 'Agregar producto al vehículo' })
     expect(add).toBeDisabled()
@@ -76,7 +82,7 @@ describe('Simulation workspace', () => {
   })
 
   it('collapses the whole workspace and preserves draft state', async () => {
-    render(<SimulationPage />)
+    renderDemo()
     fireEvent.change(await screen.findByLabelText('Cantidad de Agua'), { target: { value: '5' } })
     fireEvent.click(screen.getByRole('button', { name: 'Contraer parámetros' }))
     expect(screen.getByRole('button', { name: 'Expandir parámetros' })).toHaveAttribute('aria-expanded', 'false')
@@ -87,7 +93,7 @@ describe('Simulation workspace', () => {
   })
 
   it('submits updated cost parameters and surplus setting', async () => {
-    render(<SimulationPage />)
+    renderDemo()
     fireEvent.change(await screen.findByLabelText('Precio combustible ($/L)'), { target: { value: '1500' } })
     fireEvent.change(screen.getByLabelText('Gastos varios ($)'), { target: { value: '30000' } })
     fireEvent.change(screen.getByLabelText('Costo por hora ($)'), { target: { value: '9000' } })
@@ -99,8 +105,8 @@ describe('Simulation workspace', () => {
   })
 
   it('retries a failed workspace request', async () => {
-    get.mockRejectedValueOnce(new Error('offline'))
-    render(<SimulationPage />)
+    get.mockImplementation((url: string) => url === '/simulation/demo/routes' ? Promise.reject(new Error('offline')) : Promise.resolve({ data: url.endsWith('/catalog') ? catalog : scenarios }))
+    renderDemo()
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron cargar los datos')
     setupGet()
     fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
@@ -109,7 +115,7 @@ describe('Simulation workspace', () => {
 
   it('keeps empty route and scenario table headers and disables actions', async () => {
     get.mockImplementation((url: string) => Promise.resolve({ data: url.endsWith('/routes') ? { ...routes, items: [], total: 0 } : url.endsWith('/catalog') ? catalog : { ...scenarios, items: [], total: 0 } }))
-    render(<SimulationPage />)
+    renderDemo()
     expect(await screen.findByText('No hay rutas disponibles')).toBeInTheDocument()
     expect(screen.getByText('No hay escenarios registrados')).toBeInTheDocument()
     expect(screen.getByRole('table', { name: 'Rutas' })).toHaveTextContent('Repartidor')
@@ -123,7 +129,7 @@ describe('Simulation workspace', () => {
     let resolveDetail: (value: unknown) => void = () => {}
     const pending = new Promise((resolve) => { resolveDetail = resolve })
     get.mockImplementation((url: string) => url.endsWith('/ESC-014') ? pending : url.endsWith('/routes') ? Promise.resolve({ data: routes }) : url.endsWith('/catalog') ? Promise.resolve({ data: catalog }) : Promise.resolve({ data: scenarios }))
-    render(<SimulationPage />)
+    renderDemo()
     fireEvent.click(await screen.findByRole('button', { name: 'Ver detalle ESC-014' }))
     const dialog = screen.getByRole('dialog', { name: 'Detalle del Escenario' })
     expect(within(dialog).getByRole('status')).toHaveTextContent('Cargando')
@@ -136,7 +142,7 @@ describe('Simulation workspace', () => {
   })
 
   it('limits selection to two and compares retrieved values including ties', async () => {
-    render(<SimulationPage />)
+    renderDemo()
     const compare = await screen.findByRole('button', { name: 'Comparar Escenarios' })
     expect(compare).toBeDisabled()
     fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar escenario ESC-014' }))
@@ -161,7 +167,7 @@ describe('Simulation workspace', () => {
 
   it('shows comparison errors and retries detail requests', async () => {
     get.mockImplementation((url: string) => url.endsWith('/routes') ? Promise.resolve({ data: routes }) : url.endsWith('/catalog') ? Promise.resolve({ data: catalog }) : url.endsWith('/scenarios') ? Promise.resolve({ data: scenarios }) : Promise.reject(new Error('unavailable')))
-    render(<SimulationPage />)
+    renderDemo()
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Seleccionar escenario ESC-014' }))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar escenario ESC-015' }))
     fireEvent.click(screen.getByRole('button', { name: 'Comparar Escenarios' }))
@@ -180,7 +186,7 @@ describe('Simulation workspace', () => {
       if (url.endsWith('/scenarios')) return Promise.resolve({ data: { ...scenarios, items: [scenarios.items[page - 1]], page, pageSize: 1, total: 3 } })
       return Promise.reject(new Error('Unexpected endpoint'))
     })
-    render(<SimulationPage />)
+    renderDemo()
     fireEvent.change(await screen.findByLabelText('Cantidad de Agua'), { target: { value: '5' } })
     fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar escenario ESC-014' }))
     fireEvent.click(screen.getByRole('button', { name: 'Página siguiente de rutas' }))
@@ -200,7 +206,7 @@ describe('Simulation workspace', () => {
     let resolveDetail: (value: unknown) => void = () => {}
     const pending = new Promise((resolve) => { resolveDetail = resolve })
     get.mockImplementation((url: string) => url.endsWith('/ESC-014') ? pending : url.endsWith('/routes') ? Promise.resolve({ data: routes }) : url.endsWith('/catalog') ? Promise.resolve({ data: catalog }) : Promise.resolve({ data: scenarios }))
-    render(<SimulationPage />)
+    renderDemo()
     fireEvent.click(await screen.findByRole('button', { name: 'Ver detalle ESC-014' }))
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cerrar' }))
     resolveDetail({ data: details[0] })
@@ -213,7 +219,7 @@ describe('Simulation workspace', () => {
 
   it('shows detail errors within the dialog and retries', async () => {
     get.mockImplementation((url: string) => url.endsWith('/routes') ? Promise.resolve({ data: routes }) : url.endsWith('/catalog') ? Promise.resolve({ data: catalog }) : url.endsWith('/scenarios') ? Promise.resolve({ data: scenarios }) : Promise.reject(new Error('unavailable')))
-    render(<SimulationPage />)
+    renderDemo()
     fireEvent.click(await screen.findByRole('button', { name: 'Ver detalle ESC-014' }))
     const dialog = screen.getByRole('dialog', { name: 'Detalle del Escenario' })
     expect(await within(dialog).findByRole('alert')).toBeInTheDocument()
@@ -225,17 +231,55 @@ describe('Simulation workspace', () => {
   it('loads simulation for a verified administrator without permissions', async () => {
     permissions.splice(0, permissions.length)
     session.isAdmin = true
-    render(<SimulationPage />)
+    renderDemo()
     await waitFor(() => expect(get).toHaveBeenCalledWith('/simulation/demo/routes', expect.anything()))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('enforces read and write permissions and uses only demo endpoints', async () => {
+  it('allows a verified administrator to access real routes without explicit grants', async () => {
+    permissions.splice(0, permissions.length)
+    session.isAdmin = true
+    get.mockImplementation((url: string) => Promise.resolve({ data: url === '/simulation/routes'
+      ? { items: [], hasMore: false, nextCursor: null }
+      : { items: [], excludedCount: 0, hasMore: false, nextCursor: null } }))
+    render(<SimulationPage />)
+    expect(await screen.findByText('No hay rutas disponibles.')).toBeInTheDocument()
+    expect(get).toHaveBeenCalledWith('/simulation/routes', expect.anything())
+    expect(get.mock.calls.every(([url]) => !String(url).includes('/demo/'))).toBe(true)
+  })
+
+  it('uses exclusively demo endpoints for demo loading, details, comparison, and simulation', async () => {
+    render(<SimulationPage />)
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/simulation/routes', expect.anything()))
+    expect(get).toHaveBeenCalledWith('/simulation/route-catalog', expect.anything())
+    expect([...get.mock.calls, ...post.mock.calls].every(([url]) => !String(url).startsWith('/simulation/demo/'))).toBe(true)
+    get.mockClear()
+    post.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'Datos de muestra' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver detalle ESC-014' }))
+    const detail = screen.getByRole('dialog')
+    await within(detail).findByText('Juan Pérez')
+    fireEvent.click(within(detail).getByRole('button', { name: 'Cerrar' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar escenario ESC-014' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar escenario ESC-015' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Comparar Escenarios' }))
+    await within(screen.getByRole('dialog')).findByText('Empate')
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cerrar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Simular' }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/simulation/demo/scenarios', expect.anything()))
+    expect(get).toHaveBeenCalledWith('/simulation/demo/routes', expect.anything())
+    expect(get).toHaveBeenCalledWith('/simulation/demo/catalog')
+    expect(get).toHaveBeenCalledWith('/simulation/demo/scenarios', expect.anything())
+    expect(get).toHaveBeenCalledWith('/simulation/demo/scenarios/ESC-014')
+    expect(get).toHaveBeenCalledWith('/simulation/demo/scenarios/ESC-015')
+    expect([...get.mock.calls, ...post.mock.calls].every(([url]) => String(url).startsWith('/simulation/demo/'))).toBe(true)
+  })
+
+  it('enforces read and write permissions', async () => {
     permissions.splice(0, permissions.length, 'simulation:read')
-    const view = render(<SimulationPage />)
+    const view = renderDemo()
     expect(await screen.findByRole('button', { name: 'Simular' })).toBeDisabled()
     expect(post).not.toHaveBeenCalled()
-    expect(get.mock.calls.every(([url]) => String(url).startsWith('/simulation/demo/'))).toBe(true)
     view.unmount()
     get.mockClear()
     permissions.splice(0, permissions.length)

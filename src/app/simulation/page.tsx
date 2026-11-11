@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch'
 import { useSessionAccess } from '@/hooks/useSessionAccess'
 import { SESSION_STATUS } from '@/interfaces/auth.interface'
 import { simulationService, type SimulationCatalog, type SimulationPage, type SimulationRoute, type SimulationScenario, type SimulationScenarioDetail, type SimulationParameters } from '@/services/simulation.service'
+import { RealRouteSimulation } from '@/components/simulation/RealRouteSimulation'
 
 const BUTTON = 'inline-flex items-center justify-center gap-1 rounded border border-border-subtle bg-surface-base px-2 py-1 text-sm text-text-secondary hover:bg-background-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-state-focus disabled:cursor-not-allowed disabled:opacity-50'
 const PRIMARY_BUTTON = 'inline-flex items-center justify-center gap-2 rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-text-inverse hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-state-focus disabled:cursor-not-allowed disabled:opacity-50'
@@ -524,5 +525,21 @@ function SimulationWorkspace() {
 }
 
 export default function SimulationPage() {
-  return <ProtectedRoute><SimulationWorkspace /></ProtectedRoute>
+  return <ProtectedRoute><SimulationModes /></ProtectedRoute>
+}
+
+function SimulationModes() {
+  const [demo, setDemo] = useState(false)
+  const { status, permissions, isAdmin } = useSessionAccess()
+  const canRead = status === SESSION_STATUS.READY && (isAdmin || permissions.includes('simulation:read'))
+  const canWrite = status === SESSION_STATUS.READY && (isAdmin || permissions.includes('simulation:write'))
+  if (status === SESSION_STATUS.HYDRATING) return <PageContainer><p role="status">Verificando el acceso a Simulación…</p></PageContainer>
+  if (!canRead) return <PageContainer><p role="alert">No tenés permiso simulation:read para acceder a Simulación.</p></PageContainer>
+  return <>
+    <div className="flex gap-2 p-4" aria-label="Tipo de simulación">
+      <button type="button" className={BUTTON} aria-pressed={!demo} onClick={() => setDemo(false)}>Rutas reales</button>
+      <button type="button" className={BUTTON} aria-pressed={demo} onClick={() => setDemo(true)}>Datos de muestra</button>
+    </div>
+    {demo ? <><p className="px-4">Datos de muestra: los escenarios y rutas son ilustrativos.</p><SimulationWorkspace /></> : <PageContainer><PageHeader title="Simulación de Escenarios" description="Módulo de Simulación de Costos Operativos" /><RealRouteSimulation canWrite={canWrite} /></PageContainer>}
+  </>
 }
