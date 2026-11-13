@@ -1,4 +1,4 @@
-import React, { ChangeEvent, useEffect, useState } from 'react'
+import { ChangeEvent, useEffect, useRef, useState } from 'react'
 import ItemLineaVenta from './ItemLineaVenta'
 import apiClient from '@/utils/client';
 import { setLoading } from '@/redux/loadingSlice';
@@ -20,12 +20,13 @@ import { clearClientSaleSelection, getSale, onChangeClientSale, selectClientSale
 import ListLineaVenta from './ListLineaVenta';
 import { clientService } from '@/services/client.service';
 import type { SaleClientOption } from '@/interfaces/client.interface';
+import Combobox from '@/components/ui/combobox';
 import axios from 'axios';
 
 export default function LineaVenta({edit}:{edit?: boolean}) {
 
-    const [date, setDate] = React.useState<Date>(new Date());
-    const [dateOpen, setDateOpen] = React.useState(false);
+    const [date, setDate] = useState<Date>(new Date());
+    const [dateOpen, setDateOpen] = useState(false);
     const sale = useAppSelector(getSale)
     const dispatch = useAppDispatch();
     const router: AppRouterInstance = useRouter()
@@ -33,6 +34,9 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
     const [options, setOptions] = useState<SaleClientOption[]>([])
     const [searchState, setSearchState] = useState<'idle' | 'loading' | 'ready' | 'forbidden' | 'error'>('idle')
     const [retry, setRetry] = useState(0)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [selectedClient, setSelectedClient] = useState<SaleClientOption | null>(null)
+    const searchRequestVersion = useRef(0)
 
     useEffect(()=>{
       if (sale.createdAt) {
@@ -42,7 +46,8 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
     }, [sale.createdAt])
 
     useEffect(() => {
-      const query = sale.cliente.trim()
+      const query = searchQuery.trim()
+      const requestVersion = searchRequestVersion.current
       let current = true
       setOptions([])
       if (edit || sale.idCliente || query.length < 2 || query.length > 100) {
@@ -50,15 +55,38 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
         return () => { current = false }
       }
       setSearchState('loading')
-      const timer = setTimeout(() => {
-        clientService.saleOptions(query).then((clients) => {
-          if (current) { setOptions(clients); setSearchState('ready') }
+      void Promise.resolve().then(() => clientService.saleOptions(query)).then((clients) => {
+          if (current && requestVersion === searchRequestVersion.current) { setOptions(clients.slice(0, 100)); setSearchState('ready') }
         }).catch((error: unknown) => {
-          if (current) setSearchState(axios.isAxiosError(error) && error.response?.status === 403 ? 'forbidden' : 'error')
+          if (current && requestVersion === searchRequestVersion.current) setSearchState(axios.isAxiosError(error) && error.response?.status === 403 ? 'forbidden' : 'error')
         })
-      }, 250)
-      return () => { current = false; clearTimeout(timer) }
-    }, [edit, sale.cliente, sale.idCliente, retry])
+      return () => { current = false }
+    }, [edit, searchQuery, sale.idCliente, retry])
+
+    const handleClientSearch = (query: string): Promise<void> => {
+      setSearchQuery(query)
+      return Promise.resolve()
+    }
+
+    const handleClientSelection = (option: SaleClientOption | null) => {
+      setSelectedClient(option)
+      if (option) {
+        dispatch(selectClientSale(option))
+      } else {
+        dispatch(clearClientSaleSelection())
+        setSearchQuery('')
+        setOptions([])
+        setSearchState('idle')
+      }
+    }
+
+    const clearSelectedClient = () => {
+      setSelectedClient(null)
+      setSearchQuery('')
+      setOptions([])
+      setSearchState('idle')
+      dispatch(clearClientSaleSelection())
+    }
 
   return (
     <div className="flex flex-1 min-w-[50%] flex-col max-[940px]:w-full max-[940px]:h-full">
@@ -68,17 +96,60 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
           <ListLineaVenta edit={edit} />
         </div>
         <div className="px-4">
-          <Input label='Cliente' name='cliente' value={sale.cliente} readOnly={Boolean(edit && sale.idCliente)} onChange={(e:ChangeEvent<HTMLInputElement>)=>{ if (!edit) dispatch(clearClientSaleSelection()); dispatch(onChangeClientSale({client: e.target.value})) }} type='text' />
+          {edit ? (
+            <Input label='Cliente' name='cliente' value={sale.cliente} readOnly={Boolean(sale.idCliente)} onChange={(e:ChangeEvent<HTMLInputElement>)=>dispatch(onChangeClientSale({client: e.target.value}))} type='text' />
+          ) : (
+            <div
+              className="my-4 flex flex-col gap-1 text-center"
+              onChangeCapture={(event: ChangeEvent<HTMLDivElement>) => {
+                if (event.target instanceof HTMLInputElement) {
+                  searchRequestVersion.current += 1
+                  setOptions([])
+                  setSearchState('idle')
+                  if (selectedClient) {
+                    setSelectedClient(null)
+                    dispatch(clearClientSaleSelection())
+                  }
+                }
+              }}
+            >
+              <label className="flex flex-col gap-1 text-sm text-text-secondary">
+                Cliente
+                <Combobox
+                  options={options}
+                  value={selectedClient}
+                  getOptionLabel={(option) => option.name}
+                  getOptionValue={(option) => option.id}
+                  onChange={handleClientSelection}
+                  onSearch={handleClientSearch}
+                  placeholder="Seleccionar cliente"
+                  noOptionsText={searchQuery.trim().length < 2 ? 'Ingresá al menos 2 caracteres para buscar.' : 'No se encontraron clientes activos.'}
+                  loading={searchState === 'loading'}
+                  className="text-left"
+                  renderOption={(option) => (
+                    <div className="flex min-w-0 flex-col items-start text-left">
+                      <span className="font-medium text-text-primary">{option.name}</span>
+                      <span className="text-xs text-text-secondary">{option.address?.trim() || 'Sin dirección'} · ID: {option.id}</span>
+                    </div>
+                  )}
+                />
+              </label>
+              {selectedClient && (
+                <button type="button" className="self-start text-sm text-text-secondary underline underline-offset-2 hover:text-text-primary" onClick={clearSelectedClient}>
+                  Limpiar selección
+                </button>
+              )}
+            </div>
+          )}
           {!edit && <div aria-live="polite" className="text-sm text-text-secondary">
-            {sale.cliente.trim().length < 2 && !sale.idCliente && <p>Ingresá al menos 2 caracteres para buscar un cliente activo.</p>}
-            {sale.cliente.trim().length > 100 && <p>La búsqueda admite hasta 100 caracteres.</p>}
+            {searchQuery.trim().length < 2 && !sale.idCliente && <p>Ingresá al menos 2 caracteres para buscar un cliente activo.</p>}
+            {searchQuery.trim().length > 100 && <p>La búsqueda admite hasta 100 caracteres.</p>}
             {searchState === 'loading' && <p>Buscando clientes...</p>}
             {searchState === 'ready' && options.length === 0 && <p>No se encontraron clientes activos.</p>}
             {searchState === 'forbidden' && <p>Necesitás el permiso read_client para seleccionar un cliente. Contactá a un administrador.</p>}
-            {searchState === 'error' && <p>No se pudieron buscar clientes. <button type="button" onClick={() => setRetry(retry + 1)}>Reintentar</button></p>}
+            {searchState === 'error' && <p>No se pudieron buscar clientes. <button type="button" onClick={() => setRetry(current => current + 1)}>Reintentar</button></p>}
             {options.length > 0 && <>
               <p>Si los datos no alcanzan para identificar al cliente, verificá su identidad antes de seleccionarlo.</p>
-              <ul>{options.map(option => <li key={option.id}><button type="button" onClick={() => dispatch(selectClientSale(option))}>{option.name} · {option.address?.trim() || 'Sin dirección'} · ID: {option.id}</button></li>)}</ul>
             </>}
           </div>}
           <div className="flex justify-around">

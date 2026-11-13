@@ -7,6 +7,7 @@ import LineaVenta from './LineaVenta'
 import saleReducer from '@/redux/saleSlice'
 import apiClient from '@/utils/client'
 import { clientService } from '@/services/client.service'
+import type { SaleClientOption } from '@/interfaces/client.interface'
 
 vi.mock('@/utils/client', () => ({ default: { post: vi.fn(), patch: vi.fn() } }))
 vi.mock('@/services/client.service', () => ({ clientService: { saleOptions: vi.fn() } }))
@@ -15,12 +16,21 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ back: vi.fn() }) }))
 vi.mock('./ListLineaVenta', () => ({ default: () => null }))
 vi.mock('@/components/ui/calendar', () => ({ Calendar: () => null }))
 vi.mock('../AnimatedNumber', () => ({ AnimatedNumber: ({ value }: { value: number }) => <span>{value}</span> }))
+vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
 
 const baseSale = { _id: 'sale', cliente: '', createdAt: '', estado: 'Creado', total: 10, itemsSale: [{ idProducto: 'product', cantidad: 1, total: 10, precio: 10 }], porcentaje: 0 }
 function setup(edit = false, sale = baseSale) {
   const store = configureStore({ reducer: { sale: saleReducer }, preloadedState: { sale } })
   render(<Provider store={store}><LineaVenta edit={edit} /></Provider>)
   return store
+}
+
+function openClientSelector() {
+  fireEvent.click(screen.getByRole('combobox', { name: 'Cliente' }))
+}
+
+function getClientSearch() {
+  return screen.getByPlaceholderText('Seleccionar cliente')
 }
 
 describe('sale client selection', () => {
@@ -30,13 +40,21 @@ describe('sale client selection', () => {
     vi.mocked(apiClient.patch).mockReset().mockResolvedValue({ data: {} })
   })
 
-  it('requires an explicit choice and submits its ID without delivery date', async () => {
+  it('shows a dropdown trigger, searches inside it, and submits only an explicitly selected ID', async () => {
     vi.mocked(clientService.saleOptions).mockResolvedValue([{ id: 'client-1', name: 'Ana' }])
     setup()
-    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'An' } })
+    expect(screen.getByRole('combobox', { name: 'Cliente' })).toBeTruthy()
+    expect(screen.queryByPlaceholderText('Seleccionar cliente')).toBeNull()
     fireEvent.click(screen.getByText('Crear'))
     expect(apiClient.post).not.toHaveBeenCalled()
-    fireEvent.click(await screen.findByRole('button', { name: /Ana.*client-1/ }))
+
+    openClientSelector()
+    fireEvent.change(getClientSearch(), { target: { value: 'An' } })
+    expect(await screen.findByRole('option', { name: /Ana.*client-1/ })).toBeTruthy()
+    fireEvent.click(screen.getByText('Crear'))
+    expect(apiClient.post).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('option', { name: /Ana.*client-1/ }))
     fireEvent.click(screen.getByText('Crear'))
     await waitFor(() => expect(apiClient.post).toHaveBeenCalledOnce())
     const payload = vi.mocked(apiClient.post).mock.calls[0][1] as Record<string, unknown>
@@ -46,12 +64,28 @@ describe('sale client selection', () => {
     expect(screen.getByText('Fecha de venta')).toBeTruthy()
   })
 
-  it('clears the selected ID when text changes', async () => {
+  it('allows clearing a selected client and blocks submission afterward', async () => {
     vi.mocked(clientService.saleOptions).mockResolvedValue([{ id: 'client-1', name: 'Ana' }])
     const store = setup()
-    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'An' } })
-    fireEvent.click(await screen.findByRole('button', { name: /Ana.*client-1/ }))
-    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'Anita' } })
+    openClientSelector()
+    fireEvent.change(getClientSearch(), { target: { value: 'An' } })
+    fireEvent.click(await screen.findByRole('option', { name: /Ana.*client-1/ }))
+    expect(store.getState().sale.idCliente).toBe('client-1')
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar selección' }))
+    expect(store.getState().sale.idCliente).toBeUndefined()
+    fireEvent.click(screen.getByText('Crear'))
+    expect(apiClient.post).not.toHaveBeenCalled()
+  })
+
+  it('clears a previous choice immediately when a new search query is typed', async () => {
+    vi.mocked(clientService.saleOptions).mockResolvedValue([{ id: 'client-1', name: 'Ana' }])
+    const store = setup()
+    openClientSelector()
+    fireEvent.change(getClientSearch(), { target: { value: 'An' } })
+    fireEvent.click(await screen.findByRole('option', { name: /Ana.*client-1/ }))
+
+    openClientSelector()
+    fireEvent.change(getClientSearch(), { target: { value: 'Anita' } })
     expect(store.getState().sale.idCliente).toBeUndefined()
     fireEvent.click(screen.getByText('Crear'))
     expect(apiClient.post).not.toHaveBeenCalled()
@@ -87,12 +121,13 @@ describe('sale client selection', () => {
       { id: 'ddd123456', name: 'Ana' },
     ])
     setup()
-    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'An' } })
-    expect(await screen.findByRole('button', { name: /Ana.*Calle 1.*aaa123456/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Ana.*Calle 2.*bbb123456/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Ana.*Calle 1.*eee123456/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Ana.*Sin dirección.*ccc123456/ })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /Ana.*Sin dirección.*ddd123456/ }))
+    openClientSelector()
+    fireEvent.change(getClientSearch(), { target: { value: 'An' } })
+    expect(await screen.findByRole('option', { name: /Ana.*Calle 1.*aaa123456/ })).toBeTruthy()
+    expect(screen.getByRole('option', { name: /Ana.*Calle 2.*bbb123456/ })).toBeTruthy()
+    expect(screen.getByRole('option', { name: /Ana.*Calle 1.*eee123456/ })).toBeTruthy()
+    expect(screen.getByRole('option', { name: /Ana.*Sin dirección.*ccc123456/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('option', { name: /Ana.*Sin dirección.*ddd123456/ }))
     fireEvent.click(screen.getByText('Crear'))
     await waitFor(() => expect(apiClient.post).toHaveBeenCalledOnce())
     expect(vi.mocked(apiClient.post).mock.calls[0][1]).toMatchObject({ idCliente: 'ddd123456' })
@@ -101,15 +136,52 @@ describe('sale client selection', () => {
   it('shows actionable permission errors', async () => {
     vi.mocked(clientService.saleOptions).mockRejectedValue(new axios.AxiosError('forbidden', 'ERR', undefined, undefined, { status: 403, statusText: '', headers: {}, config: { headers: new axios.AxiosHeaders() }, data: {} }))
     setup()
-    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'An' } })
+    openClientSelector()
+    fireEvent.change(getClientSearch(), { target: { value: 'An' } })
     expect(await screen.findByText(/permiso read_client/)).toBeTruthy()
   })
 
   it('offers retry for network failures and shows empty results', async () => {
     vi.mocked(clientService.saleOptions).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([])
     setup()
-    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'An' } })
+    openClientSelector()
+    fireEvent.change(getClientSearch(), { target: { value: 'An' } })
     fireEvent.click(await screen.findByText('Reintentar'))
-    expect(await screen.findByText('No se encontraron clientes activos.')).toBeTruthy()
+    expect(await screen.findByText('No se encontraron clientes activos.', { selector: 'p' })).toBeTruthy()
+  })
+
+  it('does not search until the query has two characters and rejects overlong queries', async () => {
+    setup()
+    openClientSelector()
+    fireEvent.change(getClientSearch(), { target: { value: 'A' } })
+    await new Promise(resolve => setTimeout(resolve, 350))
+    expect(clientService.saleOptions).not.toHaveBeenCalled()
+
+    fireEvent.change(getClientSearch(), { target: { value: 'A'.repeat(101) } })
+    await new Promise(resolve => setTimeout(resolve, 350))
+    expect(clientService.saleOptions).not.toHaveBeenCalled()
+    expect(await screen.findByText(/hasta 100 caracteres/)).toBeTruthy()
+  })
+
+  it('ignores stale client options after a newer query has completed', async () => {
+    let resolveFirst: (clients: SaleClientOption[]) => void = () => {}
+    let resolveSecond: (clients: SaleClientOption[]) => void = () => {}
+    vi.mocked(clientService.saleOptions)
+      .mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve }))
+      .mockImplementationOnce(() => new Promise(resolve => { resolveSecond = resolve }))
+    setup()
+    openClientSelector()
+    fireEvent.change(getClientSearch(), { target: { value: 'An' } })
+    await waitFor(() => expect(clientService.saleOptions).toHaveBeenCalledWith('An'))
+    expect(await screen.findByText('Buscando clientes...')).toBeTruthy()
+
+    fireEvent.change(getClientSearch(), { target: { value: 'Ana' } })
+    resolveFirst([{ id: 'stale-client', name: 'Ana Stale' }])
+    await Promise.resolve()
+    expect(screen.queryByRole('option', { name: /Ana Stale.*stale-client/ })).toBeNull()
+    await waitFor(() => expect(clientService.saleOptions).toHaveBeenCalledWith('Ana'))
+    resolveSecond([{ id: 'new-client', name: 'Ana New' }])
+    expect(await screen.findByRole('option', { name: /Ana New.*new-client/ })).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('option', { name: /Ana Stale.*stale-client/ })).toBeNull())
   })
 })
