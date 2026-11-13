@@ -16,3 +16,5 @@ Prevent background session revalidation from unmounting authenticated screens an
 Branch `feat/sale-client-browse` starts at `543e76b`. The exact trigger for all reported focused-window clicks remains unverified; avoid claiming this fix resolves every possible reload.
 
 RDD is disabled for this clone; assessment was unassessable due to untracked inventory and treated as high risk. Independent verification and a parent test rerun passed. No live browser integration or full suite was run. No push or PR is authorized.
+
+Work-unit commit: `1136f30`. Next: reproduce the reported focused-window click in the running application to identify any separate trigger.
