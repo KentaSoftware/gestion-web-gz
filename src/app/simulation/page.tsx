@@ -23,7 +23,10 @@ const TABLE = 'w-full min-w-max text-left text-sm [&_th]:bg-background-subtle [&
 const PANEL = 'rounded-lg border border-border-subtle bg-surface-base'
 const INITIAL_PARAMETERS: SimulationParameters = { fuelPricePerLiter: 1250, includeSurplus: true, generalCosts: 25000, hourlyRate: 8000 }
 const money = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value)
-const number = (value: number) => new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format(value)
+const number = (value: number | null | undefined) => value == null ? '—' : new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format(value)
+const canSimulateRoute = (route: SimulationRoute | undefined): route is SimulationRoute =>
+  route !== undefined && Number.isFinite(route.fuelLiters) && Number.isFinite(route.durationHours) &&
+  route.fuelLiters !== null && route.durationHours !== null
 const failureMessage = (failure: unknown): string => {
   if (typeof failure === 'object' && failure !== null && 'response' in failure) {
     const response = failure.response
@@ -75,7 +78,7 @@ function Pagination({ page, pageSize, total, label, onChange }: PaginationProps)
   </div>
 }
 
-function Facts({ items, columns = 3 }: { items: Array<[string, string | number]>; columns?: number }) {
+function Facts({ items, columns = 3 }: { items: Array<[string, string | number | null]>; columns?: number }) {
   return (
     <dl className={`grid grid-cols-2 gap-3 text-sm ${columns === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
       {items.map(([label, value]) => (
@@ -125,7 +128,7 @@ function DetailContent({ detail }: { detail: SimulationScenarioDetail }) {
       </section>
       <section className="overflow-hidden rounded border border-border-subtle">
         <h3 className="flex items-center gap-2 bg-background-subtle px-3 py-2 font-semibold text-brand-primary"><Info className="size-4" aria-hidden="true" />Observaciones</h3>
-        <div className="p-3"><p>Los resultados mostrados son estimaciones y no ejecutan acciones reales automáticamente.</p><p className="text-text-secondary">Datos de muestra.</p></div>
+        <div className="p-3"><p>Los resultados son estimaciones basadas en los datos actuales. No se modifican ventas, stock ni rutas.</p></div>
       </section>
     </div>
   )
@@ -140,7 +143,7 @@ function ComparisonContent({ details }: { details: SimulationScenarioDetail[] })
   ]
   return (
     <div className="space-y-4 text-sm">
-      <p className="text-text-secondary">Comparación ilustrativa de datos de muestra.</p>
+      <p className="text-text-secondary">Comparación de escenarios guardados.</p>
       <div className="grid gap-3 sm:grid-cols-2">
         {details.map((item) => {
           const rows = [
@@ -222,7 +225,7 @@ function SimulationWorkspace() {
       if (cancelled) return
       setData({ routes, catalog, scenarios })
       setKnownRoutes((current) => ({ ...current, ...Object.fromEntries(routes.items.map((route) => [route.id, route])) }))
-      setSelectedRoute((current) => current || routes.items[0]?.id || '')
+      setSelectedRoute((current) => current || routes.items.find((route) => canSimulateRoute(route))?.id || '')
       setAvailableId((current) => current || catalog.available[0]?.id || '')
       setIncluded((current) => current ?? Object.fromEntries(catalog.included.map((product) => [product.id, product.quantity])))
       setLoading(false)
@@ -255,7 +258,7 @@ function SimulationWorkspace() {
 
   const createScenario = async () => {
     const route = knownRoutes[selectedRoute]
-    if (!canWrite || !data || !route || !validParameters || !validDraft || submitting || data.routes.total === 0) return
+    if (!canWrite || !data || !canSimulateRoute(route) || !validParameters || !validDraft || submitting || data.routes.total === 0) return
     setSubmitting(true)
     setCreateMessage('')
     try {
@@ -297,8 +300,8 @@ function SimulationWorkspace() {
                   <tbody>
                     {data.routes.items.map((route) => (
                       <tr key={route.id} className={route.id === selectedRoute ? 'bg-background-subtle' : ''}>
-                        <td><input type="radio" name="route" aria-label={`Seleccionar ruta ${route.id}`} checked={selectedRoute === route.id} onChange={() => setSelectedRoute(route.id)} /></td>
-                        <td>{route.id}</td><td>{route.zone}</td><td>{route.orderCount}</td>
+                        <td><input type="radio" name="route" aria-label={`Seleccionar ruta ${route.id}`} checked={selectedRoute === route.id} disabled={!canSimulateRoute(route)} onChange={() => setSelectedRoute(route.id)} /></td>
+                        <td>{route.id}</td><td>{route.zone}</td><td>{number(route.orderCount)}</td>
                         <td>{route.driver}</td><td>{route.vehicle}</td><td>{number(route.fuelLiters)} L</td>
                         <td>{number(route.distanceKm)} km</td><td>{number(route.durationHours)} h</td><td>{route.date}</td>
                       </tr>
@@ -319,7 +322,7 @@ function SimulationWorkspace() {
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
                   <label htmlFor="include-surplus">Incluir excedentes</label>
-                  <span tabIndex={0} title="El cálculo de muestra no aplica excedentes." aria-label="El cálculo de muestra no aplica excedentes.">
+                  <span tabIndex={0} title="El cálculo no aplica excedentes." aria-label="El cálculo no aplica excedentes.">
                     <Info className="size-4 text-text-secondary" aria-hidden="true" />
                   </span>
                 </div>
@@ -374,6 +377,7 @@ function SimulationWorkspace() {
                   </tbody>
                 </table>
               </div>
+              {data.catalog.excludedCount > 0 && <p className="mt-1 text-xs text-text-secondary">{data.catalog.excludedCount} productos excluidos por datos incompletos o no válidos.</p>}
               {!validDraft && <p role="alert" className="text-sm text-state-error">Ingrese cantidades enteras dentro del stock disponible.</p>}
             </div>
             <div className="flex justify-center gap-2 lg:flex-col lg:pt-8">
@@ -428,7 +432,7 @@ function SimulationWorkspace() {
           <button
             type="button"
             className="mt-4 flex w-full items-center justify-center gap-2 rounded bg-brand-accent px-4 py-2 font-semibold text-text-primary disabled:opacity-50"
-            disabled={!canWrite || !selectedRoute || data.routes.total === 0 || !validParameters || !validDraft || submitting}
+            disabled={!canWrite || !canSimulateRoute(knownRoutes[selectedRoute]) || data.routes.total === 0 || !validParameters || !validDraft || submitting}
             onClick={() => void createScenario()}
           >
             <Play className="size-4" aria-hidden="true" />Simular
