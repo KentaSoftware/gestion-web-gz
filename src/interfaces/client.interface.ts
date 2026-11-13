@@ -46,3 +46,7 @@ export interface SaleClientOption {
 export interface SaleClientOptionsResponse {
   clients: SaleClientOption[]
 }
+
+export interface SaleClientOptionsPage extends SaleClientOptionsResponse {
+  nextCursor: string | null
+}

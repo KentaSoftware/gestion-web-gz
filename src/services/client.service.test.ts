@@ -28,6 +28,18 @@ describe('clientService geocoding', () => {
 describe('sale client options', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('requests a paged first page and preserves the continuation cursor', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { clients: [], nextCursor: 'next' } })
+    await expect(clientService.saleOptionsPage('')).resolves.toEqual({ clients: [], nextCursor: 'next' })
+    expect(apiClient.get).toHaveBeenCalledWith('/client/sale-options', { params: { paged: true, q: '', limit: 50 } })
+  })
+
+  it('passes the cursor with a trimmed short query', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { clients: [], nextCursor: null } })
+    await clientService.saleOptionsPage(' A ', 'cursor')
+    expect(apiClient.get).toHaveBeenCalledWith('/client/sale-options', { params: { paged: true, q: 'A', limit: 50, cursor: 'cursor' } })
+  })
+
   it('requests the bounded authenticated lookup with a trimmed literal prefix', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { clients: [{ id: '123', name: 'Ana', address: 'Calle 1' }] } })
     await expect(clientService.saleOptions(' Ana ')).resolves.toEqual([{ id: '123', name: 'Ana', address: 'Calle 1' }])

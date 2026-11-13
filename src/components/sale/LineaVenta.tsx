@@ -35,8 +35,16 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
     const [searchState, setSearchState] = useState<'idle' | 'loading' | 'ready' | 'forbidden' | 'error'>('idle')
     const [retry, setRetry] = useState(0)
     const [searchQuery, setSearchQuery] = useState('')
-    const [selectedClient, setSelectedClient] = useState<SaleClientOption | null>(null)
+    const [selectorOpen, setSelectorOpen] = useState(false)
+    const [nextCursor, setNextCursor] = useState<string | null>(null)
+    const [loadingMore, setLoadingMore] = useState(false)
+    const [pageError, setPageError] = useState(false)
     const searchRequestVersion = useRef(0)
+    const loadingMoreRef = useRef(false)
+    const debounceSearch = useRef(false)
+    const selectedClient: SaleClientOption | null = sale.idCliente ? { id: String(sale.idCliente), name: sale.cliente } : null
+
+    useEffect(() => () => { searchRequestVersion.current += 1 }, [])
 
     useEffect(()=>{
       if (sale.createdAt) {
@@ -50,26 +58,70 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
       const requestVersion = searchRequestVersion.current
       let current = true
       setOptions([])
-      if (edit || sale.idCliente || query.length < 2 || query.length > 100) {
+      setNextCursor(null)
+      if (edit || !selectorOpen || query.length > 100) {
         setSearchState('idle')
         return () => { current = false }
       }
       setSearchState('loading')
-      void Promise.resolve().then(() => clientService.saleOptions(query)).then((clients) => {
-          if (current && requestVersion === searchRequestVersion.current) { setOptions(clients.slice(0, 100)); setSearchState('ready') }
+      const fetchPage = () => { void Promise.resolve().then(() => clientService.saleOptionsPage(query)).then((page) => {
+          if (current && requestVersion === searchRequestVersion.current) { setOptions(page.clients); setNextCursor(page.nextCursor); setSearchState('ready') }
         }).catch((error: unknown) => {
           if (current && requestVersion === searchRequestVersion.current) setSearchState(axios.isAxiosError(error) && error.response?.status === 403 ? 'forbidden' : 'error')
-        })
-      return () => { current = false }
-    }, [edit, searchQuery, sale.idCliente, retry])
+        }) }
+      const timer = debounceSearch.current ? setTimeout(fetchPage, 300) : undefined
+      if (!debounceSearch.current) fetchPage()
+      return () => { current = false; if (timer) clearTimeout(timer) }
+    }, [edit, searchQuery, selectorOpen, retry])
 
     const handleClientSearch = (query: string): Promise<void> => {
+      searchRequestVersion.current += 1
+      debounceSearch.current = true
+      setPageError(false)
+      loadingMoreRef.current = false
+      setLoadingMore(false)
+      setOptions([])
+      setNextCursor(null)
+      if (sale.idCliente) dispatch(clearClientSaleSelection())
       setSearchQuery(query)
       return Promise.resolve()
     }
 
+    const handleSelectorOpen = (open: boolean) => {
+      searchRequestVersion.current += 1
+      debounceSearch.current = false
+      setPageError(false)
+      loadingMoreRef.current = false
+      setLoadingMore(false)
+      setSearchQuery('')
+      setOptions([])
+      setNextCursor(null)
+      setSelectorOpen(open)
+    }
+
+    const loadMore = () => {
+      if (!nextCursor || loadingMoreRef.current) return
+      const version = searchRequestVersion.current
+      loadingMoreRef.current = true
+      setLoadingMore(true)
+      setPageError(false)
+      setSearchState('ready')
+      void clientService.saleOptionsPage(searchQuery.trim(), nextCursor).then((page) => {
+        if (version !== searchRequestVersion.current) return
+        setOptions(current => [...current, ...page.clients.filter(client => !current.some(existing => existing.id === client.id))])
+        setNextCursor(page.nextCursor)
+        setSearchState('ready')
+      }).catch((error: unknown) => {
+        if (version === searchRequestVersion.current) {
+          setPageError(true)
+          setSearchState(axios.isAxiosError(error) && error.response?.status === 403 ? 'forbidden' : 'error')
+        }
+      }).finally(() => {
+        if (version === searchRequestVersion.current) { loadingMoreRef.current = false; setLoadingMore(false) }
+      })
+    }
+
     const handleClientSelection = (option: SaleClientOption | null) => {
-      setSelectedClient(option)
       if (option) {
         dispatch(selectClientSale(option))
       } else {
@@ -81,7 +133,6 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
     }
 
     const clearSelectedClient = () => {
-      setSelectedClient(null)
       setSearchQuery('')
       setOptions([])
       setSearchState('idle')
@@ -99,20 +150,7 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
           {edit ? (
             <Input label='Cliente' name='cliente' value={sale.cliente} readOnly={Boolean(sale.idCliente)} onChange={(e:ChangeEvent<HTMLInputElement>)=>dispatch(onChangeClientSale({client: e.target.value}))} type='text' />
           ) : (
-            <div
-              className="my-4 flex flex-col gap-1 text-center"
-              onChangeCapture={(event: ChangeEvent<HTMLDivElement>) => {
-                if (event.target instanceof HTMLInputElement) {
-                  searchRequestVersion.current += 1
-                  setOptions([])
-                  setSearchState('idle')
-                  if (selectedClient) {
-                    setSelectedClient(null)
-                    dispatch(clearClientSaleSelection())
-                  }
-                }
-              }}
-            >
+            <div className="my-4 flex flex-col gap-1 text-center">
               <label className="flex flex-col gap-1 text-sm text-text-secondary">
                 Cliente
                 <Combobox
@@ -122,8 +160,11 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
                   getOptionValue={(option) => option.id}
                   onChange={handleClientSelection}
                   onSearch={handleClientSearch}
+                  immediateSearch
+                  onOpenChange={handleSelectorOpen}
+                  footer={(nextCursor || searchState === 'error') && <button type="button" className="w-full border-t border-border-subtle p-2 text-sm hover:bg-background-subtle" disabled={loadingMore} onClick={() => { if (pageError || nextCursor) loadMore(); else { debounceSearch.current = false; setRetry(current => current + 1) } }}>{loadingMore ? 'Cargando...' : searchState === 'error' ? 'Reintentar' : 'Cargar más clientes'}</button>}
                   placeholder="Seleccionar cliente"
-                  noOptionsText={searchQuery.trim().length < 2 ? 'Ingresá al menos 2 caracteres para buscar.' : 'No se encontraron clientes activos.'}
+                  noOptionsText={searchState === 'forbidden' || searchState === 'error' ? 'No se pudieron cargar clientes.' : 'No se encontraron clientes activos.'}
                   loading={searchState === 'loading'}
                   className="text-left"
                   renderOption={(option) => (
@@ -142,12 +183,11 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
             </div>
           )}
           {!edit && <div aria-live="polite" className="text-sm text-text-secondary">
-            {searchQuery.trim().length < 2 && !sale.idCliente && <p>Ingresá al menos 2 caracteres para buscar un cliente activo.</p>}
             {searchQuery.trim().length > 100 && <p>La búsqueda admite hasta 100 caracteres.</p>}
             {searchState === 'loading' && <p>Buscando clientes...</p>}
             {searchState === 'ready' && options.length === 0 && <p>No se encontraron clientes activos.</p>}
             {searchState === 'forbidden' && <p>Necesitás el permiso read_client para seleccionar un cliente. Contactá a un administrador.</p>}
-            {searchState === 'error' && <p>No se pudieron buscar clientes. <button type="button" onClick={() => setRetry(current => current + 1)}>Reintentar</button></p>}
+            {searchState === 'error' && <p>No se pudieron buscar clientes.</p>}
             {options.length > 0 && <>
               <p>Si los datos no alcanzan para identificar al cliente, verificá su identidad antes de seleccionarlo.</p>
             </>}

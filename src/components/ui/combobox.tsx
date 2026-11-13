@@ -29,6 +29,9 @@ export interface ComboboxProps<T> {
   onSearch?: (query: string) => Promise<void>;
   renderOption?: (option: T) => React.ReactNode;
   className?: string;
+  onOpenChange?: (open: boolean) => void;
+  immediateSearch?: boolean;
+  footer?: React.ReactNode;
 }
 
 export default function Combobox<T>({
@@ -43,6 +46,9 @@ export default function Combobox<T>({
   onSearch,
   renderOption,
   className,
+  onOpenChange,
+  immediateSearch = false,
+  footer,
 }: ComboboxProps<T>) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -54,10 +60,11 @@ export default function Combobox<T>({
       setSearch(query);
       if (onSearch) {
         if (searchTimer.current) clearTimeout(searchTimer.current);
-        searchTimer.current = setTimeout(() => onSearch(query), 300);
+        if (immediateSearch) void onSearch(query);
+        else searchTimer.current = setTimeout(() => onSearch(query), 300);
       }
     },
-    [onSearch],
+    [onSearch, immediateSearch],
   );
 
   useEffect(() => {
@@ -69,7 +76,12 @@ export default function Combobox<T>({
   const selectedLabel = value ? getOptionLabel(value) : '';
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(nextOpen) => {
+      if (!nextOpen && immediateSearch && searchTimer.current) clearTimeout(searchTimer.current);
+      if (!nextOpen && immediateSearch) setSearch('');
+      setOpen(nextOpen);
+      onOpenChange?.(nextOpen);
+    }}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -110,6 +122,7 @@ export default function Combobox<T>({
                       onChange(selected);
                       setOpen(false);
                       setSearch('');
+                      onOpenChange?.(false);
                     }}
                   >
                     <Check
@@ -126,6 +139,7 @@ export default function Combobox<T>({
             </CommandGroup>
           </CommandList>
         </Command>
+        {footer}
       </PopoverContent>
     </Popover>
   );
