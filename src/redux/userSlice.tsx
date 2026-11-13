@@ -40,9 +40,13 @@ const userSlice = createSlice({
     builder.addCase(hydrateSession.pending, (state, action) => {
       if (state.token !== action.meta.arg) return
       state.requestId = action.meta.requestId
-      state.sessionStatus = SESSION_STATUS.HYDRATING
-      state.role = undefined
-      state.isAdmin = false
+      // A ready session's permissions came from this token's verified profile.
+      // Keep them while refreshing; new or replaced tokens still hydrate closed.
+      if (state.sessionStatus !== SESSION_STATUS.READY) {
+        state.sessionStatus = SESSION_STATUS.HYDRATING
+        state.role = undefined
+        state.isAdmin = false
+      }
     })
     builder.addCase(hydrateSession.fulfilled, (state, action) => {
       if (state.requestId !== action.meta.requestId || state.token !== action.meta.arg) return
