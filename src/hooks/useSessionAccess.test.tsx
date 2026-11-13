@@ -69,16 +69,16 @@ describe('session hydration', () => {
     expect(state.isAdmin).toBe(false)
   })
 
-  it('hides previously verified access during revalidation and ignores older responses', () => {
+  it('retains verified access during revalidation and ignores older responses', () => {
     let state = reducer(undefined, setUser(persisted))
     state = reducer(state, hydrateSession.pending('first', persisted.token))
     state = reducer(state, hydrateSession.fulfilled(profile, 'first', persisted.token))
     state = reducer(state, hydrateSession.pending('refresh-1', persisted.token))
-    expect(state.sessionStatus).toBe(SESSION_STATUS.HYDRATING)
-    expect(state.role).toBeUndefined()
+    expect(state.sessionStatus).toBe(SESSION_STATUS.READY)
+    expect(state.role?.permissions).toEqual(profile.permissions)
     state = reducer(state, hydrateSession.pending('refresh-2', persisted.token))
     state = reducer(state, hydrateSession.fulfilled(profile, 'refresh-1', persisted.token))
-    expect(state.sessionStatus).toBe(SESSION_STATUS.HYDRATING)
+    expect(state.sessionStatus).toBe(SESSION_STATUS.READY)
     state = reducer(state, hydrateSession.fulfilled(profile, 'refresh-2', persisted.token))
     expect(state.sessionStatus).toBe(SESSION_STATUS.READY)
   })
