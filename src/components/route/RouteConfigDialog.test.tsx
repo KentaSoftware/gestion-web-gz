@@ -5,7 +5,7 @@ import { fireEvent } from '@testing-library/react'
 
 const { getConfig, updateConfig, confirmLocation } = vi.hoisted(() => ({ getConfig: vi.fn(), updateConfig: vi.fn(), confirmLocation: vi.fn() }))
 vi.mock('@/services/routePlan.service', () => ({ routePlanService: { getConfig, updateConfig } }))
-vi.mock('@/services/client.service', () => ({ clientService: { confirmLocation, geocode: vi.fn() } }))
+vi.mock('@/services/client.service', () => ({ clientService: { confirmLocation, geocode: vi.fn(), locationSnapshot: vi.fn().mockResolvedValue({ address: 'Calle 1', lat: null, lng: null, locationRevision: 0 }) } }))
 
 vi.mock('./LocationMapPicker', async (importOriginal) => {
   const original = await importOriginal<typeof import('./LocationMapPicker')>()
@@ -41,11 +41,12 @@ describe('RouteConfigDialog', () => {
     expect(screen.getByText('Geocodificación manual de direcciones')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'c1' } })
     expect(screen.getByLabelText('Dirección')).toHaveValue('Calle 1')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar coordenadas' })).toBeEnabled())
     confirmLocation.mockResolvedValueOnce({ geocoding: { status: 'PENDING' } })
     fireEvent.change(screen.getByLabelText('Latitud'), { target: { value: '0' } })
     fireEvent.change(screen.getByLabelText('Longitud'), { target: { value: '0' } })
     fireEvent.click(screen.getByRole('button', { name: 'Guardar coordenadas' }))
     expect(await screen.findByText('Ubicación manual guardada. Pendiente de validación.')).toBeInTheDocument()
-    expect(confirmLocation).toHaveBeenCalledWith('c1', { manualReference: { address: 'Calle 1', lat: 0, lng: 0 } })
+    expect(confirmLocation).toHaveBeenCalledWith('c1', { manualReference: { address: 'Calle 1', lat: 0, lng: 0 }, expectedLocation: { address: 'Calle 1', lat: null, lng: null, locationRevision: 0 } })
   })
 })

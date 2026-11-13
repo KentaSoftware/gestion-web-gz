@@ -6,6 +6,12 @@ vi.mock('@/utils/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 
 describe('clientService geocoding', () => {
   beforeEach(() => vi.mocked(apiClient.post).mockReset())
+  it('loads the exact location snapshot without caching', async () => {
+    const snapshot = { address: null, lat: 0, lng: 0, locationRevision: 2 }
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ data: snapshot })
+    await expect(clientService.locationSnapshot('client-1')).resolves.toEqual(snapshot)
+    expect(apiClient.get).toHaveBeenCalledWith('/client/client-1/location-snapshot', { headers: { 'Cache-Control': 'no-store' } })
+  })
   it('searches candidates through the backend contract', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: { candidates: [] } })
     await expect(clientService.geocode('client-1', 'Calle 1')).resolves.toEqual({ candidates: [] })
@@ -13,15 +19,17 @@ describe('clientService geocoding', () => {
   })
   it('confirms an explicit candidate', async () => {
     const candidate = { formattedAddress: 'Calle 1', placeId: 'place-1', precision: 'ROOFTOP' as const, lat: -34, lng: -58 }
+    const expectedLocation = { address: null, lat: null, lng: null, locationRevision: 0 }
     vi.mocked(apiClient.post).mockResolvedValue({ data: { _id: 'client-1' } })
-    await clientService.confirmLocation('client-1', { candidate })
-    expect(apiClient.post).toHaveBeenCalledWith('/client/client-1/location-confirmation', { candidate })
+    await clientService.confirmLocation('client-1', { candidate, expectedLocation })
+    expect(apiClient.post).toHaveBeenCalledWith('/client/client-1/location-confirmation', { candidate, expectedLocation })
   })
   it('sends manual coordinates without converting zero to missing', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: { geocoding: { status: 'PENDING' } } })
     const manualReference = { address: 'Calle 1', lat: 0, lng: 0 }
-    await expect(clientService.confirmLocation('client-1', { manualReference })).resolves.toEqual({ geocoding: { status: 'PENDING' } })
-    expect(apiClient.post).toHaveBeenCalledWith('/client/client-1/location-confirmation', { manualReference })
+    const expectedLocation = { address: null, lat: null, lng: null, locationRevision: 0 }
+    await expect(clientService.confirmLocation('client-1', { manualReference, expectedLocation })).resolves.toEqual({ geocoding: { status: 'PENDING' } })
+    expect(apiClient.post).toHaveBeenCalledWith('/client/client-1/location-confirmation', { manualReference, expectedLocation })
   })
 })
 

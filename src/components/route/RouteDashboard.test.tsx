@@ -55,6 +55,14 @@ const dashboard = {
 }
 
 describe('RouteDashboard selected-route detail', () => {
+  it('shows precise location issues and available zones without requiring an address', async () => {
+    getDashboard.mockResolvedValue({ ...dashboard, candidates: { eligible: [{ saleId: 'a', displayName: 'Confirmado', latitude: 0, longitude: 0, zoneName: 'Norte' }], blocked: [{ saleId: 'b', displayName: 'Inválido', locationIssue: 'COORDINATES_INVALID', reasons: ['CLIENT_LOCATION_MISSING'] }], ruleVersion: 'v1' } })
+    render(<RouteDashboard />)
+    expect(await screen.findByText(/Coordenadas inválidas/)).toBeInTheDocument()
+    expect(screen.getByText('Dirección no disponible · Norte')).toBeInTheDocument()
+    expect(screen.getByText('Dirección no disponible · Zona no disponible')).toBeInTheDocument()
+    expect(screen.getByText(/Ubicación confirmada/)).toBeInTheDocument()
+  })
   it('closes the saved preview when the dashboard scope changes', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     getDashboard.mockResolvedValue(dashboard)

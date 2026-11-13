@@ -12,6 +12,7 @@ export interface GeocodingResult {
 
 export interface CandidateLocationConfirmation {
   candidate: GeocodingCandidate
+  expectedLocation: ClientLocationSnapshot
 }
 
 export interface ManualLocationReference {
@@ -22,9 +23,27 @@ export interface ManualLocationReference {
 
 export interface ManualLocationConfirmation {
   manualReference: ManualLocationReference
+  expectedLocation: ClientLocationSnapshot
 }
 
-export type ClientLocationConfirmation = CandidateLocationConfirmation | ManualLocationConfirmation
+export interface ClientLocationSnapshot {
+  address: string | null
+  lat: number | null
+  lng: number | null
+  locationRevision: number
+}
+
+export interface ManualConfirmedLocation {
+  lat: number
+  lng: number
+}
+
+export interface ConfirmManualLocation {
+  manualConfirmation: ManualConfirmedLocation
+  expectedLocation: ClientLocationSnapshot
+}
+
+export type ClientLocationConfirmation = CandidateLocationConfirmation | ManualLocationConfirmation | ConfirmManualLocation
 
 export interface ClientGeocodingStatus {
   status: string

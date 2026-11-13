@@ -1,8 +1,12 @@
 import apiClient from '@/utils/client'
-import type { ClientLocationConfirmation, GeocodingResult, ClientLocationConfirmationResponse } from '@/interfaces/client.interface'
+import type { ClientLocationConfirmation, GeocodingResult, ClientLocationConfirmationResponse, ClientLocationSnapshot } from '@/interfaces/client.interface'
 import type { SaleClientOption, SaleClientOptionsResponse, SaleClientOptionsPage } from '@/interfaces/client.interface'
 
 export const clientService = {
+  locationSnapshot: async (clientId: string): Promise<ClientLocationSnapshot> => {
+    const response = await apiClient.get<ClientLocationSnapshot>(`/client/${clientId}/location-snapshot`, { headers: { 'Cache-Control': 'no-store' } })
+    return response.data
+  },
   saleOptionsPage: async (query: string, cursor?: string): Promise<SaleClientOptionsPage> => {
     const response = await apiClient.get<SaleClientOptionsPage>('/client/sale-options', { params: { paged: true, q: query.trim(), limit: 50, ...(cursor ? { cursor } : {}) } })
     return response.data
