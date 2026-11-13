@@ -312,7 +312,9 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
                       const distanceMeters = candidate.distanceMeters
                       const hasDistance = distanceMeters !== undefined && Number.isFinite(distanceMeters)
                       const locationStatus = blocked
-                        ? candidate.reasons.includes('CLIENT_LOCATION_MISSING')
+                        ? candidate.locationIssue === 'UNCONFIRMED' ? 'Ubicación no confirmada'
+                          : candidate.locationIssue === 'COORDINATES_INVALID' ? 'Coordenadas inválidas'
+                          : candidate.locationIssue === 'COORDINATES_MISSING' || candidate.reasons.includes('CLIENT_LOCATION_MISSING')
                           ? 'No posee coordenadas'
                           : candidate.reasons.includes('CLIENT_LOCATION_UNCONFIRMED')
                             ? 'Ubicación no confirmada'
@@ -325,7 +327,7 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
                             <MapPin className={`mt-0.5 size-4 shrink-0 ${blocked ? 'text-state-warning' : hasCoordinates ? 'text-state-success' : 'text-state-warning'}`} aria-hidden="true" />
                             <div className="min-w-0 flex-1">
                               <p className="font-medium text-text-primary">{candidate.displayName ?? 'Cliente no disponible'}</p>
-                            <p className="text-xs text-text-secondary">{candidate.addressSummary ?? 'Dirección no disponible'}{candidate.zoneName ? ` · ${candidate.zoneName}` : ''}</p>
+                             <p className="text-xs text-text-secondary">{candidate.addressSummary?.trim() || 'Dirección no disponible'} · {candidate.zoneName?.trim() || 'Zona no disponible'}</p>
                               <p className={`mt-1 text-xs ${blocked ? 'text-state-warning' : hasCoordinates ? 'text-state-success' : 'text-state-warning'}`}>
                                 {locationStatus ?? reasonLabel}
                                 {' · '}

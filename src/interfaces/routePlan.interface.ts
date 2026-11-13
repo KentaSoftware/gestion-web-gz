@@ -45,6 +45,7 @@ export interface CandidateEntry {
   displayName?: string
   addressSummary?: string
   zoneName?: string
+  locationIssue?: 'COORDINATES_MISSING' | 'COORDINATES_INVALID' | 'UNCONFIRMED'
   latitude?: number
   longitude?: number
   distanceMeters?: number
