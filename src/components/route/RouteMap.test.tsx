@@ -140,6 +140,15 @@ describe('decodePolyline', () => {
 })
 
 describe('RouteMap', () => {
+  it('allows the dashboard map to fill its panel while retaining a responsive minimum height', () => {
+    process.env[API_KEY_ENV] = 'test-key'
+    useApiLoadingStatus.mockReturnValue('LOADED')
+    useMap.mockReturnValue(null)
+    const { rerender } = render(<RouteMap route={ROUTE} fill />)
+    expect(screen.getByTestId('map').parentElement).toHaveClass('flex-1', 'min-h-64', 'md:min-h-80')
+    rerender(<RouteMap route={ROUTE} />)
+    expect(screen.getByTestId('map').parentElement).toHaveClass('h-64', 'md:h-80')
+  })
   it('renders an accessible fallback without an API key and never mounts the map', () => {
     delete process.env[API_KEY_ENV]
     render(<RouteMap route={ROUTE} />)

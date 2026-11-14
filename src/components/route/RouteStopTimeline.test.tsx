@@ -1,9 +1,43 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { RouteStopTimeline } from './RouteStopTimeline'
 
 describe('RouteStopTimeline', () => {
+  it('limits the list to four measured entries including the depot and responds to resizing', () => {
+    const stops = Array.from({ length: 4 }, (_, index) => ({ clientId: String(index), saleIds: [], latitude: 0, longitude: 0 }))
+    let heights = [80, 100, 120, 140, 160]
+    let onResize = () => {}
+    const disconnect = vi.fn()
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) { onResize = callback }
+      observe() {}
+      disconnect() { disconnect() }
+    })
+    const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const index = Array.from(this.parentElement?.children ?? []).indexOf(this)
+      return { height: heights[index] ?? 0 } as DOMRect
+    })
+    const { rerender } = render(<RouteStopTimeline stops={stops.slice(0, 3)} limitVisibleEntries />)
+    const list = screen.getByRole('list', { name: 'Paradas del recorrido' })
+    expect(list).not.toHaveAttribute('tabindex')
+    expect(list).not.toHaveClass('overflow-y-auto')
+    rerender(<RouteStopTimeline stops={stops} limitVisibleEntries />)
+    expect(list).toHaveAttribute('tabindex', '0')
+    expect(list).toHaveClass('overflow-y-auto')
+    expect(list).toHaveStyle({ maxHeight: '440px' })
+    heights = [90, 110, 130, 150, 160]
+    act(() => window.dispatchEvent(new Event('resize')))
+    expect(list).toHaveStyle({ maxHeight: '480px' })
+    heights = [100, 120, 140, 160, 160]
+    act(() => onResize())
+    expect(list).toHaveStyle({ maxHeight: '520px' })
+    rerender(<RouteStopTimeline stops={stops.slice(0, 3)} limitVisibleEntries />)
+    expect(list).not.toHaveStyle({ maxHeight: '520px' })
+    expect(disconnect).toHaveBeenCalled()
+    measure.mockRestore()
+    vi.unstubAllGlobals()
+  })
   it('exposes keyboard accessible bounded movement only when editable', async () => {
     const move = vi.fn()
     const stops = [{ clientId: 'a', saleIds: ['1', '2'], latitude: 0, longitude: 0, displayName: 'Uno' }, { clientId: 'b', saleIds: ['3'], latitude: 0, longitude: 0, displayName: 'Dos' }]

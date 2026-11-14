@@ -55,6 +55,25 @@ const dashboard = {
 }
 
 describe('RouteDashboard selected-route detail', () => {
+  it('starts the stop list at the top when a different route is selected', async () => {
+    const stops = Array.from({ length: 5 }, (_, index) => ({
+      clientId: `client-${index}`, saleIds: [`sale-${index}`], sequence: index + 1, latitude: -34.61, longitude: -58.41,
+    }))
+    const route = { ...dashboard.routes[0], stops }
+    getDashboard.mockResolvedValue({ ...dashboard, routes: [route, { ...route, id: 'route-2' }] })
+    render(<RouteDashboard />)
+
+    const firstList = await screen.findByRole('list', { name: 'Paradas del recorrido' })
+    firstList.scrollTop = 200
+    fireEvent.click(screen.getByRole('button', { name: 'Seleccionar ruta route-2' }))
+
+    const secondList = screen.getByRole('list', { name: 'Paradas del recorrido' })
+    expect(secondList).not.toBe(firstList)
+    expect(secondList.scrollTop).toBe(0)
+    secondList.scrollTop = 100
+    fireEvent.click(screen.getByRole('button', { name: 'Seleccionar ruta route-2' }))
+    expect(screen.getByRole('list', { name: 'Paradas del recorrido' }).scrollTop).toBe(100)
+  })
   it('shows precise location issues and available zones without requiring an address', async () => {
     getDashboard.mockResolvedValue({ ...dashboard, candidates: { eligible: [{ saleId: 'a', displayName: 'Confirmado', latitude: 0, longitude: 0, zoneName: 'Norte' }], blocked: [{ saleId: 'b', displayName: 'Inválido', locationIssue: 'COORDINATES_INVALID', reasons: ['CLIENT_LOCATION_MISSING'] }], ruleVersion: 'v1' } })
     render(<RouteDashboard />)

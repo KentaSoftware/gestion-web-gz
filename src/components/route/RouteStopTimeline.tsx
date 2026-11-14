@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { RoutePreviewSegment, RoutePreviewStop } from '@/interfaces/routePlan.interface'
 import { Clock3, FileText, House, Navigation } from 'lucide-react'
 
@@ -28,6 +28,7 @@ export interface RouteStopTimelineProps {
   depot?: RouteStopTimelineDepot
   showHeader?: boolean
   onMove?: (index: number, direction: number) => void
+  limitVisibleEntries?: boolean
 }
 
 const DATE_TIME_FORMAT = new Intl.DateTimeFormat('es-AR', {
@@ -67,8 +68,28 @@ const formatDuration = (seconds: number): string => {
 const decimal = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
 
 /** Ordered, provider-independent representation of a route's stops. */
-export function RouteStopTimeline({ stops, segments = [], estimates = [], depot = { name: 'el depósito' }, showHeader = true, onMove }: RouteStopTimelineProps) {
+export function RouteStopTimeline({ stops, segments = [], estimates = [], depot = { name: 'el depósito' }, showHeader = true, onMove, limitVisibleEntries = false }: RouteStopTimelineProps) {
   const titleId = useId()
+  const listRef = useRef<HTMLOListElement>(null)
+  const [maxHeight, setMaxHeight] = useState<number>()
+  const scrollable = limitVisibleEntries && stops.length + 1 > 4
+  useEffect(() => {
+    const list = listRef.current
+    if (!scrollable || !list) return
+    const entries = Array.from(list.children).slice(0, 4)
+    const measure = () => {
+      const height = entries.reduce((total, entry) => total + entry.getBoundingClientRect().height, 0)
+      if (height > 0) setMaxHeight(height)
+    }
+    measure()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    entries.forEach((entry) => observer?.observe(entry))
+    window.addEventListener('resize', measure)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [scrollable, stops, depot.name, depot.address, segments, onMove])
   const estimateBySequence = new Map(estimates.map((estimate) => [estimate.sequence, estimate]))
   const segmentByDestination = new Map(segments.map((segment) => [segment.toId, segment]))
   const unavailableAddress = 'Dirección no disponible'
@@ -86,8 +107,8 @@ export function RouteStopTimeline({ stops, segments = [], estimates = [], depot 
           No hay paradas disponibles.
         </p>
       ) : (
-        <ol aria-label="Paradas del recorrido" className="mt-3 flex flex-col">
-          <li className="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-2 border-b border-border-subtle py-3 first:pt-2">
+        <ol ref={listRef} aria-label="Paradas del recorrido" tabIndex={scrollable ? 0 : undefined} style={scrollable && maxHeight ? { maxHeight } : undefined} className={`mt-3 flex flex-col ${scrollable ? 'overflow-y-auto focus-visible:outline-2 focus-visible:outline-state-focus' : ''}`}>
+          <li className="grid shrink-0 grid-cols-[2.25rem_minmax(0,1fr)] gap-2 border-b border-border-subtle py-3 first:pt-2">
             <div className="flex justify-center">
               <span aria-label="Depósito" className="flex size-8 items-center justify-center text-state-error">
                 <House className="size-7" aria-hidden="true" fill="currentColor" />
@@ -109,7 +130,7 @@ export function RouteStopTimeline({ stops, segments = [], estimates = [], depot 
             const distance = segment ? formatKilometers(segment.distanceMeters) : 'No disponible'
             const duration = segment ? formatDuration(segment.durationSeconds) : 'No disponible'
             return (
-              <li key={stop.clientId} className="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-2 border-b border-border-subtle py-3 last:border-b-0">
+              <li key={stop.clientId} className="grid shrink-0 grid-cols-[2.25rem_minmax(0,1fr)] gap-2 border-b border-border-subtle py-3 last:border-b-0">
                 <div className="relative flex justify-center">
                   <span aria-hidden="true" className="absolute bottom-[-0.75rem] top-[-0.75rem] border-l border-dashed border-border-subtle" />
                   <span aria-label={`Parada ${index + 1}`} className="z-10 flex size-8 items-center justify-center rounded-full bg-brand-primary text-sm font-semibold text-white">

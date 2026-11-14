@@ -352,9 +352,9 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
              </div>
           {dashboard.warnings.length > 0 && <div role="alert" className="rounded-lg border border-state-warning bg-surface-base p-4 text-sm text-state-warning">{dashboard.warnings.join(' · ')}</div>}
             {selectedRoute !== undefined && <div data-testid="route-lower-panels" className="grid w-full min-w-0 flex-1 min-h-0 items-stretch gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
-              <section id="route-map-region" tabIndex={-1} aria-labelledby="route-map-title" className="w-full min-w-0 rounded-lg border border-border-subtle bg-surface-base p-5">
+              <section id="route-map-region" tabIndex={-1} aria-labelledby="route-map-title" className="flex w-full min-w-0 flex-col rounded-lg border border-border-subtle bg-surface-base p-5">
                <h3 id="route-map-title" className="flex items-center gap-2 text-base font-semibold text-text-primary"><Map aria-hidden="true" /> Mapa interactivo</h3>
-              {selectedRoutePreview !== null ? <RouteMap route={selectedRoutePreview} mapLocations={dashboard.mapLocations ?? []} /> : <p role="status" className="mt-3 text-sm text-text-secondary">No hay detalle geográfico disponible para esta ruta.</p>}
+              {selectedRoutePreview !== null ? <RouteMap route={selectedRoutePreview} mapLocations={dashboard.mapLocations ?? []} fill /> : <p role="status" className="mt-3 text-sm text-text-secondary">No hay detalle geográfico disponible para esta ruta.</p>}
               {dashboard.routes.some((route) => route.stale) && <p role="status" className="mt-3 rounded-md border border-state-warning p-3 text-sm text-state-warning">Hay snapshots desactualizados. Se muestran en modo solo lectura; generá una nueva ruta para actualizar.</p>}
              </section>
               <section id="route-detail-region" tabIndex={-1} aria-labelledby="route-detail-title" className="w-full min-w-0 rounded-lg border border-border-subtle bg-surface-base p-5">
@@ -370,10 +370,10 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
                     <div><dt className="text-text-secondary">Combustible</dt><dd>{selectedRoute.metrics.fuelLiters === null ? 'No disponible' : `${selectedRoute.metrics.fuelLiters.toLocaleString('es-AR')} L`}</dd></div>
                     <div><dt className="text-text-secondary">Paradas/clientes</dt><dd>{selectedRoute.clientCount}</dd></div>
                   </dl>
-                   {selectedRoutePreview !== null ? <div className="mt-5"><RouteStopTimeline stops={selectedRoutePreview.stops.map((stop) => {
+                   {selectedRoutePreview !== null ? <div className="mt-5"><RouteStopTimeline key={selectedRoute.id} stops={selectedRoutePreview.stops.map((stop) => {
                      const reference = selectedRoute.saleReferences?.find((entry) => stop.saleIds.includes(entry.saleId))
                      return { ...stop, displayName: reference?.clientName, addressSummary: reference?.address }
-                   }) as readonly RouteStopTimelineStop[]} segments={selectedRoutePreview.segments} estimates={selectedRoute.stopEstimates} depot={{ name: selectedRoute.depot?.name ?? 'el depósito', address: selectedRoute.depot?.address }} /></div> : <p role="status" className="mt-3 text-sm text-text-secondary">La secuencia de paradas no está disponible para esta ruta.</p>}
+                   }) as readonly RouteStopTimelineStop[]} segments={selectedRoutePreview.segments} estimates={selectedRoute.stopEstimates} depot={{ name: selectedRoute.depot?.name ?? 'el depósito', address: selectedRoute.depot?.address }} limitVisibleEntries /></div> : <p role="status" className="mt-3 text-sm text-text-secondary">La secuencia de paradas no está disponible para esta ruta.</p>}
                   {selectedRoute.metrics.fuelLiters === null && <p role="status" className="mt-3 text-sm text-state-warning">Litros de combustible no disponibles para esta ruta.</p>}
                   {selectedRoute.stopEstimates === undefined && <p role="status" className="mt-3 text-sm text-state-warning">Horarios estimados no disponibles para esta ruta.</p>}
                   {selectedRoute.stale && <p role="status" className="mt-3 text-sm text-state-warning">Esta ruta está desactualizada y es de solo lectura; generá una nueva ruta para actualizarla.</p>}

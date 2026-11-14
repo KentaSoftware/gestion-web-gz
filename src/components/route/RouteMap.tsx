@@ -27,6 +27,7 @@ interface RouteMapProps {
   route: PreviewRoute
   mapLocations?: RouteMapLocation[]
   minimal?: boolean
+  fill?: boolean
 }
 
 const MISSING_KEY_MESSAGE = 'El mapa no está configurado. Las paradas se detallan en la lista del recorrido.'
@@ -129,6 +130,7 @@ interface RouteMapCanvasProps {
   roadGeometry: RouteMapPoint[] | null
   mapLocations: RouteMapLocation[]
   minimal: boolean
+  fill: boolean
 }
 
 type MapView = 'full' | 'route'
@@ -144,7 +146,7 @@ const MapControls = ({ onFit, onZoomIn, onZoomOut, onCenter }: { onFit: () => vo
   </div>
 )
 
-const RouteMapCanvas = ({ route, roadGeometry, mapLocations, minimal }: RouteMapCanvasProps) => {
+const RouteMapCanvas = ({ route, roadGeometry, mapLocations, minimal, fill }: RouteMapCanvasProps) => {
   const status = useApiLoadingStatus()
   const map = useMap()
   const [view, setView] = useState<MapView>('full')
@@ -207,7 +209,7 @@ const RouteMapCanvas = ({ route, roadGeometry, mapLocations, minimal }: RouteMap
   }
 
   return (
-    <div>
+    <div className={fill ? 'flex min-h-0 flex-1 flex-col' : undefined}>
       {!minimal && <>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div role="group" aria-label="Vista del mapa" className="flex gap-1">
@@ -222,7 +224,7 @@ const RouteMapCanvas = ({ route, roadGeometry, mapLocations, minimal }: RouteMap
           <span><span className="mr-1 inline-block size-2 rounded-full bg-state-warning" aria-hidden="true" />Excluidos</span>
         </div>
       </>}
-      <div className="h-64 w-full overflow-hidden rounded-md border border-border-subtle md:h-80">
+      <div className={fill ? 'min-h-64 w-full flex-1 overflow-hidden rounded-md border border-border-subtle md:min-h-80' : 'h-64 w-full overflow-hidden rounded-md border border-border-subtle md:h-80'}>
       <Map defaultCenter={centerOf(route)} defaultZoom={12} gestureHandling="cooperative">
         {!minimal && <MapControl position={ControlPosition.TOP_RIGHT}><MapControls onFit={fitVisiblePoints} onCenter={centerVisiblePoints} onZoomIn={() => changeZoom(1)} onZoomOut={() => changeZoom(-1)} /></MapControl>}
         <Marker
@@ -268,7 +270,7 @@ const RouteMapCanvas = ({ route, roadGeometry, mapLocations, minimal }: RouteMap
  * failure all resolve to an accessible status message, and the ordered stop list
  * in `RoutePreview` remains the authoritative fallback.
  */
-export function RouteMap({ route, mapLocations = [], minimal = false }: RouteMapProps) {
+export function RouteMap({ route, mapLocations = [], minimal = false, fill = false }: RouteMapProps) {
   const headingId = useId()
   // Public client key: Next.js inlines NEXT_PUBLIC_ variables only through
   // static member access in client components.
@@ -280,7 +282,7 @@ export function RouteMap({ route, mapLocations = [], minimal = false }: RouteMap
   const content: ReactNode =
     typeof apiKey === 'string' && apiKey.trim() !== '' ? (
       <APIProvider apiKey={apiKey}>
-        <RouteMapCanvas route={route} roadGeometry={roadGeometry} mapLocations={mapLocations} minimal={minimal} />
+        <RouteMapCanvas route={route} roadGeometry={roadGeometry} mapLocations={mapLocations} minimal={minimal} fill={fill} />
       </APIProvider>
     ) : (
       <MapFallback message={MISSING_KEY_MESSAGE} />
@@ -289,14 +291,14 @@ export function RouteMap({ route, mapLocations = [], minimal = false }: RouteMap
   if (minimal) return <div aria-label="Mapa de la ruta">{content}</div>
 
   return (
-    <section aria-labelledby={headingId}>
+    <section aria-labelledby={headingId} className={fill ? 'flex min-h-0 flex-1 flex-col' : undefined}>
       <h4 id={headingId} className="text-sm font-semibold text-text-primary">
         Mapa del recorrido
       </h4>
       <p className="mt-1 text-xs text-text-secondary">
         {roadGeometry !== null ? ROAD_ROUTE_DESCRIPTION : APPROXIMATE_ROUTE_DESCRIPTION}
       </p>
-      <div className="mt-3">{content}</div>
+      <div className={fill ? 'mt-3 flex min-h-0 flex-1 flex-col' : 'mt-3'}>{content}</div>
     </section>
   )
 }
