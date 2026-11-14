@@ -11,7 +11,7 @@ const { getActiveDeliveryZones, getAssignmentOptions, getDashboard, useSessionAc
 
 vi.mock('@/services/routePlan.service', () => ({ routePlanService: { getActiveDeliveryZones, getAssignmentOptions, getDashboard } }))
 vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess }))
-vi.mock('./RouteMap', () => ({ RouteMap: () => <div>Mapa simulado</div> }))
+vi.mock('./RouteMap', () => ({ RouteMap: ({ route, routeOnly }: { route: { stops: Array<{ clientId: string }> }; routeOnly?: boolean }) => <div data-route-only={String(routeOnly)} data-stops={route.stops.map((stop) => stop.clientId).join(',')}>Mapa simulado</div> }))
 
 const scrollIntoView = vi.fn()
 
@@ -55,6 +55,21 @@ const dashboard = {
 }
 
 describe('RouteDashboard selected-route detail', () => {
+  it('passes the selected route to the route-only map and handles unavailable or removed routes', async () => {
+    getDashboard.mockResolvedValueOnce(dashboard).mockResolvedValueOnce({ ...dashboard, routes: [] })
+    const { rerender } = render(<RouteDashboard refreshToken={0} />)
+    const map = await screen.findByText('Mapa simulado')
+    expect(map).toHaveAttribute('data-route-only', 'true')
+    expect(map).toHaveAttribute('data-stops', 'client-1')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Seleccionar ruta route-2' }))
+    expect(screen.queryByText('Mapa simulado')).not.toBeInTheDocument()
+    expect(screen.getByText('No hay detalle geográfico disponible para esta ruta.')).toBeInTheDocument()
+
+    rerender(<RouteDashboard refreshToken={1} />)
+    await screen.findByRole('heading', { name: 'Rutas planificadas (0)' })
+    expect(screen.queryByRole('heading', { name: 'Mapa interactivo' })).not.toBeInTheDocument()
+  })
   it('starts the stop list at the top when a different route is selected', async () => {
     const stops = Array.from({ length: 5 }, (_, index) => ({
       clientId: `client-${index}`, saleIds: [`sale-${index}`], sequence: index + 1, latitude: -34.61, longitude: -58.41,

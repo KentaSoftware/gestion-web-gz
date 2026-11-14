@@ -28,6 +28,7 @@ interface RouteMapProps {
   mapLocations?: RouteMapLocation[]
   minimal?: boolean
   fill?: boolean
+  routeOnly?: boolean
 }
 
 const MISSING_KEY_MESSAGE = 'El mapa no está configurado. Las paradas se detallan en la lista del recorrido.'
@@ -131,6 +132,7 @@ interface RouteMapCanvasProps {
   mapLocations: RouteMapLocation[]
   minimal: boolean
   fill: boolean
+  routeOnly: boolean
 }
 
 type MapView = 'full' | 'route'
@@ -146,7 +148,7 @@ const MapControls = ({ onFit, onZoomIn, onZoomOut, onCenter }: { onFit: () => vo
   </div>
 )
 
-const RouteMapCanvas = ({ route, roadGeometry, mapLocations, minimal, fill }: RouteMapCanvasProps) => {
+const RouteMapCanvas = ({ route, roadGeometry, mapLocations, minimal, fill, routeOnly }: RouteMapCanvasProps) => {
   const status = useApiLoadingStatus()
   const map = useMap()
   const [view, setView] = useState<MapView>('full')
@@ -163,8 +165,8 @@ const RouteMapCanvas = ({ route, roadGeometry, mapLocations, minimal, fill }: Ro
         ]
 
   const routeClientIds = new Set(route.stops.map((stop) => stop.clientId))
-  const additionalLocations = view === 'full' ? mapLocations.filter((location) => !routeClientIds.has(location.clientId)) : []
-  const visibleStops = view === 'route' ? route.stops : [...route.stops, ...additionalLocations]
+  const additionalLocations = !routeOnly && view === 'full' ? mapLocations.filter((location) => !routeClientIds.has(location.clientId)) : []
+  const visibleStops = [...route.stops, ...additionalLocations]
   const visiblePoints: RouteMapPoint[] = [
     { lat: route.depot.latitude, lng: route.depot.longitude },
     ...visibleStops.map((location) => ({ lat: location.latitude, lng: location.longitude })),
@@ -185,7 +187,7 @@ const RouteMapCanvas = ({ route, roadGeometry, mapLocations, minimal, fill }: Ro
   }
 
   useEffect(() => {
-    const stopsForBounds = view === 'route' ? route.stops : [...route.stops, ...mapLocations.filter((location) => !route.stops.some((stop) => stop.clientId === location.clientId))]
+    const stopsForBounds = routeOnly || view === 'route' ? route.stops : [...route.stops, ...mapLocations.filter((location) => !route.stops.some((stop) => stop.clientId === location.clientId))]
     const points: RouteMapPoint[] = [
       { lat: route.depot.latitude, lng: route.depot.longitude },
       ...stopsForBounds.map((location) => ({ lat: location.latitude, lng: location.longitude })),
@@ -194,7 +196,7 @@ const RouteMapCanvas = ({ route, roadGeometry, mapLocations, minimal, fill }: Ro
     const bounds = new google.maps.LatLngBounds()
     points.forEach((point) => bounds.extend(point))
     map.fitBounds(bounds)
-  }, [map, view, mapLocations, route])
+  }, [map, view, mapLocations, route, routeOnly])
 
   if (status === APILoadingStatus.FAILED || status === APILoadingStatus.AUTH_FAILURE) {
     return <MapFallback message={FAILURE_MESSAGE} />
@@ -210,7 +212,7 @@ const RouteMapCanvas = ({ route, roadGeometry, mapLocations, minimal, fill }: Ro
 
   return (
     <div className={fill ? 'flex min-h-0 flex-1 flex-col' : undefined}>
-      {!minimal && <>
+      {!minimal && !routeOnly && <>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div role="group" aria-label="Vista del mapa" className="flex gap-1">
             <button type="button" className="rounded border border-border-subtle px-2 py-1 text-xs text-text-primary" aria-pressed={view === 'full'} onClick={() => setView('full')}>Vista completa</button>
@@ -270,7 +272,7 @@ const RouteMapCanvas = ({ route, roadGeometry, mapLocations, minimal, fill }: Ro
  * failure all resolve to an accessible status message, and the ordered stop list
  * in `RoutePreview` remains the authoritative fallback.
  */
-export function RouteMap({ route, mapLocations = [], minimal = false, fill = false }: RouteMapProps) {
+export function RouteMap({ route, mapLocations = [], minimal = false, fill = false, routeOnly = false }: RouteMapProps) {
   const headingId = useId()
   // Public client key: Next.js inlines NEXT_PUBLIC_ variables only through
   // static member access in client components.
@@ -282,7 +284,7 @@ export function RouteMap({ route, mapLocations = [], minimal = false, fill = fal
   const content: ReactNode =
     typeof apiKey === 'string' && apiKey.trim() !== '' ? (
       <APIProvider apiKey={apiKey}>
-        <RouteMapCanvas route={route} roadGeometry={roadGeometry} mapLocations={mapLocations} minimal={minimal} fill={fill} />
+        <RouteMapCanvas route={route} roadGeometry={roadGeometry} mapLocations={mapLocations} minimal={minimal} fill={fill} routeOnly={routeOnly} />
       </APIProvider>
     ) : (
       <MapFallback message={MISSING_KEY_MESSAGE} />
