@@ -1,55 +1,44 @@
-export type LiquidityClass = 'liquidez' | 'necesidad' | 'en_reserva'
-
-export type FinanceSectionStatus =
-  | 'ok'
-  | 'insufficient_history'
-  | 'data_incomplete'
-  | 'source_unavailable'
-  | 'not_calculable'
+export type FinanceRiskProfile = 'conservador' | 'moderado' | 'agresivo'
 
 export interface FinanceRulesConfig {
-  openingBalance: number
-  reserveMonthsMultiplier: number
-  deficitAlertEnabled: boolean
-  idleCapitalRecommendMin: number
+  reserveMinimumAmount: number
+  deficitAlertThresholdPercent: number
+  minExpectedRoiPercent: number
+  historyEvaluationDays: number
+  riskProfile: FinanceRiskProfile
 }
 
-export interface ComparableMonthTotals {
-  year: number
-  month: number
-  label: string
-  inflows: number
-  outflows: number
-}
-
-export interface FinanceHistoricalBlock {
-  status: FinanceSectionStatus
-  startDate: string
-  endDate: string
-  openingBalance: number
+export interface FinanceKpis {
+  currentBalance: number
   totalInflows: number
   totalOutflows: number
   netCashFlow: number
-  closingBalance: number
-  kind: 'historical'
+  idleCapital: number
+  effectiveReserve: number
 }
 
-export interface FinanceProjectionBlock {
-  status: FinanceSectionStatus
-  kind: 'projected'
-  rulesVersion: string
-  periodLabel: string
+export interface FinanceExpenseDistributionSlice {
+  category: string
+  amount: number
+}
+
+export interface FinanceWeeklyPoint {
+  label: string
+  weekIndex: number
   startDate: string
   endDate: string
-  openingBalance: number
-  projectedInflows: number
-  projectedOutflows: number
-  projectedClosingBalance: number
-  reserveMinimum: number
+  realNet: number
+  projectedNet: number
+}
+
+export interface FinanceOpportunityCard {
+  code: 'CAPITAL_OCIOSO_DETECTADO' | 'CAPITAL_OCIOSO_NO_DETECTADO'
+  title: string
+  explanation: string
+  referenceRoiPercent: number | null
   idleCapital: number
-  liquidityClass: LiquidityClass | null
-  comparableMonths: ComparableMonthTotals[]
-  message?: string
+  roiEnabled: boolean
+  disclaimer?: string
 }
 
 export interface FinanceInsight {
@@ -62,14 +51,30 @@ export interface FinanceInsight {
   disclaimer?: string
 }
 
+export interface FinanceMovement {
+  date: string
+  type: 'inflow' | 'outflow'
+  amount: number
+  source: 'sale' | 'buy' | 'expense'
+  description: string
+  sourceId: string
+}
+
 export interface FinanceDashboard {
   rulesVersion: string
   currency: 'ARS'
   generatedAt: string
-  historical: FinanceHistoricalBlock
-  projection: FinanceProjectionBlock
+  startDate: string
+  endDate: string
+  emptyPeriod: boolean
+  kpis: FinanceKpis
+  timeline: FinanceMovement[]
+  expenseDistribution: FinanceExpenseDistributionSlice[]
+  weeklyProjection: FinanceWeeklyPoint[]
+  recentMovements: FinanceMovement[]
   insights: FinanceInsight[]
-  config: FinanceRulesConfig
+  opportunity: FinanceOpportunityCard
+  historySufficient: boolean
 }
 
 export interface FinanceDateParams {
