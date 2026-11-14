@@ -140,6 +140,15 @@ describe('decodePolyline', () => {
 })
 
 describe('RouteMap', () => {
+  it('allows the dashboard map to fill its panel while retaining a responsive minimum height', () => {
+    process.env[API_KEY_ENV] = 'test-key'
+    useApiLoadingStatus.mockReturnValue('LOADED')
+    useMap.mockReturnValue(null)
+    const { rerender } = render(<RouteMap route={ROUTE} fill />)
+    expect(screen.getByTestId('map').parentElement).toHaveClass('flex-1', 'min-h-64', 'md:min-h-80')
+    rerender(<RouteMap route={ROUTE} />)
+    expect(screen.getByTestId('map').parentElement).toHaveClass('h-64', 'md:h-80')
+  })
   it('renders an accessible fallback without an API key and never mounts the map', () => {
     delete process.env[API_KEY_ENV]
     render(<RouteMap route={ROUTE} />)
@@ -229,6 +238,44 @@ describe('RouteMap', () => {
     expect(screen.getByRole('button', { name: 'Centrar' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Acercar mapa' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Alejar mapa' })).toBeInTheDocument()
+  })
+
+  it('keeps dashboard markers and bounds limited to the selected route when it changes', () => {
+    process.env[API_KEY_ENV] = 'test-key'
+    useApiLoadingStatus.mockReturnValue('LOADED')
+    const extend = vi.fn()
+    const fitBounds = vi.fn()
+    const panTo = vi.fn()
+    vi.stubGlobal('google', { maps: { LatLngBounds: class { extend = extend } } })
+    useMap.mockReturnValue({ fitBounds, panTo })
+    const locations = [{ clientId: 'other', displayName: 'Other', latitude: 10, longitude: 20, status: 'NO_ORDER' as const }]
+    const secondRoute = { ...ROUTE, encodedPolyline: KNOWN_ENCODED_POLYLINE, stops: [{ ...ROUTE.stops[1], latitude: -35, longitude: -59 }] }
+
+    try {
+      const { rerender } = render(<RouteMap route={ROUTE} mapLocations={locations} routeOnly />)
+      expect(screen.queryByRole('group', { name: 'Vista del mapa' })).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Leyenda del mapa')).not.toBeInTheDocument()
+      expect(screen.getAllByTestId('map-marker')).toHaveLength(3)
+      expect(renderedPolylinePath()).toEqual(ROUTE_DECODED_POINTS)
+      expect(extend.mock.calls.map(([point]) => point)).toEqual([
+        { lat: -34.6, lng: -58.4 }, { lat: -34.61, lng: -58.41 }, { lat: -34.62, lng: -58.42 },
+      ])
+
+      extend.mockClear()
+      rerender(<RouteMap route={secondRoute} mapLocations={locations} routeOnly />)
+      expect(screen.getAllByTestId('map-marker')).toHaveLength(2)
+      expect(screen.getAllByTestId('map-marker')[1]).toHaveAttribute('data-lat', '-35')
+      expect(renderedPolylinePath()).toEqual(KNOWN_DECODED_POINTS)
+      expect(extend.mock.calls.map(([point]) => point)).toEqual([
+        { lat: -34.6, lng: -58.4 }, { lat: -35, lng: -59 },
+      ])
+      fireEvent.click(screen.getByRole('button', { name: 'Ajustar vista' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Centrar' }))
+      expect(fitBounds).toHaveBeenCalledTimes(3)
+      expect(panTo).toHaveBeenCalledWith({ lat: -34.8, lng: -58.7 })
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('uses the Google map instance for zoom and center controls when available', () => {

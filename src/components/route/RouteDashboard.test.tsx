@@ -11,7 +11,7 @@ const { getActiveDeliveryZones, getAssignmentOptions, getDashboard, useSessionAc
 
 vi.mock('@/services/routePlan.service', () => ({ routePlanService: { getActiveDeliveryZones, getAssignmentOptions, getDashboard } }))
 vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess }))
-vi.mock('./RouteMap', () => ({ RouteMap: () => <div>Mapa simulado</div> }))
+vi.mock('./RouteMap', () => ({ RouteMap: ({ route, routeOnly }: { route: { stops: Array<{ clientId: string }> }; routeOnly?: boolean }) => <div data-route-only={String(routeOnly)} data-stops={route.stops.map((stop) => stop.clientId).join(',')}>Mapa simulado</div> }))
 
 const scrollIntoView = vi.fn()
 
@@ -55,6 +55,40 @@ const dashboard = {
 }
 
 describe('RouteDashboard selected-route detail', () => {
+  it('passes the selected route to the route-only map and handles unavailable or removed routes', async () => {
+    getDashboard.mockResolvedValueOnce(dashboard).mockResolvedValueOnce({ ...dashboard, routes: [] })
+    const { rerender } = render(<RouteDashboard refreshToken={0} />)
+    const map = await screen.findByText('Mapa simulado')
+    expect(map).toHaveAttribute('data-route-only', 'true')
+    expect(map).toHaveAttribute('data-stops', 'client-1')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Seleccionar ruta route-2' }))
+    expect(screen.queryByText('Mapa simulado')).not.toBeInTheDocument()
+    expect(screen.getByText('No hay detalle geográfico disponible para esta ruta.')).toBeInTheDocument()
+
+    rerender(<RouteDashboard refreshToken={1} />)
+    await screen.findByRole('heading', { name: 'Rutas planificadas (0)' })
+    expect(screen.queryByRole('heading', { name: 'Mapa interactivo' })).not.toBeInTheDocument()
+  })
+  it('starts the stop list at the top when a different route is selected', async () => {
+    const stops = Array.from({ length: 5 }, (_, index) => ({
+      clientId: `client-${index}`, saleIds: [`sale-${index}`], sequence: index + 1, latitude: -34.61, longitude: -58.41,
+    }))
+    const route = { ...dashboard.routes[0], stops }
+    getDashboard.mockResolvedValue({ ...dashboard, routes: [route, { ...route, id: 'route-2' }] })
+    render(<RouteDashboard />)
+
+    const firstList = await screen.findByRole('list', { name: 'Paradas del recorrido' })
+    firstList.scrollTop = 200
+    fireEvent.click(screen.getByRole('button', { name: 'Seleccionar ruta route-2' }))
+
+    const secondList = screen.getByRole('list', { name: 'Paradas del recorrido' })
+    expect(secondList).not.toBe(firstList)
+    expect(secondList.scrollTop).toBe(0)
+    secondList.scrollTop = 100
+    fireEvent.click(screen.getByRole('button', { name: 'Seleccionar ruta route-2' }))
+    expect(screen.getByRole('list', { name: 'Paradas del recorrido' }).scrollTop).toBe(100)
+  })
   it('shows precise location issues and available zones without requiring an address', async () => {
     getDashboard.mockResolvedValue({ ...dashboard, candidates: { eligible: [{ saleId: 'a', displayName: 'Confirmado', latitude: 0, longitude: 0, zoneName: 'Norte' }], blocked: [{ saleId: 'b', displayName: 'Inválido', locationIssue: 'COORDINATES_INVALID', reasons: ['CLIENT_LOCATION_MISSING'] }], ruleVersion: 'v1' } })
     render(<RouteDashboard />)
@@ -97,6 +131,22 @@ describe('RouteDashboard selected-route detail', () => {
     expect(date).toHaveValue('2026-10-15')
     expect(getDashboard).toHaveBeenCalledTimes(3)
     expect(getAssignmentOptions).not.toHaveBeenCalled()
+  })
+
+  it('updates the fuel cost from the filtered dashboard aggregate', async () => {
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValueOnce(dashboard).mockResolvedValueOnce({
+      ...dashboard,
+      kpis: { ...dashboard.kpis, estimatedFuelLiters: 5.796235 },
+    })
+    render(<RouteDashboard />)
+
+    expect(await screen.findByLabelText('Costo combustible est.: $ 1.500,00')).toBeInTheDocument()
+    await screen.findByRole('option', { name: 'Zona Norte' })
+    fireEvent.change(screen.getByLabelText('Fecha de servicio'), { target: { value: '2026-10-15' } })
+    fireEvent.change(screen.getByLabelText('Zona de entrega'), { target: { value: 'zone-1' } })
+    expect(await screen.findByLabelText('Costo combustible est.: $ 7.245,29')).toBeInTheDocument()
+    expect(getDashboard).toHaveBeenLastCalledWith({ serviceDate: '2026-10-15', zoneCode: 'NORTE' })
   })
 
   it('ignores stale filtered responses after a faster filter change', async () => {
