@@ -6,6 +6,7 @@ import {
 } from '@/interfaces/routePlan.interface'
 import { RouteTabs } from './RoutePreview'
 import type { RouteStopEstimateLike } from './RouteStopTimeline'
+import { isVisibleRouteWarning } from './visibleRouteWarnings'
 
 interface RouteSnapshotProps {
   /** Immutable snapshot as stored by the backend. Never recomputed here. */
@@ -106,7 +107,7 @@ export function RouteSnapshot({ snapshot }: RouteSnapshotProps) {
   const dashboard = snapshot as RoutePlan & SnapshotDashboardFields
   const mapUnavailable = snapshot.warnings.includes(ROUTE_PREVIEW_WARNING.MAP_UNAVAILABLE)
   const visibleWarnings = snapshot.warnings.filter(
-    (warning) => warning !== ROUTE_PREVIEW_WARNING.MAP_UNAVAILABLE
+    (warning) => isVisibleRouteWarning(warning) && warning !== ROUTE_PREVIEW_WARNING.MAP_UNAVAILABLE
   )
 
   return (

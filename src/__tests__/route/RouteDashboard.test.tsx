@@ -63,5 +63,29 @@ describe('RouteDashboard', () => {
     expect(screen.getByText('Almacén Sur')).toBeInTheDocument()
     expect(screen.getByText('Kiosco Norte')).toBeInTheDocument()
     expect(screen.getByText('La ubicación del cliente no está disponible')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Advertencias de route-1' })).not.toBeInTheDocument()
+  })
+
+  it('hides only the time-window warning while retaining other warnings and staleness', async () => {
+    getDashboard.mockResolvedValueOnce({
+      ...dashboard,
+      warnings: ['TIME_WINDOWS_NOT_CONSIDERED', 'DASHBOARD_WARNING'],
+      routes: [{ ...dashboard.routes[0], stale: true, warnings: ['TIME_WINDOWS_NOT_CONSIDERED', 'OTHER_WARNING'] }],
+    })
+    render(<RouteDashboard />)
+
+    expect(await screen.findByText('DASHBOARD_WARNING')).toBeInTheDocument()
+    const warnings = screen.getByRole('list', { name: 'Advertencias de route-1' })
+    expect(warnings).toHaveTextContent('OTHER_WARNING')
+    expect(warnings).toHaveTextContent('La información de esta ruta está desactualizada.')
+    expect(screen.queryByText(/TIME_WINDOWS_NOT_CONSIDERED/)).not.toBeInTheDocument()
+  })
+
+  it('does not render an empty dashboard warning alert', async () => {
+    getDashboard.mockResolvedValueOnce({ ...dashboard, warnings: ['TIME_WINDOWS_NOT_CONSIDERED'] })
+    render(<RouteDashboard />)
+
+    await screen.findByRole('heading', { name: /Ruta 1 · Zona/ })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
