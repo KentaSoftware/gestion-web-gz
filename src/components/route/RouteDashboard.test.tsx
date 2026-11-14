@@ -99,6 +99,22 @@ describe('RouteDashboard selected-route detail', () => {
     expect(getAssignmentOptions).not.toHaveBeenCalled()
   })
 
+  it('updates the fuel cost from the filtered dashboard aggregate', async () => {
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValueOnce(dashboard).mockResolvedValueOnce({
+      ...dashboard,
+      kpis: { ...dashboard.kpis, estimatedFuelLiters: 5.796235 },
+    })
+    render(<RouteDashboard />)
+
+    expect(await screen.findByLabelText('Costo combustible est.: $ 1.500,00')).toBeInTheDocument()
+    await screen.findByRole('option', { name: 'Zona Norte' })
+    fireEvent.change(screen.getByLabelText('Fecha de servicio'), { target: { value: '2026-10-15' } })
+    fireEvent.change(screen.getByLabelText('Zona de entrega'), { target: { value: 'zone-1' } })
+    expect(await screen.findByLabelText('Costo combustible est.: $ 7.245,29')).toBeInTheDocument()
+    expect(getDashboard).toHaveBeenLastCalledWith({ serviceDate: '2026-10-15', zoneCode: 'NORTE' })
+  })
+
   it('ignores stale filtered responses after a faster filter change', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     let resolveOld: (value: typeof dashboard) => void = () => {}
