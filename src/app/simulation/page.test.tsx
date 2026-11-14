@@ -98,6 +98,106 @@ describe('Simulation workspace', () => {
     expect(screen.getByRole('table', { name: 'Productos incluidos en el vehículo' })).not.toHaveTextContent('Agua')
   })
 
+  it('paginates available products while preserving drafts, selection and vehicle contents', async () => {
+    const products = Array.from({ length: 11 }, (_, index) => ({
+      id: `product-${index + 1}`, name: `Producto ${index + 1}`, stock: 20, precioUnitario: 100,
+    }))
+    get.mockImplementation((url: string) => Promise.resolve({ data: url === '/simulation/routes'
+      ? routeOptionsResponse
+      : url === '/simulation/route-catalog'
+        ? { items: products, excludedCount: 0, hasMore: false, nextCursor: null }
+        : scenarioHistoryResponse() }))
+
+    render(<SimulationPage />)
+    const table = await screen.findByRole('table', { name: 'Productos disponibles' })
+    const previous = screen.getByRole('button', { name: 'Página anterior de productos disponibles' })
+    const next = screen.getByRole('button', { name: 'Página siguiente de productos disponibles' })
+    expect(within(table).getAllByRole('row')).toHaveLength(6)
+    expect(previous).toBeDisabled()
+    expect(screen.getByText('Mostrando 1 a 5 de 11 productos disponibles')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Cantidad de Producto 1'), { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar producto al vehículo' }))
+    fireEvent.change(screen.getByLabelText('Cantidad de Producto 1'), { target: { value: '2' } })
+    fireEvent.click(next)
+    expect(within(table).getAllByRole('row')).toHaveLength(6)
+    expect(within(table).queryByText('Producto 1')).not.toBeInTheDocument()
+    expect(screen.getByText('Mostrando 6 a 10 de 11 productos disponibles')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('radio', { name: 'Seleccionar producto Producto 6' }))
+    fireEvent.change(screen.getByLabelText('Cantidad de Producto 6'), { target: { value: '4' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar producto al vehículo' }))
+    fireEvent.click(next)
+    expect(within(table).getAllByRole('row')).toHaveLength(2)
+    expect(next).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Página 3 de productos disponibles' })).toHaveAttribute('aria-current', 'page')
+    fireEvent.click(previous)
+    expect(screen.getByRole('radio', { name: 'Seleccionar producto Producto 6' })).toBeChecked()
+    fireEvent.click(previous)
+    expect(screen.getByLabelText('Cantidad de Producto 1')).toHaveValue(2)
+    const includedTable = screen.getByRole('table', { name: 'Productos incluidos en el vehículo' })
+    expect(includedTable).toHaveTextContent('Producto 1')
+    expect(includedTable).toHaveTextContent('Producto 6')
+    fireEvent.click(screen.getByRole('button', { name: 'Simular' }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/simulation/route-scenarios', expect.objectContaining({
+      products: [{ id: 'product-1', quantity: 3 }, { id: 'product-6', quantity: 4 }],
+    })))
+  })
+
+  it('clamps the available products page when a refreshed catalog shrinks to empty', async () => {
+    let products = Array.from({ length: 6 }, (_, index) => ({
+      id: `product-${index + 1}`, name: `Producto ${index + 1}`, stock: 20, precioUnitario: 100,
+    }))
+    get.mockImplementation((url: string) => Promise.resolve({ data: url === '/simulation/routes'
+      ? routeOptionsResponse
+      : url === '/simulation/route-catalog'
+        ? { items: products, excludedCount: 0, hasMore: false, nextCursor: null }
+        : scenarioHistoryResponse() }))
+    render(<SimulationPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Página siguiente de productos disponibles' }))
+    expect(screen.getByText('Mostrando 6 a 6 de 6 productos disponibles')).toBeInTheDocument()
+    products = []
+    fireEvent.click(screen.getByRole('button', { name: 'Simular' }))
+    expect(await screen.findByText('Mostrando 0 de 0 productos disponibles')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Página anterior de productos disponibles' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Página siguiente de productos disponibles' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Página 1 de productos disponibles' })).toBeDisabled()
+  })
+
+  it('prevents transfers of a hidden selection and points to off-page invalid quantities', async () => {
+    const products = Array.from({ length: 6 }, (_, index) => ({
+      id: `product-${index + 1}`, name: `Producto ${index + 1}`, stock: 20, precioUnitario: 100,
+    }))
+    get.mockImplementation((url: string) => Promise.resolve({ data: url === '/simulation/routes'
+      ? routeOptionsResponse
+      : url === '/simulation/route-catalog'
+        ? { items: products, excludedCount: 0, hasMore: false, nextCursor: null }
+        : scenarioHistoryResponse() }))
+
+    render(<SimulationPage />)
+    fireEvent.change(await screen.findByLabelText('Cantidad de Producto 1'), { target: { value: '3' } })
+    const add = screen.getByRole('button', { name: 'Agregar producto al vehículo' })
+    expect(add).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Página siguiente de productos disponibles' }))
+    expect(add).toBeDisabled()
+    expect(screen.getByText(/producto seleccionado \(Producto 1\) está en otra página/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('radio', { name: 'Seleccionar producto Producto 6' }))
+    fireEvent.change(screen.getByLabelText('Cantidad de Producto 6'), { target: { value: '21' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Página anterior de productos disponibles' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Producto 6 (página 2)')
+    expect(screen.getByRole('button', { name: 'Simular' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Ir al producto' }))
+    expect(screen.getByRole('radio', { name: 'Seleccionar producto Producto 6' })).toBeChecked()
+    expect(screen.getByLabelText('Cantidad de Producto 6')).toHaveValue(21)
+    expect(screen.getByLabelText('Cantidad de Producto 6')).toHaveFocus()
+    fireEvent.click(screen.getByRole('button', { name: 'Ir al producto' }))
+    expect(screen.getByLabelText('Cantidad de Producto 6')).toHaveFocus()
+    fireEvent.change(screen.getByLabelText('Cantidad de Producto 6'), { target: { value: '4' } })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Simular' })).toBeEnabled()
+    expect(add).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Página anterior de productos disponibles' }))
+    expect(screen.getByLabelText('Cantidad de Producto 1')).toHaveValue(3)
+  })
+
   it('collapses the whole workspace and preserves draft state', async () => {
     render(<SimulationPage />)
     fireEvent.change(await screen.findByLabelText('Cantidad de Agua'), { target: { value: '5' } })

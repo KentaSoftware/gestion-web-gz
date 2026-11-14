@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CalendarDays, Calculator, ChevronDown,
   ChevronLeft, ChevronRight, ChevronUp, ClipboardList, DollarSign, Eye, FileText,
@@ -22,6 +22,7 @@ const INPUT = 'w-full rounded border border-border-subtle bg-surface-base px-2 p
 const TABLE = 'w-full min-w-max text-left text-sm [&_th]:bg-background-subtle [&_th]:px-2 [&_th]:py-1 [&_th]:font-semibold [&_th]:text-brand-primary [&_td]:border-t [&_td]:border-border-subtle [&_td]:px-2 [&_td]:py-1'
 const PANEL = 'rounded-lg border border-border-subtle bg-surface-base'
 const INITIAL_PARAMETERS: SimulationParameters = { fuelPricePerLiter: 1250, includeSurplus: true, generalCosts: 25000, hourlyRate: 8000 }
+const PRODUCT_PAGE_SIZE = 5
 const money = (value: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value)
 const number = (value: number | null | undefined) => value == null ? '—' : new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format(value)
 const canSimulateRoute = (route: SimulationRoute | undefined): route is SimulationRoute =>
@@ -195,6 +196,9 @@ function SimulationWorkspace() {
   const [data, setData] = useState<WorkspaceData | null>(null)
   const [routePage, setRoutePage] = useState(1)
   const [scenarioPage, setScenarioPage] = useState(1)
+  const [productPage, setProductPage] = useState(1)
+  const [focusInvalidRequest, setFocusInvalidRequest] = useState(0)
+  const invalidQuantityRef = useRef<HTMLInputElement>(null)
   const [reload, setReload] = useState(0)
   const [selectedRoute, setSelectedRoute] = useState('')
   const [knownRoutes, setKnownRoutes] = useState<Record<string, SimulationRoute>>({})
@@ -217,6 +221,10 @@ function SimulationWorkspace() {
   const [dialogRetry, setDialogRetry] = useState(0)
 
   useEffect(() => {
+    if (focusInvalidRequest > 0) invalidQuantityRef.current?.focus()
+  }, [focusInvalidRequest])
+
+  useEffect(() => {
     if (!canRead) return
     let cancelled = false
     setLoading(true)
@@ -224,6 +232,7 @@ function SimulationWorkspace() {
     void Promise.all([simulationService.getRoutes(routePage), simulationService.getCatalog(), simulationService.getScenarios(scenarioPage)]).then(([routes, catalog, scenarios]) => {
       if (cancelled) return
       setData({ routes, catalog, scenarios })
+      setProductPage((current) => Math.min(current, Math.max(1, Math.ceil(catalog.available.length / PRODUCT_PAGE_SIZE))))
       setKnownRoutes((current) => ({ ...current, ...Object.fromEntries(routes.items.map((route) => [route.id, route])) }))
       setSelectedRoute((current) => current || routes.items.find((route) => canSimulateRoute(route))?.id || '')
       setAvailableId((current) => current || catalog.available[0]?.id || '')
@@ -251,10 +260,12 @@ function SimulationWorkspace() {
   }, [detailId, compareOpen, selectedScenarios, dialogRetry])
 
   const validParameters = [parameters.fuelPricePerLiter, parameters.generalCosts, parameters.hourlyRate].every((value) => Number.isFinite(value) && value >= 0)
-  const validDraft = data?.catalog.available.every((product) => Number.isInteger(draft[product.id] ?? 0) && (draft[product.id] ?? 0) >= 0 && (draft[product.id] ?? 0) + (included?.[product.id] ?? 0) <= product.stock) ?? false
+  const invalidProductIndex = data?.catalog.available.findIndex((product) => !Number.isInteger(draft[product.id] ?? 0) || (draft[product.id] ?? 0) < 0 || (draft[product.id] ?? 0) + (included?.[product.id] ?? 0) > product.stock) ?? -1
+  const validDraft = data !== null && invalidProductIndex === -1
   const selectedProduct = data?.catalog.available.find((product) => product.id === availableId)
   const amount = draft[availableId] ?? 0
-  const canTransfer = selectedProduct !== undefined && Number.isInteger(amount) && amount > 0 && amount + (included?.[availableId] ?? 0) <= selectedProduct.stock
+  const selectedProductVisible = data?.catalog.available.slice((productPage - 1) * PRODUCT_PAGE_SIZE, productPage * PRODUCT_PAGE_SIZE).some((product) => product.id === availableId) ?? false
+  const canTransfer = selectedProductVisible && selectedProduct !== undefined && Number.isInteger(amount) && amount > 0 && amount + (included?.[availableId] ?? 0) <= selectedProduct.stock
 
   const createScenario = async () => {
     const route = knownRoutes[selectedRoute]
@@ -355,7 +366,7 @@ function SimulationWorkspace() {
                     <tr><th><span className="sr-only">Selección</span></th><th>Producto</th><th>Stock disponible</th><th>Precio unitario ($)</th><th>Cantidad</th></tr>
                   </thead>
                   <tbody>
-                    {data.catalog.available.map((product) => (
+                    {data.catalog.available.slice((productPage - 1) * PRODUCT_PAGE_SIZE, productPage * PRODUCT_PAGE_SIZE).map((product) => (
                       <tr key={product.id} className={availableId === product.id ? 'bg-background-subtle' : ''}>
                         <td>
                           <input type="radio" name="available-product" aria-label={`Seleccionar producto ${product.name}`} checked={availableId === product.id} onChange={() => setAvailableId(product.id)} />
@@ -365,6 +376,7 @@ function SimulationWorkspace() {
                         <td>{money(product.unitPrice)}</td>
                         <td>
                           <input
+                            ref={data.catalog.available[invalidProductIndex]?.id === product.id ? invalidQuantityRef : undefined}
                             className="w-16 rounded border border-border-subtle bg-surface-base px-1"
                             aria-label={`Cantidad de ${product.name}`}
                             type="number" min="0" step="1" max={product.stock}
@@ -377,8 +389,16 @@ function SimulationWorkspace() {
                   </tbody>
                 </table>
               </div>
+              <Pagination page={productPage} pageSize={PRODUCT_PAGE_SIZE} total={data.catalog.available.length} label="productos disponibles" onChange={setProductPage} />
+              {selectedProduct && !selectedProductVisible && <p className="mt-1 text-xs text-text-secondary">El producto seleccionado ({selectedProduct.name}) está en otra página. Volvé a esa página o seleccioná otro producto para agregarlo.</p>}
               {data.catalog.excludedCount > 0 && <p className="mt-1 text-xs text-text-secondary">{data.catalog.excludedCount} productos excluidos por datos incompletos o no válidos.</p>}
-              {!validDraft && <p role="alert" className="text-sm text-state-error">Ingrese cantidades enteras dentro del stock disponible.</p>}
+              {invalidProductIndex >= 0 && <div role="alert" className="text-sm text-state-error">
+                Ingrese cantidades enteras dentro del stock disponible. Revisá {data.catalog.available[invalidProductIndex].name} (página {Math.floor(invalidProductIndex / PRODUCT_PAGE_SIZE) + 1}).{' '}
+                <button type="button" className={BUTTON} onClick={() => {
+                  setProductPage(Math.floor(invalidProductIndex / PRODUCT_PAGE_SIZE) + 1)
+                  setFocusInvalidRequest((current) => current + 1)
+                }}>Ir al producto</button>
+              </div>}
             </div>
             <div className="flex justify-center gap-2 lg:flex-col lg:pt-8">
               <button
