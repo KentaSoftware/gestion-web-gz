@@ -67,10 +67,20 @@ describe('RouteSnapshot', () => {
     expect(orderedStops[2]).toHaveTextContent('1 pedido')
   })
 
-  it('renders the stored warnings', () => {
+  it('hides the time-window warning from stored snapshots without changing the snapshot', () => {
     render(<RouteSnapshot snapshot={SNAPSHOT} />)
 
-    expect(screen.getByText('No se consideran ventanas horarias.')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Advertencias' })).not.toBeInTheDocument()
+    expect(SNAPSHOT.warnings).toEqual(['TIME_WINDOWS_NOT_CONSIDERED'])
+  })
+
+  it('retains other stored and read warnings', () => {
+    render(<RouteSnapshot snapshot={{ ...SNAPSHOT, warnings: ['TIME_WINDOWS_NOT_CONSIDERED', 'FUTURE_WARNING'], readWarnings: ['TIME_WINDOWS_NOT_CONSIDERED', 'READ_WARNING'] } as RoutePlan} />)
+
+    expect(screen.getByText('FUTURE_WARNING')).toBeInTheDocument()
+    expect(screen.getByText('READ_WARNING')).toBeInTheDocument()
+    expect(screen.queryByText('TIME_WINDOWS_NOT_CONSIDERED')).not.toBeInTheDocument()
+    expect(screen.queryByText('No se consideran ventanas horarias.')).not.toBeInTheDocument()
   })
 
   it('keeps MAP_UNAVAILABLE non-terminal and still renders the ordered fallback list', () => {

@@ -10,6 +10,7 @@ import {
 } from '@/interfaces/routePlan.interface'
 import { RouteMap } from './RouteMap'
 import { RouteStopTimeline, type RouteStopEstimateLike, type RouteStopTimelineStop } from './RouteStopTimeline'
+import { isVisibleRouteWarning } from './visibleRouteWarnings'
 
 export type RoutePreviewStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -181,7 +182,7 @@ const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, 
         </div>
       </div>
       {stale && <p role="status" className="mt-4 rounded-md border border-state-warning p-3 text-xs text-state-warning">Este snapshot está desactualizado y es de solo lectura. Para actualizarlo, generá una nueva ruta.</p>}
-      {readWarnings.map((warning) => <p key={warning} className="mt-2 text-xs text-state-warning">{warning}</p>)}
+      {readWarnings.filter(isVisibleRouteWarning).map((warning) => <p key={warning} className="mt-2 text-xs text-state-warning">{warning}</p>)}
     </div>
   )
 }

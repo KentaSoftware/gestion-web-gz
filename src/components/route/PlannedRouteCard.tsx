@@ -2,6 +2,7 @@ import type { RouteDashboardCard } from '@/interfaces/routePlan.interface'
 import { Eye, Map } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { MouseEvent } from 'react'
+import { isVisibleRouteWarning } from './visibleRouteWarnings'
 
 export const statusLabel: Record<RouteDashboardCard['status'], string> = {
   PENDING: 'Pendiente',
@@ -22,6 +23,7 @@ type PlannedRouteCardProps = {
 }
 
 export function PlannedRouteCard({ route, index, selected, onSelect, onViewMap, onPreview }: PlannedRouteCardProps) {
+  const visibleWarnings = route.warnings.filter(isVisibleRouteWarning)
   return (
     <article className={`rounded-lg border border-border-subtle bg-surface-base p-3 ${selected ? 'ring-2 ring-brand-primary' : ''}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -45,10 +47,10 @@ export function PlannedRouteCard({ route, index, selected, onSelect, onViewMap, 
         <div><dt className="text-text-secondary">Combustible</dt><dd className="font-medium text-text-primary">{route.metrics.fuelLiters === null ? 'No disponible' : `${route.metrics.fuelLiters.toLocaleString('es-AR')} L`}</dd></div>
         <div><dt className="text-text-secondary">Paradas/clientes</dt><dd className="font-medium text-text-primary">{route.clientCount}</dd></div>
       </dl>
-      {(route.stale || route.warnings.length > 0) && (
+      {(route.stale || visibleWarnings.length > 0) && (
         <ul className="mt-4 flex flex-col gap-1 text-sm text-state-warning" aria-label={`Advertencias de ${route.id}`}>
           {route.stale && <li>La información de esta ruta está desactualizada.</li>}
-          {route.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+          {visibleWarnings.map((warning) => <li key={warning}>{warning}</li>)}
         </ul>
       )}
       <div className="mt-2 flex flex-wrap gap-2">
