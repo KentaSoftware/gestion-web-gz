@@ -1,9 +1,11 @@
 'use client'
 
-import type { FinanceInsight } from '@/interfaces/finance.interface'
+import type { FinanceInsight, FinanceOpportunityCard } from '@/interfaces/finance.interface'
+import { cn } from '@/lib/cn'
 
 interface Props {
   insights: FinanceInsight[]
+  opportunity: FinanceOpportunityCard | null
   loading: boolean
 }
 
@@ -13,41 +15,75 @@ const severityClass: Record<string, string> = {
   critical: 'border-state-error/40 bg-state-error/10',
 }
 
-export function FinanceInsightsPanel({ insights, loading }: Props) {
+export function FinanceInsightsPanel({ insights, opportunity, loading }: Props) {
+  const cards: Array<{
+    key: string
+    title: string
+    body: string
+    tone: string
+    meta?: string
+  }> = []
+
+  if (opportunity) {
+    cards.push({
+      key: opportunity.code,
+      title: opportunity.title,
+      body: opportunity.explanation,
+      tone: opportunity.roiEnabled
+        ? 'border-brand-primary/30 bg-brand-primary/5'
+        : 'border-border-subtle bg-background-subtle',
+      meta:
+        opportunity.roiEnabled && opportunity.referenceRoiPercent != null
+          ? `ROI de referencia: ${opportunity.referenceRoiPercent}%`
+          : undefined,
+    })
+  }
+
+  for (const insight of insights) {
+    // Avoid duplicating capital-ocioso copy already shown via opportunity card
+    if (
+      insight.code === 'FINANCE_REC_REVIEW_IDLE_CAPITAL' &&
+      opportunity?.code === 'CAPITAL_OCIOSO_DETECTADO'
+    ) {
+      continue
+    }
+    cards.push({
+      key: `${insight.code}-${insight.title}`,
+      title: insight.title,
+      body: insight.explanation,
+      tone: severityClass[insight.severity] ?? severityClass.info,
+    })
+  }
+
   return (
-    <section className="mb-6">
-      <h2 className="text-label font-semibold text-text-primary mb-3">
-        Alertas y recomendaciones
+    <section className="mb-6 space-y-3">
+      <h2 className="text-label font-semibold text-text-primary">
+        Oportunidades de Optimización
       </h2>
 
-      {loading && <div className="h-20 bg-background-subtle rounded-sm animate-pulse" />}
+      {loading && <div className="h-24 bg-background-subtle rounded-sm animate-pulse" />}
 
-      {!loading && insights.length === 0 && (
+      {!loading && cards.length === 0 && (
         <p className="text-caption text-text-secondary">
-          Sin alertas ni recomendaciones para este período.
+          Sin alertas ni oportunidades para el período / configuración actual.
         </p>
       )}
 
-      {!loading && insights.length > 0 && (
-        <ul className="space-y-3">
-          {insights.map((insight) => (
-            <li
-              key={`${insight.code}-${insight.title}`}
-              className={`rounded-md border p-4 ${severityClass[insight.severity] ?? severityClass.info}`}
+      {!loading && cards.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {cards.map((card) => (
+            <article
+              key={card.key}
+              className={cn('rounded-md border p-4 min-w-0 flex flex-col', card.tone)}
             >
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span className="text-caption uppercase tracking-wide text-text-secondary">
-                  {insight.type}
-                </span>
-                <p className="text-label font-semibold text-text-primary">{insight.title}</p>
-              </div>
-              <p className="text-caption text-text-primary">{insight.explanation}</p>
-              {insight.disclaimer && (
-                <p className="text-caption text-text-secondary mt-2 italic">{insight.disclaimer}</p>
+              <p className="text-label font-semibold text-text-primary">{card.title}</p>
+              <p className="text-caption text-text-primary mt-2 flex-1">{card.body}</p>
+              {card.meta && (
+                <p className="text-caption text-text-secondary mt-3 font-medium">{card.meta}</p>
               )}
-            </li>
+            </article>
           ))}
-        </ul>
+        </div>
       )}
     </section>
   )

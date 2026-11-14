@@ -33,8 +33,10 @@ export interface CreateExpenseDTO {
   date: string;              // Formato: YYYY-MM-DD
   amount: number;            // En pesos (se convertirá a centavos en backend)
   category: string;          // String libre (MVP)
-  type: ExpenseType;
-  paymentMethod: PaymentMethod;
+  /** Optional — CUR-5 finance modal omits these; legacy /expense form still sends them. */
+  type?: ExpenseType;
+  paymentMethod?: PaymentMethod;
+  comprobante?: string;
   description?: string;      // Opcional
 }
 

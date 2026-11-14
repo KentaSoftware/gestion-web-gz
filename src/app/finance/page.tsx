@@ -6,14 +6,18 @@ import { Permission } from '@/interfaces/auth.interface'
 import { financeService } from '@/services/finance.service'
 import type { FinanceDashboard } from '@/interfaces/finance.interface'
 import { FinanceKpiCards } from '@/components/finance/FinanceKpiCards'
-import { FinanceProjectionPanel } from '@/components/finance/FinanceProjectionPanel'
+import {
+  FinanceChartsPanel,
+  FinanceProjectionChart,
+} from '@/components/finance/FinanceChartsPanel'
+import { FinanceMovementsPanel } from '@/components/finance/FinanceMovementsPanel'
 import { FinanceInsightsPanel } from '@/components/finance/FinanceInsightsPanel'
 import { FinanceRulesPanel } from '@/components/finance/FinanceRulesPanel'
+import { RegisterExpenseModal } from '@/components/finance/RegisterExpenseModal'
 import { Spinner } from '@/components/ui/spinner'
 import Button from '@/components/Button'
 import { cn } from '@/lib/cn'
 import { PageContainer, PageHeader } from '@/components/layout/PageLayout'
-import Link from 'next/link'
 
 interface DateRange {
   startDate: string
@@ -36,6 +40,7 @@ function FinancePageContent() {
   const [dateError, setDateError] = useState('')
   const [loadError, setLoadError] = useState('')
   const [exporting, setExporting] = useState(false)
+  const [expenseOpen, setExpenseOpen] = useState(false)
 
   const fetchDashboard = useCallback(async (range: DateRange) => {
     try {
@@ -94,8 +99,26 @@ function FinancePageContent() {
 
   return (
     <PageContainer>
-      <PageHeader title="Finanzas">
-        <div className="flex items-end gap-4 flex-wrap">
+      <PageHeader
+        title="Gestión Financiera"
+        actions={
+          <>
+            <Button
+              text={exporting ? 'Exportando…' : 'Exportar Reporte'}
+              onClick={() => { void handleExportPdf() }}
+              size="md"
+              variant="secondary"
+            />
+            <Button
+              text="+ Nuevo Movimiento"
+              onClick={() => setExpenseOpen(true)}
+              size="md"
+              variant="primary"
+            />
+          </>
+        }
+      >
+        <div className="flex items-end gap-4 flex-wrap mt-3">
           <div className="flex flex-col gap-1">
             <label htmlFor="fin-desde" className="text-caption text-text-secondary font-medium">
               Desde
@@ -129,40 +152,56 @@ function FinancePageContent() {
             />
           </div>
           <Button text="Aplicar" onClick={handleApply} size="md" />
-          <Button
-            text={exporting ? 'Exportando…' : 'Exportar reporte'}
-            onClick={handleExportPdf}
-            size="md"
-          />
         </div>
 
         {(dateError || loadError) && (
           <p className="text-state-error text-caption mt-2 font-medium">{dateError || loadError}</p>
         )}
-
-        <p className="text-caption text-text-secondary mt-3">
-          Panel unificado Golozur360. También podés usar{' '}
-          <Link href="/expense" className="text-brand-primary underline">
-            Egresos
-          </Link>{' '}
-          y{' '}
-          <Link href="/cashflow" className="text-brand-primary underline">
-            Flujo de caja
-          </Link>
-          .
-          {dashboard && (
-            <>
-              {' '}
-              · Reglas: <strong>{dashboard.rulesVersion}</strong>
-            </>
-          )}
-        </p>
       </PageHeader>
 
-      <FinanceKpiCards historical={dashboard?.historical ?? null} loading={loading} />
-      <FinanceProjectionPanel projection={dashboard?.projection ?? null} loading={loading} />
-      <FinanceInsightsPanel insights={dashboard?.insights ?? []} loading={loading} />
+      {dashboard?.emptyPeriod && !loading && (
+        <div className="mb-6 rounded-md border border-state-warning/40 bg-state-warning/10 p-4">
+          <p className="text-label font-medium text-text-primary">
+            No se encontraron registros para las fechas seleccionadas
+          </p>
+          <p className="text-caption text-text-secondary mt-1">
+            Probá otro rango o registrá un egreso con Nuevo Movimiento / cobrá ventas pendientes.
+          </p>
+        </div>
+      )}
+
+      <FinanceKpiCards kpis={dashboard?.kpis ?? null} loading={loading} />
+      <FinanceChartsPanel
+        timeline={dashboard?.timeline ?? []}
+        distribution={dashboard?.expenseDistribution ?? []}
+        weekly={dashboard?.weeklyProjection ?? []}
+        loading={loading}
+        showProjection={false}
+      />
+      {/* Mock row: Proyección vs Real | Últimos Movimientos */}
+      <section className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+        <FinanceProjectionChart
+          weekly={dashboard?.weeklyProjection ?? []}
+          loading={loading}
+        />
+        <FinanceMovementsPanel
+          movements={dashboard?.recentMovements ?? []}
+          loading={loading}
+          compact
+        />
+      </section>
+      <FinanceInsightsPanel
+        insights={dashboard?.insights ?? []}
+        opportunity={dashboard?.opportunity ?? null}
+        loading={loading}
+      />
       <FinanceRulesPanel onUpdated={() => void fetchDashboard(dateRange)} />
+
+      <RegisterExpenseModal
+        open={expenseOpen}
+        onClose={() => setExpenseOpen(false)}
+        onCreated={() => void fetchDashboard(dateRange)}
+      />
     </PageContainer>
   )
 }
