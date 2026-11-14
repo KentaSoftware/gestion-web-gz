@@ -22,16 +22,27 @@ describe('RouteKpiCards', () => {
     expect(screen.getByLabelText('Rutas activas: 2')).toBeInTheDocument()
     expect(screen.getByLabelText('Pedidos pendientes: 12')).toBeInTheDocument()
     expect(screen.getByLabelText('Distancia total: 3,5 km')).toBeInTheDocument()
-    expect(screen.getByLabelText('Costo combustible est.: No disponible')).toBeInTheDocument()
-    expect(screen.getByText('Consumo estimado: 78,25 L')).toBeInTheDocument()
-    expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Costo combustible est.: $ 97.812,50')).toBeInTheDocument()
+    expect(screen.getByText('Consumo estimado: 78,25 L · Precio fijo: $ 1.250,00/L')).toBeInTheDocument()
   })
 
-  it('does not imply a fuel cost or consumption when liters are unavailable', () => {
-    render(<RouteKpiCards kpis={{ activeRoutes: 0, pendingOrders: 0, totalDistanceMeters: null, estimatedFuelLiters: null }} />)
+  it('uses unrounded liters for the cost', () => {
+    render(<RouteKpiCards kpis={{ activeRoutes: 0, pendingOrders: 0, totalDistanceMeters: null, estimatedFuelLiters: 5.796235 }} />)
+
+    expect(screen.getByLabelText('Costo combustible est.: $ 7.245,29')).toBeInTheDocument()
+    expect(screen.getByText(/Consumo estimado: 5,8 L/)).toBeInTheDocument()
+  })
+
+  it('displays zero cost for zero liters', () => {
+    render(<RouteKpiCards kpis={{ activeRoutes: 0, pendingOrders: 0, totalDistanceMeters: null, estimatedFuelLiters: 0 }} />)
+
+    expect(screen.getByLabelText('Costo combustible est.: $ 0,00')).toBeInTheDocument()
+  })
+
+  it.each([null, NaN, Infinity, -1])('does not imply a fuel cost or consumption for invalid liters: %s', (liters) => {
+    render(<RouteKpiCards kpis={{ activeRoutes: 0, pendingOrders: 0, totalDistanceMeters: null, estimatedFuelLiters: liters }} />)
 
     expect(screen.getByLabelText('Costo combustible est.: No disponible')).toBeInTheDocument()
-    expect(screen.getByText('Consumo estimado: No disponible')).toBeInTheDocument()
-    expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
+    expect(screen.getByText(/Consumo estimado: No disponible/)).toBeInTheDocument()
   })
 })

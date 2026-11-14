@@ -5,22 +5,32 @@ interface RouteKpiCardsProps {
   kpis: RouteDashboardKpis
 }
 
+const FUEL_PRICE_PER_LITER = 1250
+const formatCurrency = (amount: number): string =>
+  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount)
+
+const isValidLiters = (liters: number | null): liters is number =>
+  typeof liters === 'number' && Number.isFinite(liters) && liters >= 0
+
 const formatDistance = (meters: number | null): string => {
   if (meters === null) return 'No disponible'
   return `${(meters / 1000).toLocaleString('es-AR', { maximumFractionDigits: 1 })} km`
 }
 
 const formatLiters = (liters: number | null): string => {
-  if (liters === null) return 'No disponible'
+  if (!isValidLiters(liters)) return 'No disponible'
   return `${liters.toLocaleString('es-AR', { maximumFractionDigits: 2 })} L`
 }
 
 export function RouteKpiCards({ kpis }: RouteKpiCardsProps) {
+  const fuelCost = isValidLiters(kpis.estimatedFuelLiters)
+    ? kpis.estimatedFuelLiters * FUEL_PRICE_PER_LITER
+    : null
   const cards = [
     { label: 'Rutas activas', value: kpis.activeRoutes.toLocaleString('es-AR'), icon: RouteIcon },
     { label: 'Pedidos pendientes', value: kpis.pendingOrders.toLocaleString('es-AR'), icon: Users },
     { label: 'Distancia total', value: formatDistance(kpis.totalDistanceMeters), icon: Map },
-    { label: 'Costo combustible est.', value: 'No disponible', icon: Fuel, detail: `Consumo estimado: ${formatLiters(kpis.estimatedFuelLiters)}` },
+    { label: 'Costo combustible est.', value: fuelCost !== null && Number.isFinite(fuelCost) ? formatCurrency(fuelCost) : 'No disponible', icon: Fuel, detail: `Consumo estimado: ${formatLiters(kpis.estimatedFuelLiters)} · Precio fijo: ${formatCurrency(FUEL_PRICE_PER_LITER)}/L` },
   ]
 
   return (
