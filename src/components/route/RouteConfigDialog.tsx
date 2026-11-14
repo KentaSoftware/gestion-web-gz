@@ -24,6 +24,9 @@ export function RouteConfigDialog({ open, onOpenChange, canManageConfig = true, 
   const [name, setName] = useState(''); const [address, setAddress] = useState(''); const [latitude, setLatitude] = useState(''); const [longitude, setLongitude] = useState('')
   const [fuel, setFuel] = useState(''); const [maxStops, setMaxStops] = useState(''); const [status, setStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle'); const [error, setError] = useState('')
   const [selectedId, setSelectedId] = useState('')
+  const [clientWritePending, setClientWritePending] = useState(false)
+  const clientWritePendingCount = useRef(0)
+  const setClientPending = (pending: boolean) => { clientWritePendingCount.current = Math.max(0, clientWritePendingCount.current + (pending ? 1 : -1)); setClientWritePending(clientWritePendingCount.current > 0) }
   const [configLoaded, setConfigLoaded] = useState(false)
   const generation = useRef(0)
   const selectedClient = clients.find((client) => client.id === selectedId)
@@ -53,8 +56,8 @@ export function RouteConfigDialog({ open, onOpenChange, canManageConfig = true, 
     } catch { if (request === generation.current) { setStatus('error'); setError('No se pudo guardar la configuración. Intentá nuevamente.') } }
   }
 
-  return <Dialog open={open} onOpenChange={(next) => { if (!next) generation.current += 1; onOpenChange(next) }}>
-    <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-6xl overflow-y-auto bg-surface-raised">
+  return <Dialog open={open} onOpenChange={(next) => { if (!next && clientWritePendingCount.current > 0) return; if (!next) generation.current += 1; onOpenChange(next) }}>
+    <DialogContent closeDisabled={clientWritePending} onEscapeKeyDown={(event) => { if (clientWritePendingCount.current > 0) event.preventDefault() }} onInteractOutside={(event) => { if (clientWritePendingCount.current > 0) event.preventDefault() }} className="max-h-[90vh] w-[calc(100%-2rem)] max-w-6xl overflow-y-auto bg-surface-raised">
       <DialogHeader><DialogTitle>Configurar ubicaciones</DialogTitle><DialogDescription>Actualizá ubicaciones y parámetros operativos. La configuración no modifica snapshots guardados.</DialogDescription></DialogHeader>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <section className="grid content-start gap-3" aria-label="Configurar depósito de origen">
@@ -66,14 +69,14 @@ export function RouteConfigDialog({ open, onOpenChange, canManageConfig = true, 
             <div className="grid gap-3 sm:grid-cols-2"><div><Label htmlFor={latId}>Latitud del depósito</Label><Input id={latId} inputMode="decimal" value={latitude} onChange={(event) => setLatitude(event.target.value)} /></div><div><Label htmlFor={lngId}>Longitud del depósito</Label><Input id={lngId} inputMode="decimal" value={longitude} onChange={(event) => setLongitude(event.target.value)} /></div></div>
             <details><summary className="cursor-pointer text-sm font-medium">Configuración avanzada</summary><div className="mt-3 grid gap-3 sm:grid-cols-2"><div><Label htmlFor={fuelId}>Consumo (L/100 km)</Label><Input id={fuelId} inputMode="decimal" value={fuel} onChange={(event) => setFuel(event.target.value)} /></div><div><Label htmlFor={maxStopsId}>Máximo de paradas</Label><Input id={maxStopsId} inputMode="numeric" value={maxStops} onChange={(event) => setMaxStops(event.target.value)} /></div></div></details>
             {status === 'error' && <p role="alert" className="text-sm text-state-error">{error}</p>}{status === 'success' && <p role="status" className="text-sm text-state-success">Configuración guardada correctamente.</p>}
-            <div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancelar</Button><Button type="button" onClick={() => void save()} disabled={status === 'loading' || !configLoaded}>{status === 'loading' ? 'Guardando…' : 'Guardar configuración'}</Button></div>
+            <div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" disabled={clientWritePending} onClick={() => { if (clientWritePendingCount.current === 0) onOpenChange(false) }}>Cancelar</Button><Button type="button" onClick={() => void save()} disabled={status === 'loading' || !configLoaded}>{status === 'loading' ? 'Guardando…' : 'Guardar configuración'}</Button></div>
           </> : <p className="text-sm text-text-secondary">No tenés permiso para configurar el depósito.</p>}
         </section>
         <section className="grid content-start gap-3" aria-label="Geocodificación manual de direcciones">
           <h3 className="font-semibold">Geocodificación manual de direcciones</h3>
           {canConfirmLocation ? <>
-            <div><Label htmlFor={clientId}>Cliente</Label><select id={clientId} value={selectedId} onChange={(event) => setSelectedId(event.target.value)} className="h-10 w-full rounded-md border border-border-subtle bg-surface-base px-3 text-sm text-text-primary"><option value="">Seleccioná un cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></div>
-            {selectedClient ? <GeocodingForm open clientId={selectedClient.id} address={selectedClient.address} onOpenChange={onOpenChange} onConfirmed={onLocationSaved} onSaved={onLocationSaved} /> : <p className="text-sm text-text-secondary">Seleccioná un cliente con pedido para cargar su ubicación.</p>}
+            <div><Label htmlFor={clientId}>Cliente</Label><select id={clientId} value={selectedId} disabled={clientWritePending} onChange={(event) => setSelectedId(event.target.value)} className="h-10 w-full rounded-md border border-border-subtle bg-surface-base px-3 text-sm text-text-primary"><option value="">Seleccioná un cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></div>
+            {selectedClient ? <GeocodingForm open clientId={selectedClient.id} address={selectedClient.address} onOpenChange={onOpenChange} onConfirmed={onLocationSaved} onSaved={onLocationSaved} externalWritePending={clientWritePending} isExternalWritePending={() => clientWritePendingCount.current > 0} onWritePendingChange={setClientPending} /> : <p className="text-sm text-text-secondary">Seleccioná un cliente con pedido para cargar su ubicación.</p>}
           </> : <p className="text-sm text-text-secondary">No tenés permiso para confirmar ubicaciones de clientes.</p>}
         </section>
       </div>

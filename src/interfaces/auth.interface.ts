@@ -35,6 +35,9 @@ export interface AuthMe {
 
 // Permisos disponibles en el sistema (según backend)
 export enum Permission {
+  READ_CLIENT = 'read_client',
+  CREATE_CLIENT = 'create_client',
+  UPDATE_CLIENT = 'update_client',
   // Egresos
   CREATE_EXPENSE = 'create_expense',
   READ_EXPENSE = 'read_expense',

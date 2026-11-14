@@ -2,7 +2,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { clientService } from './client.service'
 import apiClient from '@/utils/client'
 
-vi.mock('@/utils/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
+vi.mock('@/utils/client', () => ({ default: { get: vi.fn(), post: vi.fn(), patch: vi.fn() } }))
+
+describe('client management', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('uses bounded pagination for literal search', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: [] })
+    await clientService.list('a.*', 25, 26)
+    expect(apiClient.post).toHaveBeenCalledWith('/client/search', { input: 'a.*', skip: 25, limit: 26 })
+  })
+
+  it('changes status without sending location fields', async () => {
+    vi.mocked(apiClient.patch).mockResolvedValue({ data: { matchedCount: 1 } })
+    await clientService.update('client-1', { isActive: false, expectedFields: { isActive: true } })
+    expect(apiClient.patch).toHaveBeenCalledWith('/client/client-1/managed', { isActive: false, expectedFields: { isActive: true } })
+  })
+
+  it('rejects a missing client instead of reporting success', async () => {
+    vi.mocked(apiClient.patch).mockResolvedValue({ data: { matchedCount: 0 } })
+    await expect(clientService.update('client-1', { isActive: true })).rejects.toThrow('Client not found')
+  })
+})
 
 describe('clientService geocoding', () => {
   beforeEach(() => vi.mocked(apiClient.post).mockReset())

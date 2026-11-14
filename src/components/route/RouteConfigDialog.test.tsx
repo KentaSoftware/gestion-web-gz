@@ -3,9 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { RouteConfigDialog } from './RouteConfigDialog'
 import { fireEvent } from '@testing-library/react'
 
-const { getConfig, updateConfig, confirmLocation } = vi.hoisted(() => ({ getConfig: vi.fn(), updateConfig: vi.fn(), confirmLocation: vi.fn() }))
+const { getConfig, updateConfig, confirmLocation, locationSnapshot } = vi.hoisted(() => ({ getConfig: vi.fn(), updateConfig: vi.fn(), confirmLocation: vi.fn(), locationSnapshot: vi.fn().mockResolvedValue({ address: 'Calle 1', lat: null, lng: null, locationRevision: 0 }) }))
 vi.mock('@/services/routePlan.service', () => ({ routePlanService: { getConfig, updateConfig } }))
-vi.mock('@/services/client.service', () => ({ clientService: { confirmLocation, geocode: vi.fn(), locationSnapshot: vi.fn().mockResolvedValue({ address: 'Calle 1', lat: null, lng: null, locationRevision: 0 }) } }))
+vi.mock('@/services/client.service', () => ({ clientService: { confirmLocation, geocode: vi.fn(), locationSnapshot } }))
 
 vi.mock('./LocationMapPicker', async (importOriginal) => {
   const original = await importOriginal<typeof import('./LocationMapPicker')>()
@@ -48,5 +48,47 @@ describe('RouteConfigDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Guardar coordenadas' }))
     expect(await screen.findByText('Ubicación manual guardada. Pendiente de validación.')).toBeInTheDocument()
     expect(confirmLocation).toHaveBeenCalledWith('c1', { manualReference: { address: 'Calle 1', lat: 0, lng: 0 }, expectedLocation: { address: 'Calle 1', lat: null, lng: null, locationRevision: 0 } })
+  })
+
+  it('prevents closing or switching clients during a location write', async () => {
+    let resolveSave: (value: object) => void = () => {}
+    confirmLocation.mockReturnValueOnce(new Promise((resolve) => { resolveSave = resolve }))
+    const onOpenChange = vi.fn()
+    render(<RouteConfigDialog open onOpenChange={onOpenChange} canManageConfig={false} canConfirmLocation clients={[{ id: 'c1', name: 'Cliente', address: 'Calle 1' }, { id: 'c2', name: 'Otro' }]} />)
+    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'c1' } })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar coordenadas' })).toBeEnabled())
+    fireEvent.change(screen.getByLabelText('Latitud'), { target: { value: '0' } })
+    fireEvent.change(screen.getByLabelText('Longitud'), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar coordenadas' }))
+    expect(screen.getByLabelText('Cliente')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onOpenChange).not.toHaveBeenCalled()
+    resolveSave({ geocoding: { status: 'PENDING' } })
+    await waitFor(() => expect(screen.getByLabelText('Cliente')).toBeEnabled())
+  })
+
+  it('keeps the remounted client form locked until its prior write settles', async () => {
+    confirmLocation.mockReset()
+    locationSnapshot.mockReset().mockResolvedValue({ address: 'Calle 1', lat: 1, lng: 2, locationRevision: 1 })
+    let resolveSave: (value: object) => void = () => {}
+    confirmLocation.mockReturnValueOnce(new Promise((resolve) => { resolveSave = resolve }))
+    const clients = [{ id: 'c1', name: 'Cliente', address: 'Calle 1' }]
+    const onOpenChange = vi.fn()
+    const { rerender } = render(<RouteConfigDialog open onOpenChange={onOpenChange} canManageConfig={false} canConfirmLocation clients={clients} />)
+    fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'c1' } })
+    await waitFor(() => expect(screen.getByLabelText('Latitud')).toHaveValue('1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar coordenadas' }))
+    rerender(<RouteConfigDialog open={false} onOpenChange={onOpenChange} canManageConfig={false} canConfirmLocation clients={clients} />)
+    rerender(<RouteConfigDialog open onOpenChange={onOpenChange} canManageConfig={false} canConfirmLocation clients={clients} />)
+    expect(screen.getByLabelText('Cliente')).toBeDisabled()
+    expect(screen.getByLabelText('Dirección')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Confirmar coordenadas' })).toBeDisabled()
+    expect(locationSnapshot).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar coordenadas' }))
+    expect(confirmLocation).toHaveBeenCalledTimes(1)
+    resolveSave({})
+    await waitFor(() => expect(locationSnapshot).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getByLabelText('Cliente')).toBeEnabled())
   })
 })

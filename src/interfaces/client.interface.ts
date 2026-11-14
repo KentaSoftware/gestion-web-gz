@@ -6,6 +6,37 @@ export interface GeocodingCandidate {
   lng: number
 }
 
+export interface ManagedClient {
+  _id: string
+  nombreCompleto: string
+  address?: string | null
+  telefonos?: number[]
+  lat?: number | null
+  lng?: number | null
+  locationRevision: number
+  deliveryZoneId?: string | null
+  isActive?: boolean
+}
+
+export interface ManagedClientInput {
+  nombreCompleto: string
+  telefonos: number[]
+  address?: string | null
+  lat?: number | null
+  lng?: number | null
+  deliveryZoneId?: string | null
+  isActive?: boolean
+  expectedLocation?: ClientLocationSnapshot
+  expectedFields?: ExpectedClientFields
+}
+
+export interface ExpectedClientFields {
+  nombreCompleto?: string | null
+  telefonos?: number[] | null
+  deliveryZoneId?: string | null
+  isActive?: boolean | null
+}
+
 export interface GeocodingResult {
   candidates: GeocodingCandidate[]
 }

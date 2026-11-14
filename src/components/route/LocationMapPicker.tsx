@@ -18,15 +18,18 @@ interface LocationMapPickerProps {
   onChange: (point: LocationPoint) => void
   kind: 'origin' | 'client'
   address?: string
+  disabled?: boolean
 }
 
-function PickerCanvas({ value, onChange, kind, address }: LocationMapPickerProps) {
+function PickerCanvas({ value, onChange, kind, address, disabled }: LocationMapPickerProps) {
   const status = useApiLoadingStatus()
   const mapId = useId()
   const map = useMap(mapId)
   const [error, setError] = useState('')
   const [searching, setSearching] = useState(false)
   const generation = useRef(0)
+  const disabledRef = useRef(disabled)
+  disabledRef.current = disabled
 
   const lat = value?.lat
   const lng = value?.lng
@@ -36,9 +39,10 @@ function PickerCanvas({ value, onChange, kind, address }: LocationMapPickerProps
   useEffect(() => () => { generation.current += 1 }, [])
   useEffect(() => { generation.current += 1; setSearching(false) }, [address])
   useEffect(() => { generation.current += 1; setSearching(false) }, [lat, lng])
+  useEffect(() => { if (disabled) { generation.current += 1; setSearching(false) } }, [disabled])
 
   const emit = (point: LocationPoint | null) => {
-    if (point !== null && Number.isFinite(point.lat) && Math.abs(point.lat) <= 90 && Number.isFinite(point.lng) && Math.abs(point.lng) <= 180) {
+    if (!disabledRef.current && point !== null && Number.isFinite(point.lat) && Math.abs(point.lat) <= 90 && Number.isFinite(point.lng) && Math.abs(point.lng) <= 180) {
       generation.current += 1
       setSearching(false)
       onChange(point)
@@ -46,6 +50,7 @@ function PickerCanvas({ value, onChange, kind, address }: LocationMapPickerProps
   }
 
   const search = async () => {
+    if (disabledRef.current) return
     if (!address?.trim() || status !== APILoadingStatus.LOADED || typeof google === 'undefined') {
       setError('No se pudo buscar la dirección. Ingresá las coordenadas manualmente.')
       return
@@ -69,11 +74,11 @@ function PickerCanvas({ value, onChange, kind, address }: LocationMapPickerProps
   if (status === APILoadingStatus.FAILED || status === APILoadingStatus.AUTH_FAILURE) return <p role="alert" className="text-sm text-state-warning">No se pudo cargar el mapa. Ingresá las coordenadas manualmente.</p>
   if (status !== APILoadingStatus.LOADED) return <p role="status" className="text-sm text-text-secondary">Cargando mapa…</p>
   return <div className="grid gap-2">
-    {kind === 'origin' && <Button type="button" variant="secondary" onClick={() => void search()} disabled={searching}>Buscar dirección del depósito</Button>}
+    {kind === 'origin' && <Button type="button" variant="secondary" onClick={() => void search()} disabled={searching || disabled}>Buscar dirección del depósito</Button>}
     {error && <p role="alert" className="text-sm text-state-warning">{error}</p>}
     <div className="h-64 overflow-hidden rounded-md border border-border-subtle" aria-label={kind === 'origin' ? 'Mapa del depósito' : 'Mapa del cliente'}>
-      <Map id={mapId} defaultCenter={value ?? { lat: -34.6, lng: -58.4 }} defaultZoom={12} gestureHandling="cooperative" onClick={(event: MapMouseEvent) => emit(event.detail.latLng)}>
-        {value !== null && <Marker position={value} draggable onDragEnd={(event: google.maps.MapMouseEvent) => emit(event.latLng?.toJSON() ?? null)} title={kind === 'origin' ? 'Depósito' : 'Cliente'} icon={{ path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: kind === 'origin' ? '#3e68a4' : '#d32f2f', fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2 }} />}
+      <Map id={mapId} defaultCenter={value ?? { lat: -34.6, lng: -58.4 }} defaultZoom={12} gestureHandling={disabled ? 'none' : 'cooperative'} keyboardShortcuts={!disabled} disableDefaultUI={!!disabled} disableDoubleClickZoom={!!disabled} clickableIcons={!disabled} onClick={(event: MapMouseEvent) => emit(event.detail.latLng)}>
+        {value !== null && <Marker position={value} draggable={!disabled} onDragEnd={(event: google.maps.MapMouseEvent) => emit(event.latLng?.toJSON() ?? null)} title={kind === 'origin' ? 'Depósito' : 'Cliente'} icon={{ path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: kind === 'origin' ? '#3e68a4' : '#d32f2f', fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2 }} />}
       </Map>
     </div>
   </div>
