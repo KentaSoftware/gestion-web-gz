@@ -32,3 +32,5 @@ FPP-3 work-unit commit: `9a6cdb2`. Next: review the sample report and verify bro
 User subsequently requested a clearer chart and removal of all references to fictional data. Dashboard and report values remain fixture-derived; unlabeled values may be mistaken for actual business data.
 
 The revised graph uses explicitly labeled linear bounds based on weekly balances and a separate reserve comparison. It retains hypothetical-scenario and uncertainty statements. Live browser download and accessibility remain unverified; production build was not run while development server was active.
+
+FPP-4 work-unit commit: `9526d31`. Next: user reviews the sample and verifies browser download.
