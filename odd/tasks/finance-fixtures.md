@@ -24,3 +24,5 @@ User requested additional fictional recommendation cards in the existing fixture
 Sales and stock figures in the recommendation cards are fixed fictional values, with dates relative to the selected range end. They are not labeled as demo per user request and could be mistaken for real business data. Live browser and production build remain unverified; no build was run while the development server was active.
 
 FFM-2 work-unit commit: `5394cb2`. Next: visually verify the recommendations and run the production build after the development server is stopped.
+
+FFM-3 work-unit commit: `3ec2301`. The three restored controls are visible but disabled while fixture mode is active; live mode keeps their real behavior. No production build was run with the development server active.
