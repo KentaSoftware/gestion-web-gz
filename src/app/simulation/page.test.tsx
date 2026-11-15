@@ -62,6 +62,38 @@ describe('Simulation workspace', () => {
     post.mockResolvedValue({ data: scenarios.items[0] })
   })
 
+  it('explains product transfer requirements and empty vehicle', async () => {
+    render(<SimulationPage />)
+    const add = await screen.findByRole('button', { name: 'Agregar producto al vehículo' })
+    expect(add).toHaveAccessibleDescription('Ingresá una cantidad mayor a cero para agregar el producto seleccionado.')
+    expect(screen.getByRole('button', { name: 'Quitar producto del vehículo' })).toHaveAccessibleDescription('Seleccioná un producto incluido para retirarlo por completo.')
+    expect(screen.getByText('Seleccioná un producto incluido para retirarlo por completo.')).toBeVisible()
+    expect(screen.getByText('Ingresá una cantidad mayor a cero para agregar el producto seleccionado.')).toBeVisible()
+    expect(screen.getByRole('table', { name: 'Productos incluidos en el vehículo' })).toHaveTextContent('No hay productos incluidos en el vehículo')
+    fireEvent.change(screen.getByLabelText('Cantidad de Agua'), { target: { value: '5' } })
+    expect(add).toBeEnabled()
+  })
+
+  it('explains unavailable routes and empty catalog', async () => {
+    get.mockImplementation((url: string) => Promise.resolve({ data: url === '/simulation/routes'
+      ? { items: [{ ...routeOptionItems[0], metrics: { ...routeOptionItems[0].metrics, fuelLiters: null } }], hasMore: false, nextCursor: null }
+      : url === '/simulation/route-catalog'
+        ? { items: [], excludedCount: 0, hasMore: false, nextCursor: null }
+        : scenarioHistoryResponse() }))
+    render(<SimulationPage />)
+    expect(await screen.findByRole('radio', { name: 'Seleccionar ruta R-001' })).toHaveAccessibleDescription('La ruta necesita combustible y tiempo válidos para simular.')
+    expect(screen.getByRole('button', { name: 'Simular' })).toHaveAccessibleDescription('Seleccioná una ruta con combustible y tiempo válidos.')
+    expect(screen.getByText('La ruta necesita combustible y tiempo válidos para simular.')).toBeVisible()
+    expect(screen.getByText('Seleccioná una ruta con combustible y tiempo válidos.')).toBeVisible()
+    expect(screen.getByRole('table', { name: 'Productos disponibles' })).toHaveTextContent('No hay productos disponibles')
+  })
+
+  it('announces which workspace data is loading', () => {
+    get.mockReturnValue(new Promise(() => undefined))
+    render(<SimulationPage />)
+    expect(screen.getByRole('status')).toHaveTextContent('Cargando rutas, productos y escenarios')
+  })
+
   it('renders reference headings, switch, route columns and zero transfer draft', async () => {
     render(<SimulationPage />)
     expect(await screen.findByRole('heading', { name: 'Registros de Escenarios' })).toBeInTheDocument()
@@ -275,6 +307,7 @@ describe('Simulation workspace', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar escenario ESC-014' }))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar escenario ESC-015' }))
     expect(screen.getByRole('checkbox', { name: 'Seleccionar escenario ESC-016' })).toBeDisabled()
+    expect(screen.getByText(/Deseleccioná uno para elegir otro/)).toBeVisible()
     fireEvent.click(compare)
     const dialog = screen.getByRole('dialog', { name: 'Comparar Escenarios' })
     expect(await within(dialog).findByText('Empate')).toBeInTheDocument()
