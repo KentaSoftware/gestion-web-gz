@@ -27,3 +27,5 @@ Sales and stock figures in the recommendation cards are fixed fictional values, 
 FFM-2 work-unit commit: `5394cb2`. Next: visually verify the recommendations and run the production build after the development server is stopped.
 
 FFM-3 work-unit commit: `3ec2301`. The three restored controls are visible but disabled while fixture mode is active; live mode keeps their real behavior. No production build was run with the development server active.
+
+FFM-4 work-unit commit: `a58083f`. Superseding FFM-3, the buttons are now enabled but intentionally do nothing in fixture mode. Live behavior remains unchanged.
