@@ -18,6 +18,7 @@ import { Spinner } from '@/components/ui/spinner'
 import Button from '@/components/Button'
 import { cn } from '@/lib/cn'
 import { PageContainer, PageHeader } from '@/components/layout/PageLayout'
+import { createFinanceDemo, demo, DEMO_MAX_DAYS } from './financeDemo'
 
 interface DateRange {
   startDate: string
@@ -43,6 +44,11 @@ function FinancePageContent() {
   const [expenseOpen, setExpenseOpen] = useState(false)
 
   const fetchDashboard = useCallback(async (range: DateRange) => {
+    if (demo) {
+      setLoadError('')
+      setDashboard(createFinanceDemo(range))
+      return
+    }
     try {
       setLoading(true)
       setLoadError('')
@@ -72,8 +78,12 @@ function FinancePageContent() {
   const handleApply = () => {
     const from = new Date(dateRange.startDate)
     const to = new Date(dateRange.endDate)
-    if (from > to) {
+    if (from > to || (demo && (!dateRange.startDate || !dateRange.endDate))) {
       setDateError('La fecha inicial no puede ser posterior a la fecha final')
+      return
+    }
+    if (demo && (to.getTime() - from.getTime()) / 86400000 + 1 > DEMO_MAX_DAYS) {
+      setDateError(`El rango no puede superar ${DEMO_MAX_DAYS} días.`)
       return
     }
     setDateError('')
@@ -81,6 +91,7 @@ function FinancePageContent() {
   }
 
   const handleExportPdf = async () => {
+    if (demo) return
     try {
       setExporting(true)
       const blob = await financeService.exportReportPdf(dateRange)
@@ -103,18 +114,18 @@ function FinancePageContent() {
         title="Gestión Financiera"
         actions={
           <>
-            <Button
+            {!demo && <Button
               text={exporting ? 'Exportando…' : 'Exportar Reporte'}
               onClick={() => { void handleExportPdf() }}
               size="md"
               variant="secondary"
-            />
-            <Button
+            />}
+            {!demo && <Button
               text="+ Nuevo Movimiento"
               onClick={() => setExpenseOpen(true)}
               size="md"
               variant="primary"
-            />
+            />}
           </>
         }
       >
@@ -177,7 +188,11 @@ function FinancePageContent() {
         weekly={dashboard?.weeklyProjection ?? []}
         loading={loading}
         showProjection={false}
+        showSinglePoint={demo}
       />
+      {demo && dashboard && dashboard.startDate === dashboard.endDate && (
+        <p className="text-caption text-text-secondary mb-4">Ingresos: {dashboard.kpis.totalInflows.toLocaleString('es-AR')} · Egresos: {dashboard.kpis.totalOutflows.toLocaleString('es-AR')}</p>
+      )}
       {/* Mock row: Proyección vs Real | Últimos Movimientos */}
       <section className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
         <FinanceProjectionChart
@@ -188,6 +203,7 @@ function FinancePageContent() {
           movements={dashboard?.recentMovements ?? []}
           loading={loading}
           compact
+          allowNavigation={!demo}
         />
       </section>
       <FinanceInsightsPanel
@@ -195,13 +211,13 @@ function FinancePageContent() {
         opportunity={dashboard?.opportunity ?? null}
         loading={loading}
       />
-      <FinanceRulesPanel onUpdated={() => void fetchDashboard(dateRange)} />
+      <FinanceRulesPanel readOnly={demo} onUpdated={() => void fetchDashboard(dateRange)} />
 
-      <RegisterExpenseModal
+      {!demo && <RegisterExpenseModal
         open={expenseOpen}
         onClose={() => setExpenseOpen(false)}
         onCreated={() => void fetchDashboard(dateRange)}
-      />
+      />}
     </PageContainer>
   )
 }

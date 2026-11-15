@@ -22,9 +22,10 @@ interface Props {
   loading: boolean
   /** Compact card for side-by-side with Proyección (mock layout). */
   compact?: boolean
+  allowNavigation?: boolean
 }
 
-export function FinanceMovementsPanel({ movements, loading, compact = false }: Props) {
+export function FinanceMovementsPanel({ movements, loading, compact = false, allowNavigation = true }: Props) {
   return (
     <section
       className={cn(
@@ -85,7 +86,7 @@ export function FinanceMovementsPanel({ movements, loading, compact = false }: P
         </ul>
       )}
 
-      <div className="mt-4 pt-3 border-t border-border-subtle">
+      {allowNavigation && <div className="mt-4 pt-3 border-t border-border-subtle">
         <Link
           href="/cashflow"
           className={cn(
@@ -96,7 +97,7 @@ export function FinanceMovementsPanel({ movements, loading, compact = false }: P
         >
           Ver Todos los Movimientos
         </Link>
-      </div>
+      </div>}
     </section>
   )
 }

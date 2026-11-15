@@ -8,6 +8,7 @@ import { cn } from '@/lib/cn'
 
 interface Props {
   onUpdated?: () => void
+  readOnly?: boolean
 }
 
 const DEFAULTS: FinanceRulesConfig = {
@@ -22,8 +23,8 @@ const DEFAULTS: FinanceRulesConfig = {
  * CU-012 / CUR-6 — Configuración de reglas financieras (mock).
  * openingBalance se configura solo en /cashflow.
  */
-export function FinanceRulesPanel({ onUpdated }: Props) {
-  const [loading, setLoading] = useState(true)
+export function FinanceRulesPanel({ onUpdated, readOnly = false }: Props) {
+  const [loading, setLoading] = useState(!readOnly)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
@@ -31,6 +32,7 @@ export function FinanceRulesPanel({ onUpdated }: Props) {
   const [form, setForm] = useState<FinanceRulesConfig>(DEFAULTS)
 
   useEffect(() => {
+    if (readOnly) return
     let cancelled = false
     ;(async () => {
       try {
@@ -49,9 +51,10 @@ export function FinanceRulesPanel({ onUpdated }: Props) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [readOnly])
 
   const handleSave = async () => {
+    if (readOnly) return
     try {
       setSaving(true)
       setError('')
@@ -91,13 +94,13 @@ export function FinanceRulesPanel({ onUpdated }: Props) {
             CUR-6 / CU-012 · {rulesVersion || 'finance-rules-v2'}
           </p>
         </div>
-        <Button text={saving ? 'Actualizando…' : 'Actualizar'} onClick={handleSave} size="md" />
+        {!readOnly && <Button text={saving ? 'Actualizando…' : 'Actualizar'} onClick={handleSave} size="md" />}
       </div>
 
       {loading && <p className="text-caption text-text-secondary">Cargando…</p>}
 
       {!loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <fieldset disabled={readOnly} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <label className="flex flex-col gap-1">
             <span className="text-caption text-text-secondary">Reserva mínima de seguridad ($)</span>
             <input
@@ -166,7 +169,7 @@ export function FinanceRulesPanel({ onUpdated }: Props) {
               <option value="agresivo">Agresivo</option>
             </select>
           </label>
-        </div>
+        </fieldset>
       )}
 
       {error && <p className="text-caption text-state-error font-medium mt-3">{error}</p>}
