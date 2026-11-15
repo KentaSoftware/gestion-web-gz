@@ -13,3 +13,5 @@ Make the Finance module available without requiring an environment variable whil
 
 ## Progress
 Branch `fix/finance-build-iterator` also includes the production-build correction. Finance permission and the existing module gate remain in place. Live browser and backend authorization were not independently verified. RDD is disabled; failed risk assessment was treated as high.
+
+Work-unit commit: `4d197cd`. Next: review and publish only when requested.
