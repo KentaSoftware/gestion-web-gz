@@ -5,6 +5,10 @@ import { GeocodingDialog } from './GeocodingDialog'
 
 const { geocode, confirmLocation, locationSnapshot } = vi.hoisted(() => ({ geocode: vi.fn(), confirmLocation: vi.fn(), locationSnapshot: vi.fn().mockResolvedValue({ address: null, lat: null, lng: null, locationRevision: 1 }) }))
 vi.mock('@/services/client.service', () => ({ clientService: { geocode, confirmLocation, locationSnapshot } }))
+vi.mock('./LocationMapPicker', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./LocationMapPicker')>()
+  return { ...actual, LocationMapPicker: ({ disabled, onChange }: { disabled?: boolean; onChange: (point: { lat: number; lng: number }) => void }) => <button type="button" disabled={disabled} onClick={() => onChange({ lat: 8, lng: 9 })}>Mapa de prueba</button> }
+})
 
 describe('GeocodingDialog', () => {
   beforeEach(() => {
@@ -23,6 +27,95 @@ describe('GeocodingDialog', () => {
     await waitFor(() => expect(confirmLocation).toHaveBeenCalledWith('client-1', { manualConfirmation: { lat: 0, lng: 0 }, expectedLocation: snapshot }))
     expect(onConfirmed).toHaveBeenCalled()
   })
+  it('does not confirm coordinates against a different unsaved address', async () => {
+    locationSnapshot.mockResolvedValueOnce({ address: 'Original', lat: 1, lng: 2, locationRevision: 3 })
+    render(<GeocodingDialog open clientId="client-1" address="Original" onOpenChange={vi.fn()} />)
+    await waitFor(() => expect(screen.getByLabelText('Latitud')).toHaveValue('1'))
+    fireEvent.change(screen.getByLabelText('Dirección'), { target: { value: 'Editada' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar coordenadas' }))
+    expect(screen.getByText(/dirección editada no está guardada/i)).toBeInTheDocument()
+    expect(confirmLocation).not.toHaveBeenCalled()
+  })
+
+  it('blocks user dismissal during a pending write and re-enables it after success', async () => {
+    let resolveSave: (value: object) => void = () => {}
+    confirmLocation.mockReturnValueOnce(new Promise((resolve) => { resolveSave = resolve }))
+    locationSnapshot.mockResolvedValueOnce({ address: null, lat: 0, lng: 0, locationRevision: 1 })
+    const onOpenChange = vi.fn()
+    const onConfirmed = vi.fn()
+    render(<GeocodingDialog open clientId="client-1" onOpenChange={onOpenChange} onConfirmed={onConfirmed} />)
+    await waitFor(() => expect(screen.getByLabelText('Latitud')).toHaveValue('0'))
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar coordenadas' }))
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.pointerDown(document.body)
+    expect(onOpenChange).not.toHaveBeenCalled()
+    resolveSave({ geocoding: { status: 'CONFIRMED' } })
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalledOnce())
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeEnabled()
+  })
+
+  it('requests a refresh when an externally closed dialog finishes saving', async () => {
+    let resolveSave: (value: object) => void = () => {}
+    confirmLocation.mockReturnValueOnce(new Promise((resolve) => { resolveSave = resolve }))
+    locationSnapshot.mockResolvedValueOnce({ address: null, lat: 0, lng: 0, locationRevision: 1 })
+    const onSaved = vi.fn()
+    const { rerender } = render(<GeocodingDialog open clientId="client-1" onOpenChange={vi.fn()} onSaved={onSaved} />)
+    await waitFor(() => expect(screen.getByLabelText('Latitud')).toHaveValue('0'))
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar coordenadas' }))
+    rerender(<GeocodingDialog open={false} clientId="client-1" onOpenChange={vi.fn()} onSaved={onSaved} />)
+    resolveSave({})
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce())
+  })
+  it.each(['success', 'failure'])('blocks a remounted form until the previous write finishes with %s', async (outcome) => {
+    let resolveSave: (value: object) => void = () => {}
+    let rejectSave: (error: Error) => void = () => {}
+    confirmLocation.mockReturnValueOnce(new Promise((resolve, reject) => { resolveSave = resolve; rejectSave = reject }))
+    locationSnapshot.mockResolvedValueOnce({ address: 'Original', lat: 0, lng: 0, locationRevision: 1 })
+      .mockResolvedValueOnce({ address: 'Actualizada', lat: 3, lng: 4, locationRevision: 2 })
+    const onSaved = vi.fn()
+    const onOpenChange = vi.fn()
+    const { rerender } = render(<GeocodingDialog open clientId="client-1" address="Original" onOpenChange={onOpenChange} onSaved={onSaved} />)
+    await waitFor(() => expect(screen.getByLabelText('Latitud')).toHaveValue('0'))
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar coordenadas' }))
+    rerender(<GeocodingDialog open={false} clientId="client-1" address="Original" onOpenChange={onOpenChange} onSaved={onSaved} />)
+    rerender(<GeocodingDialog open clientId="client-1" address="Original" onOpenChange={onOpenChange} onSaved={onSaved} />)
+    expect(screen.getByRole('status')).toHaveTextContent('Guardando ubicación')
+    for (const label of ['Dirección', 'Latitud', 'Longitud']) expect(screen.getByLabelText(label)).toBeDisabled()
+    for (const name of ['Buscar', 'Mapa de prueba', 'Guardar coordenadas', 'Confirmar coordenadas', 'Cerrar', 'Close']) expect(screen.getByRole('button', { name })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar coordenadas' }))
+    expect(confirmLocation).toHaveBeenCalledTimes(1)
+    expect(locationSnapshot).toHaveBeenCalledTimes(1)
+    if (outcome === 'success') resolveSave({})
+    else rejectSave(new Error('Failed'))
+    await waitFor(() => expect(locationSnapshot).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getByLabelText('Latitud')).toHaveValue('3'))
+    expect(screen.getByLabelText('Dirección')).toHaveValue('Actualizada')
+    expect(screen.getByLabelText('Dirección')).toBeEnabled()
+    expect(onSaved).toHaveBeenCalledTimes(outcome === 'success' ? 1 : 0)
+  })
+  it('keeps every editing control locked when the address prop changes during a write', async () => {
+    let resolveSave: (value: object) => void = () => {}
+    confirmLocation.mockReturnValueOnce(new Promise((resolve) => { resolveSave = resolve }))
+    locationSnapshot.mockResolvedValueOnce({ address: 'Original', lat: 0, lng: 0, locationRevision: 1 })
+    const onSaved = vi.fn()
+    const onOpenChange = vi.fn()
+    const { rerender } = render(<GeocodingDialog open clientId="client-1" address="Original" onOpenChange={onOpenChange} onSaved={onSaved} />)
+    await waitFor(() => expect(screen.getByLabelText('Latitud')).toHaveValue('0'))
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar coordenadas' }))
+    rerender(<GeocodingDialog open clientId="client-1" address="Actualizada" onOpenChange={onOpenChange} onSaved={onSaved} />)
+    expect(screen.getByRole('status')).toHaveTextContent('Guardando ubicación')
+    for (const label of ['Dirección', 'Latitud', 'Longitud']) expect(screen.getByLabelText(label)).toBeDisabled()
+    for (const name of ['Buscar', 'Mapa de prueba', 'Guardar coordenadas', 'Confirmar coordenadas', 'Cerrar', 'Close']) expect(screen.getByRole('button', { name })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
+    expect(geocode).not.toHaveBeenCalled()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onOpenChange).not.toHaveBeenCalled()
+    resolveSave({})
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce())
+    await waitFor(() => expect(screen.getByLabelText('Dirección')).toBeEnabled())
+  })
   it('requires an explicit reload and another confirmation after a conflict', async () => {
     confirmLocation.mockReset()
     locationSnapshot.mockResolvedValueOnce({ address: null, lat: 1, lng: 2, locationRevision: 1 })
@@ -38,6 +131,23 @@ describe('GeocodingDialog', () => {
     expect(confirmLocation).toHaveBeenCalledTimes(1)
     await userEvent.click(screen.getByRole('button', { name: 'Confirmar coordenadas' }))
     await waitFor(() => expect(confirmLocation).toHaveBeenCalledWith('client-1', { manualConfirmation: { lat: 3, lng: 4 }, expectedLocation: { address: 'Nueva', lat: 3, lng: 4, locationRevision: 2 } }))
+  })
+  it('replaces an edited address and coordinates with the refreshed snapshot after a conflict', async () => {
+    const refreshed = { address: 'Dirección actual', lat: 3, lng: 4, locationRevision: 2 }
+    locationSnapshot.mockResolvedValueOnce({ address: 'Original', lat: 1, lng: 2, locationRevision: 1 }).mockResolvedValueOnce(refreshed)
+    confirmLocation.mockRejectedValueOnce({ response: { status: 409 } }).mockResolvedValueOnce({})
+    render(<GeocodingDialog open clientId="client-1" address="Original" onOpenChange={vi.fn()} />)
+    await waitFor(() => expect(screen.getByLabelText('Latitud')).toHaveValue('1'))
+    fireEvent.change(screen.getByLabelText('Dirección'), { target: { value: 'Borrador anterior' } })
+    fireEvent.change(screen.getByLabelText('Latitud'), { target: { value: '8' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar coordenadas' }))
+    expect(await screen.findByText(/La ubicación cambió/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Recargar ubicación' }))
+    await waitFor(() => expect(screen.getByLabelText('Dirección')).toHaveValue('Dirección actual'))
+    expect(screen.getByLabelText('Latitud')).toHaveValue('3')
+    expect(screen.getByLabelText('Longitud')).toHaveValue('4')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar coordenadas' }))
+    await waitFor(() => expect(confirmLocation).toHaveBeenLastCalledWith('client-1', { manualConfirmation: { lat: 3, lng: 4 }, expectedLocation: refreshed }))
   })
   it('ignores a snapshot arriving after selecting another client', async () => {
     let resolveOld: (value: { address: null; lat: number; lng: number; locationRevision: number }) => void = () => {}

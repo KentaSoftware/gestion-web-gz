@@ -2,18 +2,39 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LocationMapPicker } from './LocationMapPicker'
 
+const { mapProps, markerProps } = vi.hoisted(() => ({ mapProps: vi.fn(), markerProps: vi.fn() }))
 vi.mock('@vis.gl/react-google-maps', () => ({
   APIProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   APILoadingStatus: { LOADED: 'loaded', FAILED: 'failed', AUTH_FAILURE: 'auth' },
   useApiLoadingStatus: () => 'loaded',
-  Map: ({ children, onClick }: { children: React.ReactNode; onClick: (event: unknown) => void }) => <div><button onClick={() => onClick({ detail: { latLng: { lat: 1, lng: 2 } } })}>map click</button>{children}</div>,
-  Marker: ({ onDragEnd }: { onDragEnd: (event: unknown) => void }) => <button onClick={() => onDragEnd({ latLng: { toJSON: () => ({ lat: 3, lng: 4 }) } })}>marker drag</button>,
+  Map: (props: { children: React.ReactNode; onClick: (event: unknown) => void }) => { mapProps(props); return <div><button onClick={() => props.onClick({ detail: { latLng: { lat: 1, lng: 2 } } })}>map click</button>{props.children}</div> },
+  Marker: (props: { onDragEnd: (event: unknown) => void }) => { markerProps(props); return <button onClick={() => props.onDragEnd({ latLng: { toJSON: () => ({ lat: 3, lng: 4 }) } })}>marker drag</button> },
   useMap: () => null,
 }))
 
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
 
 describe('LocationMapPicker', () => {
+  it('supports a configurable viewport without selecting a location, and preserves existing coordinates', () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key')
+    vi.stubGlobal('google', { maps: { SymbolPath: { CIRCLE: 0 } } })
+    const onChange = vi.fn()
+    const center = { lat: -26.9, lng: -65.3 }
+    const { rerender } = render(<LocationMapPicker value={null} onChange={onChange} kind="client" defaultCenter={center} defaultZoom={8} mapClassName="flex-1 min-h-64" />)
+    expect(mapProps).toHaveBeenLastCalledWith(expect.objectContaining({ defaultCenter: center, defaultZoom: 8 }))
+    expect(screen.getByLabelText('Mapa del cliente')).toHaveClass('flex-1', 'min-h-64')
+    expect(onChange).not.toHaveBeenCalled()
+    expect(screen.queryByText('marker drag')).not.toBeInTheDocument()
+    rerender(<LocationMapPicker value={{ lat: 0, lng: 0 }} onChange={onChange} kind="client" defaultCenter={center} defaultZoom={8} />)
+    expect(mapProps).toHaveBeenLastCalledWith(expect.objectContaining({ defaultCenter: { lat: 0, lng: 0 } }))
+  })
+
+  it('retains the original viewport and height when not configured', () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key')
+    render(<LocationMapPicker value={null} onChange={vi.fn()} kind="client" />)
+    expect(mapProps).toHaveBeenLastCalledWith(expect.objectContaining({ defaultCenter: { lat: -34.6, lng: -58.4 }, defaultZoom: 12 }))
+    expect(screen.getByLabelText('Mapa del cliente')).toHaveClass('h-64')
+  })
   it.each(['map click', 'marker drag', 'prop change'])('ignores a delayed search after %s', async (choice) => {
     vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key')
     let resolveSearch: (value: unknown) => void = () => {}
@@ -45,6 +66,35 @@ describe('LocationMapPicker', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/manualmente/i)
   })
 
+  it('does not change coordinates while disabled', () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key')
+    vi.stubGlobal('google', { maps: { SymbolPath: { CIRCLE: 0 } } })
+    const onChange = vi.fn()
+    const { rerender } = render(<LocationMapPicker value={{ lat: 0, lng: 0 }} onChange={onChange} kind="client" disabled />)
+    expect(mapProps).toHaveBeenLastCalledWith(expect.objectContaining({ gestureHandling: 'none', keyboardShortcuts: false, disableDefaultUI: true, disableDoubleClickZoom: true, clickableIcons: false }))
+    expect(markerProps).toHaveBeenLastCalledWith(expect.objectContaining({ draggable: false }))
+    fireEvent.click(screen.getByText('map click'))
+    fireEvent.click(screen.getByText('marker drag'))
+    expect(onChange).not.toHaveBeenCalled()
+    rerender(<LocationMapPicker value={{ lat: 0, lng: 0 }} onChange={onChange} kind="client" />)
+    expect(mapProps).toHaveBeenLastCalledWith(expect.objectContaining({ gestureHandling: 'cooperative', keyboardShortcuts: true, disableDefaultUI: false, disableDoubleClickZoom: false, clickableIcons: true }))
+    expect(markerProps).toHaveBeenLastCalledWith(expect.objectContaining({ draggable: true }))
+  })
+
+  it('disables origin search and discards a search started before the picker was disabled', async () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key')
+    let resolveSearch: (value: unknown) => void = () => {}
+    const geocode = vi.fn().mockReturnValue(new Promise((resolve) => { resolveSearch = resolve }))
+    vi.stubGlobal('google', { maps: { SymbolPath: { CIRCLE: 0 }, Geocoder: class { geocode = geocode } } })
+    const onChange = vi.fn()
+    const { rerender } = render(<LocationMapPicker value={null} onChange={onChange} kind="origin" address="Calle" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar dirección del depósito' }))
+    rerender(<LocationMapPicker value={null} onChange={onChange} kind="origin" address="Calle" disabled />)
+    expect(screen.getByRole('button', { name: 'Buscar dirección del depósito' })).toBeDisabled()
+    rerender(<LocationMapPicker value={null} onChange={onChange} kind="origin" address="Calle" />)
+    await act(async () => { resolveSearch({ results: [{ geometry: { location: { lat: () => 8, lng: () => 9 } } }] }) })
+    expect(onChange).not.toHaveBeenCalled()
+  })
   it('retains manual fallback when an explicit origin search fails', async () => {
     vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key')
     const geocode = vi.fn().mockRejectedValue(new Error('quota'))

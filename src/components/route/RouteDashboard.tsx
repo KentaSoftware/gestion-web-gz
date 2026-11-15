@@ -403,7 +403,7 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
         </DialogContent>
       </Dialog>
       {(canManageConfig || canConfirmLocation) && configOpen && <RouteConfigDialog open onOpenChange={setConfigOpen} canManageConfig={canManageConfig} canConfirmLocation={canConfirmLocation} clients={Array.from(new globalThis.Map(clientCandidates.filter(({ candidate }) => candidate.clientId !== undefined).map(({ candidate }) => [candidate.clientId as string, { id: candidate.clientId as string, name: candidate.displayName ?? 'Cliente', address: candidate.addressSummary }])).values())} onLocationSaved={() => setReloadToken((token) => token + 1)} />}
-      {canConfirmLocation && geocodingClient !== null && <GeocodingDialog open clientId={geocodingClient.id} clientName={geocodingClient.name} address={geocodingClient.address} onOpenChange={(open) => { if (!open) setGeocodingClient(null) }} onConfirmed={() => { setGeocodingClient(null); setReloadToken((token) => token + 1) }} />}
+      {canConfirmLocation && geocodingClient !== null && <GeocodingDialog open clientId={geocodingClient.id} clientName={geocodingClient.name} address={geocodingClient.address} onOpenChange={(open) => { if (!open) setGeocodingClient(null) }} onConfirmed={() => { setGeocodingClient(null); setReloadToken((token) => token + 1) }} onSaved={() => setReloadToken((token) => token + 1)} />}
     </section>
   )
 }
