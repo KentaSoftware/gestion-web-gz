@@ -251,6 +251,44 @@ describe('Stock Inteligente read dashboard', () => {
     expect(quickLookup).toHaveTextContent('Sin disponibilidad')
   })
 
+  it('hides the initial instruction for matching searches and restores it when cleared or whitespace-only', async () => {
+    render(<SmartStockPage />)
+    await screen.findByRole('table')
+    const lookup = within(screen.getByRole('complementary', { name: 'Consulta rápida de existencias' }))
+    const input = lookup.getByLabelText('Búsqueda rápida en esta página')
+    const instruction = 'Seleccioná un resultado para ver existencias y movimientos.'
+
+    expect(lookup.getByText('Consultá un producto')).toBeInTheDocument()
+    expect(lookup.getByText(instruction)).toBeInTheDocument()
+    fireEvent.change(input, { target: { value: 'Norte' } })
+    expect(lookup.getByRole('button', { name: /Té del Norte/ })).toBeInTheDocument()
+    expect(lookup.queryByText('Consultá un producto')).not.toBeInTheDocument()
+    expect(lookup.queryByText(instruction)).not.toBeInTheDocument()
+    fireEvent.change(input, { target: { value: '' } })
+    expect(lookup.getByText('Consultá un producto')).toBeInTheDocument()
+    expect(lookup.getByText(instruction)).toBeInTheDocument()
+    fireEvent.change(input, { target: { value: '   ' } })
+    expect(lookup.getByText('Consultá un producto')).toBeInTheDocument()
+    expect(lookup.getByText(instruction)).toBeInTheDocument()
+  })
+
+  it('shows no-results without the initial instruction and preserves selected product detail', async () => {
+    render(<SmartStockPage />)
+    await screen.findByRole('table')
+    const lookup = within(screen.getByRole('complementary', { name: 'Consulta rápida de existencias' }))
+    const input = lookup.getByLabelText('Búsqueda rápida en esta página')
+    fireEvent.change(input, { target: { value: 'Inexistente' } })
+    expect(lookup.getByText('No hay productos en esta página que coincidan.')).toBeInTheDocument()
+    expect(lookup.queryByText('Consultá un producto')).not.toBeInTheDocument()
+    expect(lookup.queryByText('Seleccioná un resultado para ver existencias y movimientos.')).not.toBeInTheDocument()
+    fireEvent.change(input, { target: { value: 'Norte' } })
+    fireEvent.click(lookup.getByRole('button', { name: /Té del Norte/ }))
+    expect(await lookup.findByText('Ingreso por compra')).toBeInTheDocument()
+    fireEvent.change(input, { target: { value: '' } })
+    expect(lookup.getByRole('heading', { name: 'Té del Norte' })).toBeInTheDocument()
+    expect(lookup.queryByText('Consultá un producto')).not.toBeInTheDocument()
+  })
+
   it('S-21 separates request failure from a valid empty page and offers retry', async () => {
     get.mockRejectedValueOnce(new Error('unavailable'))
     render(<SmartStockPage />)
