@@ -27,7 +27,6 @@ import { Permission, SESSION_STATUS, type SessionAccess } from '@/interfaces/aut
 /** Feature flag keys for the remaining Phase 0 modules. */
 export const MODULE_FLAG = {
   STOCK: 'stock',
-  FINANCE: 'finance',
   SIMULATION: 'simulation',
 } as const
 
@@ -48,14 +47,13 @@ const parseEnabledFlag = (value: string | undefined): boolean => value === 'true
 /** Resolved module flags, read from public env vars at module load. Default false. */
 export const MODULE_FLAGS: Readonly<Record<ModuleFlagKey, boolean>> = {
   [MODULE_FLAG.STOCK]: parseEnabledFlag(process.env.NEXT_PUBLIC_STOCK_ENABLED),
-  [MODULE_FLAG.FINANCE]: parseEnabledFlag(process.env.NEXT_PUBLIC_FINANCE_ENABLED),
   [MODULE_FLAG.SIMULATION]: parseEnabledFlag(process.env.NEXT_PUBLIC_SIMULATION_ENABLED),
 }
 
 /** Gate evidence is approved outside the app; defaults are unmet except explicit approvals below. */
 export const DEFAULT_MODULE_GATES: Readonly<Record<string, boolean>> = {
   [MODULE_GATE.STOCK]: false,
-  /** Finance module enabled for this iteration (flag still required via env). */
+  /** Finance module enabled for this iteration. */
   [MODULE_GATE.FINANCE]: true,
   [MODULE_GATE.SIMULATION]: false,
 }
@@ -78,8 +76,8 @@ export interface ModuleRegistryEntry {
 
 /**
  * Legacy navigation entries require authentication; Rutas also requires read access. The
- * remaining Phase 0 modules are registered with a flag and a gate so they stay
- * hidden while unapproved. Permission requirements remain for unrelated modules.
+ * gated modules remain hidden while unapproved. Permission requirements remain
+ * for unrelated modules.
  */
 export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
   { id: 'home', href: '/home', label: 'Inicio', icon: Home, flag: null, requiredPermissions: [], gate: null },
@@ -93,7 +91,7 @@ export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
   { id: 'cashflow', href: '/cashflow', label: 'Flujo de caja', icon: LineChart, flag: null, requiredPermissions: [], gate: null },
   { id: 'route', href: '/route', label: 'Rutas', icon: Route, flag: null, requiredPermissions: [Permission.READ_ROUTE_PLAN], gate: null },
   { id: 'stock', href: '/stock', label: 'Stock', icon: Boxes, flag: MODULE_FLAG.STOCK, requiredPermissions: [Permission.ADJUST_STOCK], gate: MODULE_GATE.STOCK },
-  { id: 'finance', href: '/finance', label: 'Finanzas', icon: Wallet, flag: MODULE_FLAG.FINANCE, requiredPermissions: [Permission.READ_CASHFLOW], gate: MODULE_GATE.FINANCE },
+  { id: 'finance', href: '/finance', label: 'Finanzas', icon: Wallet, flag: null, requiredPermissions: [Permission.READ_CASHFLOW], gate: MODULE_GATE.FINANCE },
   /** Simulation stays visible for the authorized demo while its flag/gate remain reserved for activation. */
   { id: 'simulation', href: '/simulation', label: 'Simulación', icon: FlaskConical, flag: null, requiredPermissions: [], gate: null },
 ]

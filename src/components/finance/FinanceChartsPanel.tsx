@@ -100,7 +100,7 @@ function buildCashflowSeries (timeline: FinanceMovement[]) {
     map.set(sortKey, row)
   }
 
-  return [...map.values()]
+  return Array.from(map.values())
     .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
     .map(({ label, ingresos, egresos }) => ({
       label,

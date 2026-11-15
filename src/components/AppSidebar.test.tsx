@@ -3,7 +3,7 @@ import { act } from 'react'
 import { hydrateRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { SESSION_STATUS } from '@/interfaces/auth.interface'
+import { Permission, SESSION_STATUS } from '@/interfaces/auth.interface'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { REPARTIDOR_ACCESS } from '@/test/fixtures/sessionAccess'
 
@@ -43,6 +43,24 @@ import AppSidebar from './AppSidebar'
 
 describe('AppSidebar', () => {
   const routeEnabledForRepartidor = (entry: { id: string }) => entry.id === 'home' || entry.id === 'route'
+
+  it('shows finance only for hydrated authorized sessions with an open gate', async () => {
+    const registry = await vi.importActual<typeof import('@/config/moduleRegistry')>('@/config/moduleRegistry')
+    isModuleEnabled.mockImplementation(registry.isModuleEnabled)
+    const access = { ...REPARTIDOR_ACCESS, permissions: [Permission.READ_CASHFLOW], gates: { ...REPARTIDOR_ACCESS.gates, finance: true } }
+    useSessionAccess.mockReturnValue(access)
+    const { rerender } = render(<SidebarProvider><AppSidebar /></SidebarProvider>)
+    expect(screen.getByRole('link', { name: 'Finanzas' })).toHaveAttribute('href', '/finance')
+    for (const blocked of [
+      { ...access, permissions: [] },
+      { ...access, status: SESSION_STATUS.HYDRATING },
+      { ...access, gates: { ...access.gates, finance: false } },
+    ]) {
+      useSessionAccess.mockReturnValue(blocked)
+      rerender(<SidebarProvider><AppSidebar /></SidebarProvider>)
+      expect(screen.queryByRole('link', { name: 'Finanzas' })).not.toBeInTheDocument()
+    }
+  })
 
   it('clears the current session when the logout item is clicked', () => {
     useSessionAccess.mockReturnValue(REPARTIDOR_ACCESS)

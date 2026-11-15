@@ -1,25 +1,51 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Permission, SESSION_STATUS } from '@/interfaces/auth.interface'
 import { useLayoutEffect } from 'react'
 
-const { useSessionAccess, usePermission, push } = vi.hoisted(() => ({
+const { useSessionAccess, usePermission, push, pathname } = vi.hoisted(() => ({
   useSessionAccess: vi.fn(),
   usePermission: vi.fn(),
   push: vi.fn(),
+  pathname: { value: '/route' },
 }))
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/route',
-  useRouter: () => ({ push }),
+  usePathname: () => pathname.value,
+  useRouter: () => ({ push, refresh: vi.fn() }),
 }))
 vi.mock('@/hooks/useSessionAccess', () => ({ useSessionAccess }))
 vi.mock('@/hooks/usePermission', () => ({ usePermission }))
-vi.mock('@/components/module-gate', () => ({ ModuleGate: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
 
 import { ProtectedRoute } from './ProtectedRoute'
 
 describe('ProtectedRoute', () => {
+  afterEach(() => { pathname.value = '/route' })
+  it('enforces finance access on direct navigation', () => {
+    pathname.value = '/finance'
+    const access = { status: SESSION_STATUS.READY, permissions: [Permission.READ_CASHFLOW], gates: { finance: true } }
+    useSessionAccess.mockReturnValue(access)
+    usePermission.mockReturnValue({ hasPermission: () => true, hasAnyPermission: () => true })
+    const route = () => <ProtectedRoute requiredPermission={Permission.READ_CASHFLOW}>Finance content</ProtectedRoute>
+    const { rerender, unmount } = render(route())
+    expect(screen.getByText('Finance content')).toBeInTheDocument()
+    useSessionAccess.mockReturnValue({ ...access, permissions: [] })
+    usePermission.mockReturnValue({ hasPermission: () => false, hasAnyPermission: () => false })
+    rerender(route())
+    expect(screen.getByRole('alert')).toHaveTextContent('Acceso restringido')
+    useSessionAccess.mockReturnValue({ ...access, permissions: [], isAdmin: true })
+    usePermission.mockReturnValue({ hasPermission: () => true, hasAnyPermission: () => true })
+    rerender(route())
+    expect(screen.getByText('Finance content')).toBeInTheDocument()
+    useSessionAccess.mockReturnValue({ ...access, status: SESSION_STATUS.HYDRATING })
+    rerender(route())
+    expect(screen.getByRole('status')).toHaveTextContent('Verificando el acceso')
+    useSessionAccess.mockReturnValue({ ...access, gates: { finance: false } })
+    rerender(route())
+    expect(screen.getByRole('alert')).toHaveTextContent('Módulo no disponible')
+    unmount()
+    pathname.value = '/route'
+  })
   it('shows a loading indicator during hydration without redirecting', () => {
     useSessionAccess.mockReturnValue({ status: SESSION_STATUS.HYDRATING })
     usePermission.mockReturnValue({ hasPermission: vi.fn(), hasAnyPermission: vi.fn() })
