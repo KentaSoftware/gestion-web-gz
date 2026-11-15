@@ -392,18 +392,6 @@ export default function SmartStockPage() {
             </select>
           </label>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <label className="relative min-w-52 flex-1">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" aria-hidden="true" />
-              <input aria-label="Buscar producto por nombre" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} placeholder="Buscar producto" className="h-10 w-full rounded-md border border-border-subtle bg-background-canvas pl-9 pr-9 text-sm text-text-primary placeholder:text-text-muted" />
-              {search && <button type="button" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-text-secondary hover:bg-background-subtle" aria-label="Limpiar búsqueda"><X className="size-4" /></button>}
-            </label>
-            <label className="flex items-center gap-2">
-              <span className="sr-only">Filtrar productos por categoría</span>
-              <input aria-label="Filtrar productos por categoría" className="h-10 min-w-36 rounded-md border border-border-subtle bg-background-canvas px-3 text-sm text-text-primary placeholder:text-text-muted" value={category} onChange={(event) => { setCategory(event.target.value); setPage(1) }} placeholder="Categoría" />
-              {category && <button type="button" onClick={() => setCategory('')} className="rounded p-2 text-text-secondary hover:bg-background-subtle" aria-label="Limpiar categoría"><X className="size-4" /></button>}
-            </label>
-          </div>
         </div>
         {status === 'loading' ? <p className="py-6 text-sm text-text-secondary" role="status">Cargando alertas…</p>
           : status === 'error' ? <p className="py-6 text-sm text-state-error" role="alert">No se pudieron cargar las alertas.</p>
@@ -439,6 +427,18 @@ export default function SmartStockPage() {
         <div className="min-w-0 rounded-xl border border-border-subtle bg-surface-base p-4 md:p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div><h2 id="stock-products-title" className="text-lg font-semibold text-text-primary">Productos</h2><p className="text-sm text-text-secondary">Página {overview?.page ?? page} de {pageCount}, {overview?.total ?? 0} productos</p></div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <label className="relative min-w-52 flex-1">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" aria-hidden="true" />
+              <input aria-label="Buscar producto por nombre" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} placeholder="Buscar producto" className="h-10 w-full rounded-md border border-border-subtle bg-background-canvas pl-9 pr-9 text-sm text-text-primary placeholder:text-text-muted" />
+              {search && <button type="button" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-text-secondary hover:bg-background-subtle" aria-label="Limpiar búsqueda"><X className="size-4" /></button>}
+            </label>
+            <label className="flex items-center gap-2">
+              <span className="sr-only">Filtrar productos por categoría</span>
+              <input aria-label="Filtrar productos por categoría" className="h-10 min-w-36 rounded-md border border-border-subtle bg-background-canvas px-3 text-sm text-text-primary placeholder:text-text-muted" value={category} onChange={(event) => { setCategory(event.target.value); setPage(1) }} placeholder="Categoría" />
+              {category && <button type="button" onClick={() => setCategory('')} className="rounded p-2 text-text-secondary hover:bg-background-subtle" aria-label="Limpiar categoría"><X className="size-4" /></button>}
+            </label>
           </div>
 
           {status === 'loading' ? <div className="flex min-h-48 items-center justify-center gap-3 text-text-secondary" role="status" aria-live="polite"><RefreshCw className="size-5 animate-spin" aria-hidden="true" />Cargando productos…</div>

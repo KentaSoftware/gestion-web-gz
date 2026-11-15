@@ -57,8 +57,12 @@ describe('Stock Inteligente read dashboard', () => {
     expect(within(screen.getByRole('table')).getByText('Té del Norte')).toBeInTheDocument()
     expect(screen.getByLabelText('8 alertas en todo el catálogo')).toBeInTheDocument()
     const toolbar = screen.getByRole('group', { name: 'Filtros del catálogo' })
-    expect(toolbar).toContainElement(screen.getByLabelText('Buscar producto por nombre'))
-    expect(toolbar).toContainElement(screen.getByLabelText('Filtrar productos por categoría'))
+    const alerts = screen.getByRole('region', { name: 'Alertas del catálogo' })
+    const products = screen.getByRole('region', { name: 'Productos' })
+    expect(within(alerts).queryByLabelText('Buscar producto por nombre')).not.toBeInTheDocument()
+    expect(within(alerts).queryByLabelText('Filtrar productos por categoría')).not.toBeInTheDocument()
+    expect(within(products).getByLabelText('Buscar producto por nombre')).toBeInTheDocument()
+    expect(within(products).getByLabelText('Filtrar productos por categoría')).toBeInTheDocument()
     expect(toolbar).toContainElement(screen.getByLabelText('Filtrar alertas por severidad'))
     expect(screen.getByRole('region', { name: 'Alertas críticas' }).parentElement).toHaveClass('md:grid-cols-3')
     expect(screen.getByRole('region', { name: 'Alertas críticas' }).querySelector('ul')).toHaveClass('grid', 'gap-2')
@@ -76,6 +80,9 @@ describe('Stock Inteligente read dashboard', () => {
     expect(screen.queryByText('Bajo mínimo')).not.toBeInTheDocument()
     expect(screen.getByText('Yerba Orgánica')).toBeInTheDocument()
     expect(screen.getByLabelText('8 alertas en todo el catálogo')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Alertas advertencias' })).toHaveTextContent('(1)')
+    expect(screen.getByRole('region', { name: 'Alertas críticas' })).toHaveTextContent('(0)')
+    expect(get).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('button', { name: 'Retirar vencidos de esta página' })).not.toBeInTheDocument()
   })
 
@@ -152,6 +159,13 @@ describe('Stock Inteligente read dashboard', () => {
     fireEvent.click(screen.getByLabelText('Limpiar búsqueda'))
     await waitFor(() => expect(get).toHaveBeenCalledWith('/stock/overview', expect.objectContaining({ params: expect.objectContaining({ category: 'Infusiones', page: 1 }) })))
     expect(get.mock.calls.at(-1)?.[1].params).not.toHaveProperty('search')
+    fireEvent.click(screen.getByLabelText('Limpiar categoría'))
+    await waitFor(() => expect(get.mock.calls.at(-1)?.[1].params).not.toHaveProperty('category'))
+    const count = get.mock.calls.length
+    fireEvent.change(screen.getByLabelText('Filtrar alertas por severidad'), { target: { value: 'WARNING' } })
+    expect(get).toHaveBeenCalledTimes(count)
+    expect(get.mock.calls.at(-1)?.[1].params).not.toHaveProperty('search')
+    expect(get.mock.calls.at(-1)?.[1].params).not.toHaveProperty('category')
   })
 
   it('does not send client-only severity to the API and omits empty filters', async () => {
