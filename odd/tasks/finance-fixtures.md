@@ -14,3 +14,5 @@ Display hardcoded financial dashboard data while a source-code `demo` constant i
 
 ## Progress
 Started on `fix/finance-build-iterator`; user explicitly requested demo mode be true and visually unlabeled. The switch is `demo` in `src/app/finance/financeDemo.ts`. Demo date ranges are limited to 366 days; actions and real service requests are blocked in demo mode. Browser rendering, live backend integration and the full production build were not run; the build was avoided while the development server was active. RDD is disabled; unavailable risk assessment treated as high.
+
+Work-unit commit: `01e8ba1`. Next: visually check the dashboard and run a production build after stopping the development server.
