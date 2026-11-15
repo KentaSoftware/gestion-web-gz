@@ -33,3 +33,5 @@ CAS-3 work-unit commit: `e6c119e`. Next: review the placement of product filters
 User subsequently requested removing the category search from the product list as well.
 
 The category table column and category matching in quick lookup remain. Browser rendering was not verified; RDD is disabled and unavailable risk assessment was treated as high.
+
+CAS-4 work-unit commit: `d14a256`. Next: visually verify the product search width in the browser.
