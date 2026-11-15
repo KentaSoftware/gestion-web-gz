@@ -18,3 +18,5 @@ Enable the existing Finance export action to generate a useful four-week project
 User approved a four-week horizon. Existing fixture weekly comparison describes the selected historical period and must not be reused as future dates. Started from Web `main` in `feat/finance-projection-pdf`.
 
 The forecast starts after the export day's Buenos Aires date. Historical baseline gaps are bridged with explicitly labeled estimates; a future applied end date is rejected. The example is a one-time hypothetical 10% of opening excess above reserve, not a transaction or investment recommendation. RDD is disabled; failed risk assessment treated as high. No production build was run while the development server was active. Tests emit a jsdom navigation warning despite passing.
+
+FPP-1 and FPP-2 work-unit commit: `763033d`. Next: verify the download in a real browser, review PDF accessibility and run the production build after the development server is stopped.
