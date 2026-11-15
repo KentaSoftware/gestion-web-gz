@@ -23,9 +23,10 @@ interface Props {
   /** Compact card for side-by-side with Proyección (mock layout). */
   compact?: boolean
   allowNavigation?: boolean
+  unavailable?: boolean
 }
 
-export function FinanceMovementsPanel({ movements, loading, compact = false, allowNavigation = true }: Props) {
+export function FinanceMovementsPanel({ movements, loading, compact = false, allowNavigation = true, unavailable = false }: Props) {
   return (
     <section
       className={cn(
@@ -34,21 +35,22 @@ export function FinanceMovementsPanel({ movements, loading, compact = false, all
       )}
     >
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <h2 className="text-label font-semibold text-text-primary">Últimos Movimientos</h2>
+        <h2 className="text-base font-semibold text-text-primary">Últimos Movimientos</h2>
       </div>
 
       {loading && <div className="h-24 bg-background-subtle rounded-sm animate-pulse" />}
 
-      {!loading && movements.length === 0 && (
+      {!loading && unavailable && <p className="text-sm text-text-secondary">Movimientos no disponibles.</p>}
+      {!loading && !unavailable && movements.length === 0 && (
         <p className="text-caption text-text-secondary">Sin movimientos en el período.</p>
       )}
 
-      {!loading && movements.length > 0 && (
+      {!loading && !unavailable && movements.length > 0 && (
         <ul className={cn('divide-y divide-border-subtle flex-1', compact && 'overflow-y-auto max-h-64')}>
           {movements.map((m, index) => (
             <li
               key={`${m.sourceId}-${index}`}
-              className="flex items-center justify-between gap-3 py-3"
+              className="flex flex-wrap items-center justify-between gap-3 py-3"
             >
               <div className="flex items-start gap-2.5 min-w-0">
                 <span
@@ -65,7 +67,7 @@ export function FinanceMovementsPanel({ movements, loading, compact = false, all
                   )}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-label text-text-primary truncate">
+                  <p className="text-sm text-text-primary break-words">
                     {SOURCE_LABELS[m.source] ?? m.source}
                     {m.description ? ` — ${m.description}` : ''}
                   </p>
@@ -74,7 +76,7 @@ export function FinanceMovementsPanel({ movements, loading, compact = false, all
               </div>
               <p
                 className={cn(
-                  'text-label font-semibold shrink-0',
+                  'text-sm font-semibold tabular-nums',
                   m.type === 'inflow' ? 'text-state-success' : 'text-state-error'
                 )}
               >

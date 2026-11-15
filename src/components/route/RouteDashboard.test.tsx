@@ -351,6 +351,7 @@ describe('RouteDashboard selected-route detail', () => {
     expect(dashboardRoot).not.toHaveClass('mb-8')
     expect(dashboardRoot).not.toHaveClass('h-full')
     expect(lowerPanels).toHaveClass('w-full', 'min-w-0', 'flex-1', 'min-h-0')
+    expect(lowerPanels).toHaveClass('lg:items-stretch')
     expect(mapPanel).toHaveClass('w-full', 'min-w-0')
     expect(detailPanel).toHaveClass('w-full', 'min-w-0')
     expect(lowerPanels).not.toHaveClass('lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]')
@@ -429,6 +430,17 @@ describe('RouteDashboard selected-route detail', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(scrollIntoView).toHaveBeenCalledTimes(1)
+  })
+
+  it('avoids smooth map scrolling when reduced motion is requested', async () => {
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true }))
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValue(dashboard)
+    render(<RouteDashboard />)
+    await screen.findByRole('heading', { name: 'Rutas planificadas (2)' })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver mapa' })[0])
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: 'instant', block: 'start' })
+    vi.unstubAllGlobals()
   })
 
   it('opens the preview dialog while retaining the map in the document', async () => {

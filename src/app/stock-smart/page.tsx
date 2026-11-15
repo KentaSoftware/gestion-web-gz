@@ -362,19 +362,23 @@ export default function SmartStockPage() {
         </div>
       } />
 
-      <section aria-label="Indicadores globales de stock" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
+      <section aria-label="Indicadores globales de stock" className="rounded-xl border border-border-subtle bg-surface-base p-4 md:p-5">
+        <h2 className="text-lg font-semibold text-text-primary">Resumen global</h2>
+        <p className="mt-1 text-sm text-text-secondary">Indicadores de todo el catálogo</p>
+        {status === 'loading' ? <p role="status" className="py-6 text-sm text-text-secondary">Cargando indicadores…</p>
+          : status === 'error' ? <p role="status" className="py-6 text-sm text-state-error">No se pudieron cargar los indicadores.</p>
+            : <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
           { label: 'Stock bajo', value: summary.belowMinimumProductCount, note: 'productos bajo el mínimo' },
           { label: 'Por vencer', value: summary.expiringProductCount, note: 'productos en ventana preventiva' },
           { label: 'Baja rotación', value: summary.lowRotationProductCount, note: 'productos con baja rotación' },
           { label: 'Alertas activas', value: summary.activeAlertCount, note: 'alertas en todo el catálogo' },
         ].map((metric) => (
-          <article key={metric.label} className="rounded-xl border border-border-subtle bg-surface-base p-4">
-            <p className="text-sm font-medium text-text-secondary">{metric.label}</p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight text-text-primary" aria-label={`${metric.value} ${metric.note}`}>{metric.value}</p>
-            <p className="mt-1 text-xs text-text-muted">{metric.note}</p>
+          <article key={metric.label} className="rounded-lg bg-background-subtle px-4 py-3">
+            <p className="text-base font-semibold text-text-primary">{metric.label}</p>
+            <p className="mt-2 text-3xl font-semibold tabular-nums tracking-tight text-text-primary" aria-label={`${metric.value} ${metric.note}`}>{metric.value}</p>
+            <p className="mt-1 text-sm text-text-secondary">{metric.note}</p>
           </article>
-        ))}
+        ))}</div>}
       </section>
 
       <section aria-labelledby="stock-alerts-title" className="rounded-xl border border-border-subtle bg-surface-base p-4 md:p-5">
@@ -400,16 +404,16 @@ export default function SmartStockPage() {
                   const visibleAlerts = expanded ? group.alerts : group.alerts.slice(0, INITIAL_ALERT_LIMIT)
                   const remainingCount = group.alerts.length - visibleAlerts.length
                   return <section key={group.key} aria-label={`Alertas ${group.label.toLocaleLowerCase('es')}`} className="min-w-0">
-                  <h3 className="mb-2 text-sm font-semibold text-text-primary">{group.label} <span className="font-normal text-text-secondary">({group.alerts.length})</span></h3>
+                  <h3 className="mb-2 border-b border-border-subtle pb-2 text-base font-semibold text-text-primary">{group.label} <span className="font-normal tabular-nums text-text-secondary">({group.alerts.length})</span></h3>
                   {group.alerts.length === 0 ? <p className="rounded-lg bg-background-subtle p-3 text-sm text-text-secondary" role="status">{(overview?.globalAlerts.length ?? 0) === 0 ? 'Sin alertas activas.' : 'Sin alertas para esta severidad.'}</p> : <>
                   <CatalogAlertList label={group.label.toLocaleLowerCase('es')} scrollable={expanded && group.alerts.length > 4}>
                     {visibleAlerts.map((alert, index) => <li key={`${alert.productId}-${alert.type}-${index}`} className="rounded-lg bg-background-subtle p-3">
                       <div className="flex items-start gap-3">
                         <AlertTriangle className={`mt-0.5 size-4 shrink-0 ${alert.severity === 'CRITICAL' ? 'text-state-error' : alert.severity === 'WARNING' ? 'text-brand-accent' : 'text-text-secondary'}`} aria-hidden="true" />
                         <div className="min-w-0">
-                          <p className="font-semibold text-text-primary">{alert.productName}</p>
-                          <p className="text-xs text-text-secondary">{formatAlertType(alert.type)}</p>
-                          <p className="mt-1 text-sm text-text-secondary">{formatAlertExplanation(alert)}</p>
+                          <p className="break-words text-base font-semibold leading-snug text-text-primary">{alert.productName}</p>
+                          <p className="mt-1 text-sm font-medium text-text-primary">{formatAlertType(alert.type)}</p>
+                          <p className="mt-1 break-words text-sm leading-relaxed text-text-secondary">{formatAlertExplanation(alert)}</p>
                         </div>
                       </div>
                     </li>)}
@@ -423,9 +427,9 @@ export default function SmartStockPage() {
       </section>
 
       <section aria-labelledby="stock-products-title" className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.8fr)]">
-        <div className="min-w-0 rounded-xl border border-border-subtle bg-surface-base p-4 md:p-5">
+        <div className="min-w-0 rounded-xl border border-border-subtle bg-surface-base p-4 md:p-5 [&_table]:text-base [&_td]:py-4 [&_td]:align-top [&_th]:text-sm">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <div><h2 id="stock-products-title" className="text-lg font-semibold text-text-primary">Productos</h2><p className="text-sm text-text-secondary">Página {overview?.page ?? page} de {pageCount}, {overview?.total ?? 0} productos</p></div>
+            <div><h2 id="stock-products-title" className="text-lg font-semibold text-text-primary">Productos</h2>{status === 'ready' && <p className="mt-1 text-sm text-text-secondary">Página {overview?.page ?? page} de {pageCount}, {overview?.total ?? 0} productos</p>}</div>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <label className="relative min-w-52 flex-1">
@@ -444,14 +448,14 @@ export default function SmartStockPage() {
 
           <div className="mt-4 flex items-center justify-between border-t border-border-subtle pt-3">
             <button type="button" disabled={page <= 1 || status === 'loading'} onClick={() => { setSelectedId(''); setPage((value) => Math.max(1, value - 1)) }} className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm text-text-secondary hover:bg-background-subtle disabled:cursor-not-allowed disabled:opacity-50"><ChevronLeft className="size-4" aria-hidden="true" />Anterior</button>
-            <span className="text-sm text-text-secondary">{page} / {pageCount}</span>
+            <span className="text-center text-sm text-text-secondary">{overview ? <>{status === 'ready' ? page : overview.page} / {pageCount}{status !== 'ready' && <span className="block">{status === 'loading' ? 'Actualizando paginación…' : 'Paginación anterior, no se pudo actualizar'}</span>}</> : status === 'loading' ? 'Cargando paginación…' : 'Paginación no disponible'}</span>
             <button type="button" disabled={page >= pageCount || status === 'loading'} onClick={() => { setSelectedId(''); setPage((value) => Math.min(pageCount, value + 1)) }} className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm text-text-secondary hover:bg-background-subtle disabled:cursor-not-allowed disabled:opacity-50">Siguiente<ChevronRight className="size-4" aria-hidden="true" /></button>
           </div>
         </div>
 
         <aside aria-label="Consulta rápida de existencias" className="min-w-0 rounded-xl border border-border-subtle bg-surface-base p-4 md:p-5">
           <h2 className="text-lg font-semibold text-text-primary">Consulta rápida de existencias</h2><p className="mt-1 text-sm text-text-secondary">Buscá entre los productos de la página actual.</p><label className="relative mt-3 block"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" aria-hidden="true" /><input aria-label="Búsqueda rápida en esta página" ref={quickSearchRef} value={quickSearch} onClick={() => setQuickResultsOpen(true)} onChange={(event) => { pendingQuickFocus.current = ''; setQuickSearch(event.target.value); setQuickResultsOpen(true) }} placeholder="Nombre o categoría" className="h-10 w-full rounded-md border border-border-subtle bg-background-canvas pl-9 pr-3 text-sm text-text-primary" /></label>
-           {quickSearch.trim() && (quickResultsOpen || !selectedId) && (quickItems.length === 0 ? <p className="py-4 text-sm text-text-secondary" role="status">No hay productos en esta página que coincidan.</p> : <ul className="mt-2 divide-y divide-border-subtle">{quickItems.map((item) => <li key={item.productId}><button type="button" onClick={() => selectQuickProduct(item.productId)} aria-pressed={selectedId === item.productId} className="flex w-full items-center gap-3 py-2 text-left hover:bg-background-subtle">{item.imagePath ? <img src={imageUrl(item.imagePath)} alt="" className="size-9 rounded object-cover" /> : <Boxes className="size-5 text-text-muted" aria-hidden="true" />}<span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary">{item.productName}</span><span className="block text-xs text-text-secondary">{item.categoryName || 'Sin categoría'}</span></span></button></li>)}</ul>)}
+           {status === 'ready' && quickSearch.trim() && (quickResultsOpen || !selectedId) && (quickItems.length === 0 ? <p className="py-4 text-sm text-text-secondary" role="status">No hay productos en esta página que coincidan.</p> : <ul className="mt-2 divide-y divide-border-subtle">{quickItems.map((item) => <li key={item.productId}><button type="button" onClick={() => selectQuickProduct(item.productId)} aria-pressed={selectedId === item.productId} className="flex w-full items-center gap-3 rounded-md px-2 py-3 text-left hover:bg-background-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary">{item.imagePath ? <img src={imageUrl(item.imagePath)} alt="" className="size-9 rounded object-cover" /> : <Boxes className="size-5 text-text-muted" aria-hidden="true" />}<span className="min-w-0 flex-1"><span className="block break-words text-base font-semibold text-text-primary">{item.productName}</span><span className="block text-sm text-text-secondary">{item.categoryName || 'Sin categoría'}</span></span></button></li>)}</ul>)}
           {!selectedId ? (!quickSearch.trim() && <div className="flex min-h-32 flex-col items-center justify-center gap-2 text-center text-text-secondary"><CircleHelp className="size-8" aria-hidden="true" /><p className="font-medium">Consultá un producto</p><p className="text-sm">Seleccioná un resultado para ver existencias y movimientos.</p></div>)
             : <>
                <div className="mt-4 border-b border-border-subtle pb-3"><p className="text-xs font-medium uppercase tracking-wide text-text-muted">Detalle de stock</p>{selectedItem?.imagePath && <img src={imageUrl(selectedItem.imagePath)} alt="" className="mt-2 size-12 rounded-md object-cover" />}<h3 ref={detailHeadingRef} tabIndex={-1} className="mt-1 text-lg font-semibold text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary">{selectedItem?.productName ?? 'Producto seleccionado'}</h3><p className="text-sm text-text-secondary">{selectedItem?.categoryName || 'Sin categoría'}</p>
@@ -459,7 +463,7 @@ export default function SmartStockPage() {
               {detailStatus === 'loading' ? <p className="py-6 text-sm text-text-secondary" role="status">Cargando disponibilidad y movimientos…</p>
                 : detailStatus === 'error' ? <div className="py-6 text-center" role="alert"><p className="text-sm text-state-error">No se pudo consultar el detalle del producto.</p><button type="button" onClick={() => setDetailRetry((value) => value + 1)} className="mt-3 rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary">Reintentar</button></div>
                   : detail && <>
-                     <dl className="grid grid-cols-2 gap-x-4 gap-y-3 py-4 text-sm">
+                     <dl className="my-4 grid grid-cols-2 gap-x-4 gap-y-4 rounded-lg bg-background-subtle p-4 text-base tabular-nums">
                       <div><dt className="text-text-secondary">Físico</dt><dd className="font-semibold text-text-primary">{detail.availability.physicalQuantity}</dd></div>
                       <div><dt className="text-text-secondary">Comprometido</dt><dd className="font-semibold text-text-primary">{detail.availability.committedQuantity}</dd></div>
                       <div><dt className="text-text-secondary">Disponible</dt><dd className="font-semibold text-text-primary">{detail.availability.availableToSell}</dd></div>
@@ -481,7 +485,8 @@ export default function SmartStockPage() {
           {dialog === 'config' && <div className="grid gap-6">
             <section aria-labelledby="expired-products-title">
               <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 id="expired-products-title" className="font-semibold text-text-primary">Productos vencidos de esta página</h3><p className="mt-1 text-sm text-text-secondary">Mostramos únicamente los productos de la página actual.</p></div><button type="button" disabled={expiredItems.length === 0 || operationBusy} onClick={() => setDialog('bulk')} className="rounded-md border border-border-subtle px-3 py-2 text-sm disabled:opacity-50">Retirar todos de esta página</button></div>
-              {expiredItems.length === 0 ? <p role="status" className="mt-4 rounded-lg bg-background-subtle p-4 text-sm text-text-secondary">No hay productos vencidos en esta página.</p> : <ul className="mt-4 divide-y divide-border-subtle rounded-lg border border-border-subtle">{expiredItems.map((item) => <li key={item.productId} className="flex flex-wrap items-center justify-between gap-3 p-3"><div className="min-w-0"><p className="truncate font-medium text-text-primary">{item.productName}</p><p className="text-sm text-text-secondary">Existencias vencidas: {item.expiredQuantity}</p></div><button type="button" aria-label={`Retirar vencidos de ${item.productName}`} disabled={operationBusy} onClick={() => { setSelectedId(item.productId); setDialog('remove') }} className="rounded-md border border-border-subtle px-3 py-2 text-sm">Retirar vencidos</button></li>)}</ul>}
+              {status !== 'ready' && <p role="status" className="mt-4 rounded-lg bg-background-subtle p-4 text-sm text-text-secondary">{status === 'loading' ? 'Cargando productos vencidos…' : 'No se pudieron cargar los productos vencidos.'}{expiredItems.length > 0 && ' Se muestran datos anteriores.'}</p>}
+              {expiredItems.length === 0 ? status === 'ready' && <p role="status" className="mt-4 rounded-lg bg-background-subtle p-4 text-sm text-text-secondary">No hay productos vencidos en esta página.</p> : <ul className="mt-4 divide-y divide-border-subtle rounded-lg border border-border-subtle">{expiredItems.map((item) => <li key={item.productId} className="flex flex-wrap items-center justify-between gap-3 p-3"><div className="min-w-0"><p className="truncate font-medium text-text-primary">{item.productName}</p><p className="text-sm text-text-secondary">Existencias vencidas: {item.expiredQuantity}</p></div><button type="button" aria-label={`Retirar vencidos de ${item.productName}`} disabled={operationBusy} onClick={() => { setSelectedId(item.productId); setDialog('remove') }} className="rounded-md border border-border-subtle px-3 py-2 text-sm">Retirar vencidos</button></li>)}</ul>}
             </section>
             <section aria-labelledby="stock-config-title" className="border-t border-border-subtle pt-5 "><h3 id="stock-config-title" className="font-semibold text-text-primary">Umbrales por producto</h3><p className="mt-1 text-sm text-text-secondary">Elegí un producto de esta página para ajustar su configuración.</p><div className="mt-4 space-y-3"><label className="block text-sm">Producto<select aria-label="Producto para configurar" value={configProductId} onChange={(event) => { const product = items.find((entry) => entry.productId === event.target.value); setConfigProductId(event.target.value); setMinimum(product ? String(product.minimum ?? 0) : ''); setExpiryAlertDays(product ? String(product.expiryAlertDays) : ''); setOperationError(''); setOperationMessage('') }} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2"><option value="">Seleccionar producto</option>{items.map((item) => <option key={item.productId} value={item.productId}>{item.productName}</option>)}</select></label><label className="block text-sm">Stock mínimo<input aria-label="Stock mínimo" type="number" min="0" step="1" value={minimum} disabled={!configItem} onChange={(event) => setMinimum(event.target.value)} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2" /></label><label className="block text-sm">Umbral preventivo (días)<input aria-label="Umbral preventivo (días)" type="number" min="0" max="3650" step="1" value={expiryAlertDays} placeholder="Sin cambios" disabled={!configItem} onChange={(event) => setExpiryAlertDays(event.target.value)} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2" /></label><p className="text-xs text-text-secondary">El umbral preventivo define cuándo avisar que un producto está próximo a vencer.</p></div>
             </section>

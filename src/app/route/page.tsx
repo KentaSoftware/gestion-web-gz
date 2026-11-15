@@ -51,7 +51,7 @@ function RoutePlanningContent() {
         }}
       />
       <Dialog open={plannerOpen && canCreate} onOpenChange={(open) => { if (!routeSavePending) setPlannerOpen(open) }}>
-         <DialogContent className="max-h-[calc(100vh-2rem)] max-w-[84rem] overflow-hidden">
+         <DialogContent tabIndex={0} className="max-h-[calc(100dvh-2rem)] max-w-[84rem] overflow-y-auto">
           <DialogHeader>
            <DialogTitle>Generador de ruta optimizada</DialogTitle>
            <DialogDescription>

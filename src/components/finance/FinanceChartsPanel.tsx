@@ -71,6 +71,7 @@ interface Props {
   /** When false, omit Proyección (rendered beside movements). Default true. */
   showProjection?: boolean
   showSinglePoint?: boolean
+  unavailable?: boolean
 }
 
 function buildCashflowSeries (timeline: FinanceMovement[]) {
@@ -131,7 +132,7 @@ function buildDistributionWithCompras (
 function EmptyChart ({ message }: { message: string }) {
   return (
     <div className="flex h-56 items-center justify-center rounded-md border border-dashed border-border-subtle bg-background-subtle/40 px-4 text-center">
-      <p className="text-caption text-text-secondary">{message}</p>
+      <p className="text-sm text-text-secondary">{message}</p>
     </div>
   )
 }
@@ -147,8 +148,8 @@ function ChartCard ({
 }) {
   return (
     <div className="min-w-0 bg-surface-base rounded-lg p-5 shadow-sm border border-border-subtle flex flex-col">
-      <h2 className="text-label font-semibold text-text-primary mb-1">{title}</h2>
-      <p className="text-caption text-text-secondary mb-3">{subtitle}</p>
+      <h2 className="text-base font-semibold text-text-primary mb-1">{title}</h2>
+      <p className="text-sm text-text-secondary mb-3">{subtitle}</p>
       {children}
     </div>
   )
@@ -157,9 +158,11 @@ function ChartCard ({
 export function FinanceProjectionChart ({
   weekly,
   loading,
+  unavailable = false,
 }: {
   weekly: FinanceWeeklyPoint[]
   loading: boolean
+  unavailable?: boolean
 }) {
   const weeklyData = useMemo(
     () =>
@@ -180,7 +183,9 @@ export function FinanceProjectionChart ({
       title="Proyección vs Real"
       subtitle="Real = neto de la semana. Proyectado = promedio semanal histórico."
     >
-      {weeklyData.length === 0 ? (
+      {unavailable ? (
+        <EmptyChart message="Proyección no disponible." />
+      ) : weeklyData.length === 0 ? (
         <EmptyChart message="Sin semanas para comparar." />
       ) : (
         <div className="h-64 w-full min-h-[16rem]" role="img" aria-label="Gráfico de barras proyección versus real">
@@ -231,6 +236,7 @@ export function FinanceChartsPanel({
   loading,
   showProjection = true,
   showSinglePoint = false,
+  unavailable = false,
 }: Props) {
   const cashflow = useMemo(() => buildCashflowSeries(timeline), [timeline])
   const pieData = useMemo(() => {
@@ -250,7 +256,9 @@ export function FinanceChartsPanel({
       {/* Mock row: Flujo de Caja | Distribución de Egresos — min-w-0 evita que Recharts rompa el grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
         <ChartCard title="Flujo de Caja" subtitle="Ingresos y egresos en el período">
-          {cashflow.length === 0 ? (
+          {unavailable ? (
+            <EmptyChart message="Flujo de caja no disponible." />
+          ) : cashflow.length === 0 ? (
             <EmptyChart message="Sin movimientos en el período." />
           ) : (
             <div className="h-64 w-full min-h-[16rem]" role="img" aria-label="Gráfico de área de flujo de caja">
@@ -317,17 +325,20 @@ export function FinanceChartsPanel({
         </ChartCard>
 
         <ChartCard title="Distribución de Egresos" subtitle="Por categoría (incluye compras pagadas)">
-          {pieData.length === 0 ? (
+          {unavailable ? (
+            <EmptyChart message="Distribución no disponible." />
+          ) : pieData.length === 0 ? (
             <EmptyChart message="Sin egresos categorizados en el período." />
           ) : (
-            <div className="h-64 w-full min-h-[16rem]" role="img" aria-label="Gráfico de dona de distribución de egresos">
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <div className="h-56 w-48 max-w-full shrink-0" role="img" aria-label="Gráfico de dona de distribución de egresos">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={pieData}
                     dataKey="value"
                     nameKey="name"
-                    cx="40%"
+                    cx="50%"
                     cy="50%"
                     innerRadius={52}
                     outerRadius={82}
@@ -343,25 +354,24 @@ export function FinanceChartsPanel({
                     contentStyle={tooltipStyle}
                     formatter={(value: number, name: string) => [formatAmount(value), name]}
                   />
-                  <Legend
-                    layout="vertical"
-                    align="right"
-                    verticalAlign="middle"
-                    wrapperStyle={{ fontSize: 11, maxWidth: '48%', lineHeight: '1.35' }}
-                    formatter={(value) => {
-                      const slice = pieData.find((p) => p.name === value)
-                      return slice ? `${value} · ${formatAmount(slice.value)}` : value
-                    }}
-                  />
                 </PieChart>
               </ResponsiveContainer>
+              </div>
+              <ul className="min-w-0 basis-48 grow space-y-2 text-sm">
+                {pieData.map((slice, index) => (
+                  <li key={slice.name} className="flex items-start gap-2 text-text-primary">
+                    <span aria-hidden className="mt-1.5 size-2.5 shrink-0 rounded-sm" style={{ backgroundColor: DONUT_PALETTE[index % DONUT_PALETTE.length] }} />
+                    <span className="min-w-0 break-words">{slice.name} · <span className="font-medium tabular-nums">{formatAmount(slice.value)}</span></span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </ChartCard>
       </div>
 
       {showProjection && (
-        <FinanceProjectionChart weekly={weekly} loading={false} />
+        <FinanceProjectionChart weekly={weekly} loading={false} unavailable={unavailable} />
       )}
     </section>
   )

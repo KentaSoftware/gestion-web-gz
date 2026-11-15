@@ -120,7 +120,8 @@ describe('RouteScreen', () => {
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).getByText('Seleccioná clientes aptos, asigná los recursos y revisá el recorrido antes de guardar el plan.')).toBeInTheDocument()
     expect(dialog.className).toContain('max-w-[84rem]')
-    expect(dialog.className).not.toContain('overflow-y-auto')
+    expect(dialog).toHaveClass('overflow-y-auto')
+    expect(dialog).toHaveAttribute('tabindex', '0')
     expect(within(dialog).queryByRole('heading', { name: 'Planificación de rutas' })).not.toBeInTheDocument()
     expect(await within(dialog).findByRole('status')).toHaveTextContent('No hay candidatos')
 

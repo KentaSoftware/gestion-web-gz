@@ -19,7 +19,7 @@ const BUTTON = 'inline-flex items-center justify-center gap-1 rounded border bor
 const PRIMARY_BUTTON = 'inline-flex items-center justify-center gap-2 rounded bg-brand-primary px-4 py-2 text-sm font-semibold text-text-inverse hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-state-focus disabled:cursor-not-allowed disabled:opacity-50'
 const TRANSFER_BUTTON = 'flex size-11 items-center justify-center rounded border border-border-subtle bg-background-subtle text-brand-primary hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-state-focus disabled:cursor-not-allowed disabled:opacity-40'
 const INPUT = 'w-full rounded border border-border-subtle bg-surface-base px-2 py-1 text-sm text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-state-focus'
-const TABLE = 'w-full min-w-max text-left text-sm [&_th]:bg-background-subtle [&_th]:px-2 [&_th]:py-1 [&_th]:font-semibold [&_th]:text-brand-primary [&_td]:border-t [&_td]:border-border-subtle [&_td]:px-2 [&_td]:py-1'
+const TABLE = 'w-full min-w-max text-left text-base tabular-nums [&_th]:bg-background-subtle [&_th]:px-3 [&_th]:py-2 [&_th]:text-sm [&_th]:font-semibold [&_th]:text-brand-primary [&_td]:border-t [&_td]:border-border-subtle [&_td]:px-3 [&_td]:py-2'
 const PANEL = 'rounded-lg border border-border-subtle bg-surface-base'
 const INITIAL_PARAMETERS: SimulationParameters = { fuelPricePerLiter: 1250, includeSurplus: true, generalCosts: 25000, hourlyRate: 8000 }
 const PRODUCT_PAGE_SIZE = 5
@@ -57,7 +57,7 @@ function Pagination({ page, pageSize, total, label, onChange }: PaginationProps)
   const pages = Math.max(1, Math.ceil(total / pageSize))
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1
   const last = Math.min(page * pageSize, total)
-  return <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-subtle px-3 py-2 text-xs text-text-secondary">
+  return <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-subtle px-3 py-2 text-sm text-text-secondary">
     <span>Mostrando {total === 0 ? '0 de 0' : `${first} a ${last} de ${total}`} {label}</span>
     <div className="flex gap-1">
       <button type="button" className={BUTTON} aria-label={`Página anterior de ${label}`} disabled={page <= 1 || total === 0} onClick={() => onChange(page - 1)}><ChevronLeft className="size-4" /></button>
@@ -85,7 +85,7 @@ function Facts({ items, columns = 3 }: { items: Array<[string, string | number |
       {items.map(([label, value]) => (
         <div key={label}>
           <dt className="text-text-secondary">{label}</dt>
-          <dd className="font-semibold text-text-primary">{value ?? '—'}</dd>
+          <dd className="text-base font-semibold tabular-nums text-text-primary">{value ?? '—'}</dd>
         </div>
       ))}
     </dl>
@@ -124,7 +124,7 @@ function DetailContent({ detail }: { detail: SimulationScenarioDetail }) {
         <h3 className="flex items-center gap-2 bg-background-subtle px-3 py-2 font-semibold text-brand-primary"><Package className="size-4" aria-hidden="true" />Productos incluidos en venta ambulatoria</h3>
         <table className={TABLE}>
           <thead><tr><th>Producto</th><th>Cantidad</th></tr></thead>
-          <tbody>{detail.products.map((product) => <tr key={product.id}><td>{product.name}</td><td>{product.quantity}</td></tr>)}</tbody>
+          <tbody>{detail.products.map((product) => <tr key={product.id}><td>{product.name}</td><td>{product.quantity}</td></tr>)}{detail.products.length === 0 && <tr><td colSpan={2} className="text-center text-text-secondary">No hay productos incluidos en esta simulación.</td></tr>}</tbody>
         </table>
       </section>
       <section className="overflow-hidden rounded border border-border-subtle">
@@ -266,6 +266,16 @@ function SimulationWorkspace() {
   const amount = draft[availableId] ?? 0
   const selectedProductVisible = data?.catalog.available.slice((productPage - 1) * PRODUCT_PAGE_SIZE, productPage * PRODUCT_PAGE_SIZE).some((product) => product.id === availableId) ?? false
   const canTransfer = selectedProductVisible && selectedProduct !== undefined && Number.isInteger(amount) && amount > 0 && amount + (included?.[availableId] ?? 0) <= selectedProduct.stock
+  const transferReason = !selectedProduct ? 'Seleccioná un producto disponible para agregarlo.'
+    : !selectedProductVisible ? 'El producto seleccionado está en otra página. Volvé a esa página o seleccioná otro producto.'
+      : amount === 0 ? 'Ingresá una cantidad mayor a cero para agregar el producto seleccionado.'
+        : 'Ingresá una cantidad entera mayor a cero dentro del stock disponible.'
+  const simulationReason = !canWrite ? 'La creación requiere el permiso simulation:write.'
+    : data?.routes.total === 0 ? 'No hay rutas disponibles para simular.'
+      : !canSimulateRoute(knownRoutes[selectedRoute]) ? 'Seleccioná una ruta con combustible y tiempo válidos.'
+        : !validParameters ? 'Ingresá costos válidos y no negativos.'
+          : !validDraft ? 'Revisá las cantidades de productos fuera del stock disponible.'
+            : submitting ? 'Creando escenario…' : ''
 
   const createScenario = async () => {
     const route = knownRoutes[selectedRoute]
@@ -286,7 +296,7 @@ function SimulationWorkspace() {
 
   return <PageContainer>
     <PageHeader title="Simulación de Escenarios" description="Módulo de Simulación de Costos Operativos" />
-    {loading && <p role="status">Cargando datos…</p>}
+    {loading && <p role="status" className="rounded-lg border border-border-subtle bg-surface-base p-4 text-sm text-text-secondary">Cargando rutas, productos y escenarios…</p>}
     {error && <div role="alert">{error} <button className={BUTTON} onClick={() => setReload((value) => value + 1)}>Reintentar</button></div>}
     {data && !loading && <>
       <PageSection><div className={PANEL}>
@@ -297,9 +307,9 @@ function SimulationWorkspace() {
           </button>
         </div>
         <div id="simulation-parameters" hidden={!expanded}>
-          <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,3fr)_minmax(15rem,1fr)]">
+          <div className="grid items-start gap-6 p-4 xl:grid-cols-[minmax(0,3fr)_minmax(15rem,1fr)]">
             <div className="min-w-0">
-              <h3 className="mb-2 text-sm font-semibold text-text-primary">Rutas a simular (selecciona una sola ruta)</h3>
+              <h3 className="mb-2 text-base font-semibold text-text-primary">Rutas a simular (selecciona una sola ruta)</h3>
               <div className="overflow-x-auto">
                 <table aria-label="Rutas" className={TABLE}>
                   <thead>
@@ -311,8 +321,8 @@ function SimulationWorkspace() {
                   <tbody>
                     {data.routes.items.map((route) => (
                       <tr key={route.id} className={route.id === selectedRoute ? 'bg-background-subtle' : ''}>
-                        <td><input type="radio" name="route" aria-label={`Seleccionar ruta ${route.id}`} checked={selectedRoute === route.id} disabled={!canSimulateRoute(route)} onChange={() => setSelectedRoute(route.id)} /></td>
-                        <td>{route.id}</td><td>{route.zone}</td><td>{number(route.orderCount)}</td>
+                        <td><input type="radio" name="route" aria-label={`Seleccionar ruta ${route.id}`} aria-describedby={!Boolean(canSimulateRoute(route)) ? `route-reason-${route.id}` : undefined} checked={selectedRoute === route.id} disabled={!canSimulateRoute(route)} onChange={() => setSelectedRoute(route.id)} /></td>
+                        <td>{route.id}{!Boolean(canSimulateRoute(route)) && <p id={`route-reason-${route.id}`} className="max-w-48 whitespace-normal text-xs text-text-secondary">La ruta necesita combustible y tiempo válidos para simular.</p>}</td><td>{route.zone}</td><td>{number(route.orderCount)}</td>
                         <td>{route.driver}</td><td>{route.vehicle}</td><td>{number(route.fuelLiters)} L</td>
                         <td>{number(route.distanceKm)} km</td><td>{number(route.durationHours)} h</td><td>{route.date}</td>
                       </tr>
@@ -325,7 +335,8 @@ function SimulationWorkspace() {
               </div>
               <Pagination {...data.routes} label="rutas" onChange={setRoutePage} />
             </div>
-            <div className="space-y-3 text-sm">
+            <section aria-labelledby="simulation-costs-title" className="grid gap-3 border-t border-border-subtle pt-4 text-sm sm:grid-cols-2 xl:grid-cols-1 xl:border-l xl:border-t-0 xl:pl-4 xl:pt-0">
+              <h3 id="simulation-costs-title" className="text-base font-semibold text-text-primary sm:col-span-2 xl:col-span-1">Costos de simulación</h3>
               <label className="block">
                 Precio combustible ($/L)
                 <input className={INPUT} type="number" min="0" value={Number.isNaN(parameters.fuelPricePerLiter) ? '' : parameters.fuelPricePerLiter} onChange={(event) => setParameters({ ...parameters, fuelPricePerLiter: event.target.value === '' ? NaN : Number(event.target.value) })} />
@@ -353,13 +364,13 @@ function SimulationWorkspace() {
                 <input className={INPUT} type="number" min="0" value={Number.isNaN(parameters.hourlyRate) ? '' : parameters.hourlyRate} onChange={(event) => setParameters({ ...parameters, hourlyRate: event.target.value === '' ? NaN : Number(event.target.value) })} />
               </label>
               {!validParameters && <p role="alert" className="text-state-error">Ingresá costos válidos y no negativos.</p>}
-            </div>
+            </section>
           </div>
-          <div className="border-t border-border-subtle p-4">
-            <h3 className="mb-3 font-semibold text-brand-primary">Productos para venta ambulatoria</h3>
+          <section aria-labelledby="simulation-products-title" className="border-t border-border-subtle p-4">
+            <h3 id="simulation-products-title" className="mb-3 font-semibold text-brand-primary">Productos para venta ambulatoria</h3>
             <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
             <div className="min-w-0">
-              <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-brand-primary"><Package className="size-4" aria-hidden="true" />Productos disponibles</h4>
+              <h4 className="mb-2 flex items-center gap-2 text-base font-semibold text-brand-primary"><Package className="size-4" aria-hidden="true" />Productos disponibles</h4>
               <div className="overflow-x-auto rounded border border-border-subtle">
                 <table className={TABLE} aria-label="Productos disponibles">
                   <thead>
@@ -386,6 +397,7 @@ function SimulationWorkspace() {
                         </td>
                       </tr>
                     ))}
+                    {data.catalog.available.length === 0 && <tr><td colSpan={5} className="text-center text-text-secondary">No hay productos disponibles</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -405,6 +417,7 @@ function SimulationWorkspace() {
                 type="button"
                 className={TRANSFER_BUTTON}
                 aria-label="Agregar producto al vehículo"
+                aria-describedby={!canTransfer ? 'add-product-reason' : undefined}
                 disabled={!canTransfer}
                 onClick={() => {
                   setIncluded({ ...included, [availableId]: (included?.[availableId] ?? 0) + amount })
@@ -417,6 +430,7 @@ function SimulationWorkspace() {
                 type="button"
                 className={TRANSFER_BUTTON}
                 aria-label="Quitar producto del vehículo"
+                aria-describedby={!includedId || !((included?.[includedId] ?? 0) > 0) ? 'remove-product-reason' : undefined}
                 disabled={!includedId || !((included?.[includedId] ?? 0) > 0)}
                 onClick={() => {
                   setIncluded({ ...included, [includedId]: 0 })
@@ -427,7 +441,7 @@ function SimulationWorkspace() {
               </button>
             </div>
             <div className="min-w-0">
-              <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-brand-primary"><ShoppingCart className="size-4" aria-hidden="true" />Productos incluidos en el vehículo</h4>
+              <h4 className="mb-2 flex items-center gap-2 text-base font-semibold text-brand-primary"><ShoppingCart className="size-4" aria-hidden="true" />Productos incluidos en el vehículo</h4>
               <div className="overflow-x-auto rounded border border-border-subtle">
                 <table className={TABLE} aria-label="Productos incluidos en el vehículo">
                   <thead><tr><th>Producto</th><th>Cantidad (unid.)</th><th>Precio unitario ($)</th></tr></thead>
@@ -443,23 +457,26 @@ function SimulationWorkspace() {
                         <td>{money(product.unitPrice)}</td>
                       </tr>
                     ))}
+                    {!data.catalog.available.some((product) => (included?.[product.id] ?? 0) > 0) && <tr><td colSpan={3} className="text-center text-text-secondary">No hay productos incluidos en el vehículo</td></tr>}
                   </tbody>
                 </table>
               </div>
-              <p className="mt-1 text-xs text-text-secondary">Seleccione un producto incluido para retirarlo por completo.</p>
+              <p id="remove-product-reason" className="mt-1 text-xs text-text-secondary">Seleccioná un producto incluido para retirarlo por completo.</p>
             </div>
           </div>
+          {!canTransfer && <p id="add-product-reason" className="mt-2 text-sm text-text-secondary">{transferReason}</p>}
           <button
             type="button"
             className="mt-4 flex w-full items-center justify-center gap-2 rounded bg-brand-accent px-4 py-2 font-semibold text-text-primary disabled:opacity-50"
             disabled={!canWrite || !canSimulateRoute(knownRoutes[selectedRoute]) || data.routes.total === 0 || !validParameters || !validDraft || submitting}
+            aria-describedby={simulationReason ? 'simulation-reason' : undefined}
             onClick={() => void createScenario()}
           >
             <Play className="size-4" aria-hidden="true" />Simular
           </button>
-          {!canWrite && <p className="text-xs text-text-secondary">La creación requiere el permiso simulation:write.</p>}
+          {simulationReason && <p id="simulation-reason" className="mt-2 text-sm text-text-secondary">{simulationReason}</p>}
           {createMessage && <p role="status" className="mt-2 text-sm">{createMessage}</p>}
-          </div>
+          </section>
         </div>
       </div></PageSection>
       <PageSection>
@@ -486,6 +503,7 @@ function SimulationWorkspace() {
                         aria-label={`Seleccionar escenario ${scenario.id}`}
                         checked={selectedScenarios.includes(scenario.id)}
                         disabled={!selectedScenarios.includes(scenario.id) && selectedScenarios.length >= 2}
+                        aria-describedby={!selectedScenarios.includes(scenario.id) && selectedScenarios.length >= 2 ? 'compare-reason' : undefined}
                         onChange={(event) => setSelectedScenarios((current) => event.target.checked ? [...current, scenario.id] : current.filter((id) => id !== scenario.id))}
                       />
                     </td>
@@ -507,8 +525,8 @@ function SimulationWorkspace() {
           </div>
           <Pagination {...data.scenarios} label="registros" onChange={setScenarioPage} />
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-subtle p-3">
-            <span className="text-xs text-text-secondary">Seleccione dos escenarios para comparar ({selectedScenarios.length}/2).</span>
-            <button type="button" className={PRIMARY_BUTTON} disabled={selectedScenarios.length !== 2} onClick={() => setCompareOpen(true)}>
+            <span id="compare-reason" className="text-xs text-text-secondary">Seleccione dos escenarios para comparar ({selectedScenarios.length}/2). {selectedScenarios.length === 2 && 'Deseleccioná uno para elegir otro.'}</span>
+            <button type="button" className={PRIMARY_BUTTON} aria-describedby={selectedScenarios.length !== 2 ? 'compare-reason' : undefined} disabled={selectedScenarios.length !== 2} onClick={() => setCompareOpen(true)}>
               <Scale className="size-4" aria-hidden="true" />Comparar Escenarios
             </button>
           </div>

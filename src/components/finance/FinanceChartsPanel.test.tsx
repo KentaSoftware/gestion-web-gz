@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { FinanceChartsPanel } from './FinanceChartsPanel'
@@ -21,5 +21,28 @@ describe('cashflow chart', () => {
     expect(areas.mock.calls.slice(-2).every(([props]) => props.dot !== false)).toBe(true)
     rerender(<FinanceChartsPanel timeline={timeline} distribution={[]} weekly={[]} loading={false} showProjection={false} />)
     expect(areas.mock.calls.slice(-2).every(([props]) => props.dot === false)).toBe(true)
+  })
+
+  it('shows all expense categories and amounts outside the chart', () => {
+    render(<FinanceChartsPanel timeline={[]} distribution={[{ category: 'Servicios de logística', amount: 123456 }, { category: 'Alquiler', amount: 40000 }]} weekly={[]} loading={false} showProjection={false} />)
+    expect(screen.getByText(/Servicios de logística/)).toHaveTextContent('123.456')
+    expect(screen.getByText(/Alquiler/)).toHaveTextContent('40.000')
+  })
+
+  it('allows the donut and legend to wrap when the card is narrow', () => {
+    render(<FinanceChartsPanel timeline={[]} distribution={[{ category: 'Servicios', amount: 123456 }]} weekly={[]} loading={false} showProjection={false} />)
+    const chart = screen.getByRole('img', { name: 'Gráfico de dona de distribución de egresos' })
+    const legend = screen.getByText(/Servicios/).closest('ul')
+    expect(chart.parentElement).toHaveClass('flex-wrap')
+    expect(chart).toHaveClass('w-48', 'max-w-full', 'shrink-0')
+    expect(legend).toHaveClass('basis-48', 'grow')
+  })
+
+  it('does not report empty charts when data is unavailable', () => {
+    render(<FinanceChartsPanel timeline={[]} distribution={[]} weekly={[]} loading={false} unavailable />)
+    expect(screen.getByText('Flujo de caja no disponible.')).toBeInTheDocument()
+    expect(screen.getByText('Distribución no disponible.')).toBeInTheDocument()
+    expect(screen.getByText('Proyección no disponible.')).toBeInTheDocument()
+    expect(screen.queryByText('Sin movimientos en el período.')).not.toBeInTheDocument()
   })
 })

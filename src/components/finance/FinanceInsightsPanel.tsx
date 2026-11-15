@@ -7,6 +7,7 @@ interface Props {
   insights: FinanceInsight[]
   opportunity: FinanceOpportunityCard | null
   loading: boolean
+  unavailable?: boolean
 }
 
 const severityClass: Record<string, string> = {
@@ -15,7 +16,7 @@ const severityClass: Record<string, string> = {
   critical: 'border-state-error/40 bg-state-error/10',
 }
 
-export function FinanceInsightsPanel({ insights, opportunity, loading }: Props) {
+export function FinanceInsightsPanel({ insights, opportunity, loading, unavailable = false }: Props) {
   const cards: Array<{
     key: string
     title: string
@@ -57,19 +58,20 @@ export function FinanceInsightsPanel({ insights, opportunity, loading }: Props) 
 
   return (
     <section className="mb-6 space-y-3">
-      <h2 className="text-label font-semibold text-text-primary">
+      <h2 className="text-base font-semibold text-text-primary">
         Oportunidades de Optimización
       </h2>
 
       {loading && <div className="h-24 bg-background-subtle rounded-sm animate-pulse" />}
 
-      {!loading && cards.length === 0 && (
+      {!loading && unavailable && <p className="text-sm text-text-secondary">Oportunidades no disponibles.</p>}
+      {!loading && !unavailable && cards.length === 0 && (
         <p className="text-caption text-text-secondary">
           Sin alertas ni oportunidades para el período / configuración actual.
         </p>
       )}
 
-      {!loading && cards.length > 0 && (
+      {!loading && !unavailable && cards.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {cards.map((card) => (
             <article

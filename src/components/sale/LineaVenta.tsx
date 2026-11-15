@@ -171,6 +171,7 @@ export default function LineaVenta({edit}:{edit?: boolean}) {
                     <div className="flex min-w-0 flex-col items-start text-left">
                       <span className="font-medium text-text-primary">{option.name}</span>
                       <span className="text-xs text-text-secondary">{option.address?.trim() || 'Sin dirección'} · ID: {option.id}</span>
+                      <span className="text-xs text-text-secondary">Zona: {option.deliveryZoneName?.trim() || 'Sin zona asignada'}</span>
                     </div>
                   )}
                 />

@@ -143,6 +143,25 @@ describe('sale client selection', () => {
     expect(vi.mocked(apiClient.post).mock.calls[0][1]).toMatchObject({ idCliente: 'ddd123456' })
   })
 
+  it('shows delivery zones and fallbacks in accessible choices without changing selection', async () => {
+    vi.mocked(clientService.saleOptionsPage).mockResolvedValue({ clients: [
+      { id: 'named', name: 'Ana', address: 'Calle 1', deliveryZoneName: 'Zona Norte' },
+      { id: 'null-zone', name: 'Ana', address: 'Calle 2', deliveryZoneName: null },
+      { id: 'missing', name: 'Ana' },
+    ], nextCursor: null })
+    const store = setup()
+    openClientSelector()
+    const named = await screen.findByRole('option', { name: /Ana.*Calle 1.*named.*Zona Norte/ })
+    expect(screen.getByRole('option', { name: /Ana.*Calle 2.*null-zone.*Sin zona asignada/ })).toBeTruthy()
+    expect(screen.getByRole('option', { name: /Ana.*Sin dirección.*missing.*Sin zona asignada/ })).toBeTruthy()
+    fireEvent.click(named)
+    expect(store.getState().sale.idCliente).toBe('named')
+    fireEvent.click(screen.getByText('Crear'))
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledOnce())
+    expect(vi.mocked(apiClient.post).mock.calls[0][1]).toMatchObject({ idCliente: 'named' })
+    expect(vi.mocked(apiClient.post).mock.calls[0][1]).not.toHaveProperty('deliveryZoneName')
+  })
+
   it('shows actionable permission errors', async () => {
     vi.mocked(clientService.saleOptionsPage).mockRejectedValue(new axios.AxiosError('forbidden', 'ERR', undefined, undefined, { status: 403, statusText: '', headers: {}, config: { headers: new axios.AxiosHeaders() }, data: {} }))
     setup()

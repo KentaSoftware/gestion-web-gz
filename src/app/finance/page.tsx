@@ -43,7 +43,7 @@ function getDefaultDateRange(): DateRange {
 function FinancePageContent() {
   const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange)
   const [dashboard, setDashboard] = useState<FinanceDashboard | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [dateError, setDateError] = useState('')
   const [loadError, setLoadError] = useState('')
   const [exporting, setExporting] = useState(false)
@@ -54,6 +54,7 @@ function FinancePageContent() {
     if (demo) {
       setLoadError('')
       setDashboard(createFinanceDemo(range))
+      setLoading(false)
       return
     }
     try {
@@ -145,7 +146,7 @@ function FinancePageContent() {
           </>
         }
       >
-        <div className="flex items-end gap-4 flex-wrap mt-3">
+        <div className="flex items-end gap-3 flex-wrap rounded-md border border-border-subtle bg-surface-base p-3">
           <div className="flex flex-col gap-1">
             <label htmlFor="fin-desde" className="text-caption text-text-secondary font-medium">
               Desde
@@ -205,6 +206,7 @@ function FinancePageContent() {
         loading={loading}
         showProjection={false}
         showSinglePoint={demo}
+        unavailable={!dashboard}
       />
       {demo && dashboard && dashboard.startDate === dashboard.endDate && (
         <p className="text-caption text-text-secondary mb-4">Ingresos: {dashboard.kpis.totalInflows.toLocaleString('es-AR')} · Egresos: {dashboard.kpis.totalOutflows.toLocaleString('es-AR')}</p>
@@ -214,18 +216,21 @@ function FinancePageContent() {
         <FinanceProjectionChart
           weekly={dashboard?.weeklyProjection ?? []}
           loading={loading}
+          unavailable={!dashboard}
         />
         <FinanceMovementsPanel
           movements={dashboard?.recentMovements ?? []}
           loading={loading}
           compact
           allowNavigation={!demo}
+          unavailable={!dashboard}
         />
       </section>
       <FinanceInsightsPanel
         insights={dashboard?.insights ?? []}
         opportunity={dashboard?.opportunity ?? null}
         loading={loading}
+        unavailable={!dashboard}
       />
       <FinanceRulesPanel readOnly={demo} onUpdated={() => void fetchDashboard(dateRange)} />
 

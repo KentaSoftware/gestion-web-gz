@@ -100,9 +100,11 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
   const zoneFieldId = useId()
   const selectionFieldId = useId()
   const previewVersion = useRef(0)
+  const assignmentVersion = useRef(0)
 
   const [zones, setZones] = useState<DeliveryZone[]>([])
   const [assignmentOptions, setAssignmentOptions] = useState<RouteAssignmentOptions>({ drivers: [], vehicles: [] })
+  const [assignmentStatus, setAssignmentStatus] = useState<ZoneStatus>('loading')
   const [driverId, setDriverId] = useState('')
   const [vehicleId, setVehicleId] = useState('')
   const [zoneStatus, setZoneStatus] = useState<ZoneStatus>('loading')
@@ -137,9 +139,25 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
     }
   }, [])
 
-  useEffect(() => {
-    void routePlanService.getAssignmentOptions().then(setAssignmentOptions).catch(() => setAssignmentOptions({ drivers: [], vehicles: [] }))
+  const loadAssignments = useCallback(async () => {
+    const version = ++assignmentVersion.current
+    setAssignmentStatus('loading')
+    try {
+      const options = await routePlanService.getAssignmentOptions()
+      if (version !== assignmentVersion.current) return
+      setAssignmentOptions(options)
+      setAssignmentStatus('ready')
+    } catch {
+      if (version !== assignmentVersion.current) return
+      setAssignmentOptions({ drivers: [], vehicles: [] })
+      setAssignmentStatus('error')
+    }
   }, [])
+
+  useEffect(() => {
+    void loadAssignments()
+    return () => { assignmentVersion.current += 1 }
+  }, [loadAssignments])
 
   useEffect(() => {
     void loadZones()
@@ -396,18 +414,18 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
           <Checkbox id={id} checked={checked} disabled={isBlocked} aria-label={group.displayName} onCheckedChange={(value) => toggleClient(group, value === true)} />
         </td>
         <td className="px-3 py-1 align-middle text-sm font-medium text-text-primary">
-          <Label htmlFor={id} title={group.displayName} className="line-clamp-2 cursor-pointer">{group.displayName}</Label>
+          <Label htmlFor={id} title={group.displayName} className="cursor-pointer break-words leading-normal">{group.displayName}</Label>
         </td>
-        <td className="px-3 py-1 align-middle text-xs text-text-secondary">
-          <div title={group.addressSummary ?? 'Dirección no disponible'} className="line-clamp-1">{group.addressSummary ?? 'Dirección no disponible'}</div>
+        <td className="px-3 py-2 align-middle text-sm text-text-secondary">
+          <div title={group.addressSummary ?? 'Dirección no disponible'} className="break-words">{group.addressSummary ?? 'Dirección no disponible'}</div>
           <div>{group.zoneMismatch ? 'Otra zona' : selectedZoneName}</div>
           {group.reasons.length > 0 && (() => {
             const reasonText = group.reasons.map((reason) => CANDIDATE_BLOCK_REASON_LABEL[reason] ?? reason).join('. ')
-            return <div title={reasonText} className="line-clamp-1 text-state-error">{reasonText}</div>
+            return <div title={reasonText} className="break-words text-state-error">{reasonText}</div>
           })()}
         </td>
         <td className="whitespace-nowrap px-3 py-1 align-middle text-sm text-text-secondary">{orderCount} {orderCount === 1 ? 'pedido' : 'pedidos'}</td>
-        <td className={isBlocked ? 'px-3 py-1 align-middle text-xs font-medium text-state-error' : 'px-3 py-1 align-middle text-xs font-medium text-state-success'}>{isBlocked ? 'Bloqueado' : 'Apto'}</td>
+        <td className={isBlocked ? 'px-3 py-2 align-middle text-sm font-medium text-state-error' : 'px-3 py-2 align-middle text-sm font-medium text-state-success'}>{isBlocked ? 'Bloqueado' : 'Apto'}</td>
       </tr>
     )
   }
@@ -528,14 +546,14 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
 
       {previewStatus === 'idle' && loadStatus === 'ready' && candidates !== null && !isEmpty && (
         <div className="flex flex-col gap-4">
-          <div className="grid gap-4 lg:grid-cols-[1.08fr_1fr]">
-            <section aria-labelledby="pending-orders-title" className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md">
-              <h3 id="pending-orders-title" className="text-sm font-semibold text-brand-primary">Pedidos pendientes</h3>
-              <p className="mt-1 text-xs text-text-secondary">
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <section aria-labelledby="pending-orders-title" className="min-w-0 rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md">
+              <h3 id="pending-orders-title" className="text-base font-semibold text-brand-primary">Pedidos pendientes</h3>
+              <p className="mt-1 text-sm text-text-secondary">
                 Seleccioná clientes. Todos sus pedidos aptos se incluirán en una sola parada.
               </p>
-              <div data-testid="pending-orders-table-container" className="mt-3 h-[38rem] overflow-hidden">
-                <table className="w-full table-fixed border-collapse text-left" aria-label="Pedidos pendientes">
+              <div data-testid="pending-orders-table-container" className="mt-3 overflow-x-auto" role="region" aria-label="Tabla de pedidos pendientes" tabIndex={0}>
+                <table className="w-full min-w-[36rem] table-fixed border-collapse text-left" aria-label="Pedidos pendientes">
                   <colgroup>
                     <col className="w-10" />
                     <col className="w-[30%]" />
@@ -543,7 +561,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
                     <col className="w-[15%]" />
                     <col className="w-[13%]" />
                   </colgroup>
-                  <thead className="border-b border-border-subtle text-xs text-text-secondary">
+                  <thead className="border-b border-border-subtle text-sm text-text-secondary">
                     <tr className="h-10">
                       <th scope="col" className="w-10 px-3 py-2"><span className="sr-only">Selección</span></th>
                       <th scope="col" className="px-3 py-2 font-medium">Cliente / Comercio</th>
@@ -554,12 +572,12 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
                   </thead>
                   <tbody>{visibleGroups.map(renderCandidateGroup)}</tbody>
                 </table>
+              </div>
                 {pendingClientPageCount > 1 && <nav aria-label="Paginación de pedidos pendientes" className="mt-3 flex items-center justify-between gap-3">
                   <Button type="button" variant="secondary" size="sm" onClick={() => setPendingClientPage((page) => Math.max(1, page - 1))} disabled={pendingClientPage === 1}>Anterior</Button>
-                  <span role="status" aria-live="polite" className="text-xs text-text-secondary">Página {pendingClientPage} de {pendingClientPageCount}</span>
+                  <span role="status" aria-live="polite" className="text-sm text-text-secondary">Página {pendingClientPage} de {pendingClientPageCount}</span>
                   <Button type="button" variant="secondary" size="sm" onClick={() => setPendingClientPage((page) => Math.min(pendingClientPageCount, page + 1))} disabled={pendingClientPage === pendingClientPageCount}>Siguiente</Button>
                 </nav>}
-              </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
                   type="button"
@@ -582,18 +600,22 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
               </div>
             </section>
           <section aria-labelledby="route-configuration-title" className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md">
-            <h3 id="route-configuration-title" className="text-sm font-semibold text-brand-primary">Configuración de la ruta</h3>
-            <div className="flex flex-col gap-3">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="flex flex-col gap-2"><Label htmlFor="route-driver">Repartidor</Label><select id="route-driver" value={driverId} onChange={(event) => { invalidatePreview(); setDriverId(event.target.value) }} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un repartidor</option>{assignmentOptions.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.nickname}</option>)}</select></div>
-                <div className="flex flex-col gap-2"><Label htmlFor="route-vehicle">Vehículo</Label><select id="route-vehicle" value={vehicleId} onChange={(event) => { invalidatePreview(); setVehicleId(event.target.value) }} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un vehículo</option>{assignmentOptions.vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.code} · {vehicle.fuelConsumptionLitersPer100Km} L/100 km</option>)}</select></div>
+            <h3 id="route-configuration-title" className="text-base font-semibold text-brand-primary">Configuración de la ruta</h3>
+            <div className="mt-3 flex flex-col gap-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="flex flex-col gap-2"><Label htmlFor="route-driver">Repartidor</Label><select id="route-driver" disabled={assignmentStatus !== 'ready'} value={driverId} onChange={(event) => { invalidatePreview(); setDriverId(event.target.value) }} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un repartidor</option>{assignmentOptions.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.nickname}</option>)}</select></div>
+                <div className="flex flex-col gap-2"><Label htmlFor="route-vehicle">Vehículo</Label><select id="route-vehicle" disabled={assignmentStatus !== 'ready'} value={vehicleId} onChange={(event) => { invalidatePreview(); setVehicleId(event.target.value) }} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un vehículo</option>{assignmentOptions.vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.code} · {vehicle.fuelConsumptionLitersPer100Km} L/100 km</option>)}</select></div>
               </div>
+              {assignmentStatus === 'loading' && <p role="status" className="text-sm text-text-secondary">Cargando repartidores y vehículos…</p>}
+              {assignmentStatus === 'error' && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-state-error"><span>No se pudieron cargar los repartidores y vehículos.</span><Button type="button" variant="secondary" size="sm" onClick={() => void loadAssignments()}>Reintentar recursos</Button></div>}
+              {assignmentStatus === 'ready' && assignmentOptions.drivers.length === 0 && <p role="status" className="text-sm text-text-secondary">No hay repartidores disponibles.</p>}
+              {assignmentStatus === 'ready' && assignmentOptions.vehicles.length === 0 && <p role="status" className="text-sm text-text-secondary">No hay vehículos disponibles.</p>}
               {(!hasAssignments || selectedClientCount < 2) && <p role="status" className="text-sm text-text-secondary">Seleccioná un repartidor, un vehículo y al menos dos clientes aptos.</p>}
               <div className="flex flex-wrap items-center gap-3">
                 <Button type="button" onClick={() => void handlePreview()} disabled={isSaving || !canPreview}>
                   Generar ruta
                 </Button>
-                <p className="text-xs text-text-secondary">
+                <p className="text-sm text-text-secondary">
                    Se seleccionaron {selectedClientCount} clientes y {selectedSaleIds.length} pedidos aptos.
                 </p>
               </div>

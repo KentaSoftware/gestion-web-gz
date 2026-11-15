@@ -47,6 +47,65 @@ describe('Stock Inteligente read dashboard', () => {
     })
   })
 
+  it('distinguishes loading and failed overview data from genuine zero counts', async () => {
+    let rejectOverview: (reason?: unknown) => void = () => {}
+    get.mockImplementation(() => new Promise((_resolve, reject) => { rejectOverview = reject }))
+    render(<SmartStockPage />)
+
+    const metrics = screen.getByLabelText('Indicadores globales de stock')
+    expect(within(metrics).getByText('Cargando indicadores…')).toBeInTheDocument()
+    expect(within(metrics).queryByLabelText('0 productos bajo el mínimo')).not.toBeInTheDocument()
+    expect(screen.queryByText('Página 1 de 1, 0 productos')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Búsqueda rápida en esta página'), { target: { value: 'Yerba' } })
+    expect(screen.queryByText('No hay productos en esta página que coincidan.')).not.toBeInTheDocument()
+
+    rejectOverview(new Error('offline'))
+    expect(await within(metrics).findByText('No se pudieron cargar los indicadores.')).toBeInTheDocument()
+    expect(screen.queryByText('No hay productos en esta página que coincidan.')).not.toBeInTheDocument()
+  })
+
+  it('shows genuine zero counts after a successful empty response', async () => {
+    get.mockResolvedValue({ data: { ...overview, total: 0, items: [], globalAlerts: [], globalSummary: { belowMinimumProductCount: 0, expiringProductCount: 0, expiredProductCount: 0, lowRotationProductCount: 0, activeAlertCount: 0 } } })
+    render(<SmartStockPage />)
+    expect(await screen.findByLabelText('0 productos bajo el mínimo')).toBeInTheDocument()
+    expect(screen.getByText('Página 1 de 1, 0 productos')).toBeInTheDocument()
+  })
+
+  it('distinguishes unavailable pagination and expired products from an empty result', async () => {
+    let rejectOverview: (reason?: unknown) => void = () => {}
+    get.mockImplementation(() => new Promise((_resolve, reject) => { rejectOverview = reject }))
+    render(<SmartStockPage />)
+    expect(screen.queryByText('1 / 1')).not.toBeInTheDocument()
+    expect(screen.getByText('Cargando paginación…')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Configuraciones' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Cargando productos vencidos…')).toBeInTheDocument()
+    expect(within(dialog).queryByText('No hay productos vencidos en esta página.')).not.toBeInTheDocument()
+    rejectOverview(new Error('offline'))
+    expect(await within(dialog).findByText('No se pudieron cargar los productos vencidos.')).toBeInTheDocument()
+    expect(screen.getByText('Paginación no disponible')).toBeInTheDocument()
+    expect(screen.queryByText('1 / 1')).not.toBeInTheDocument()
+    expect(within(dialog).queryByText('No hay productos vencidos en esta página.')).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Retirar todos de esta página' })).toBeDisabled()
+  })
+
+  it('shows pagination and the expired-products empty state after a successful response', async () => {
+    get.mockResolvedValue({ data: { ...overview, total: 0, items: [] } })
+    render(<SmartStockPage />)
+    expect(await screen.findByText('1 / 1')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Configuraciones' }))
+    expect(within(screen.getByRole('dialog')).getByText('No hay productos vencidos en esta página.')).toBeInTheDocument()
+  })
+
+  it('does not report an empty expired-products list while the overview is loading', () => {
+    get.mockImplementation(() => new Promise(() => {}))
+    render(<SmartStockPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Configuraciones' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).queryByText('No hay productos vencidos en esta página.')).not.toBeInTheDocument()
+    expect(within(dialog).getByText('Cargando productos vencidos…')).toBeInTheDocument()
+  })
+
   it('S-01 renders invariant global indicators and catalog-wide alerts', async () => {
     render(<SmartStockPage />)
     expect(await within(await screen.findByRole('table')).findByText('Yerba del Sur')).toBeInTheDocument()
