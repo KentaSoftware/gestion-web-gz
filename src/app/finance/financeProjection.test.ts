@@ -1,8 +1,36 @@
 import { describe, expect, it } from 'vitest'
 import { createFinanceDemo } from './financeDemo'
-import { projectFinance } from './financeProjection'
+import { projectFinance, FutureFinancePeriodError } from './financeProjection'
 
 describe('forward cash projection', () => {
+  it('rejects nonfinite, out-of-range and overflowing intermediate amounts with an export-safe error', () => {
+    const clock = new Date('2026-12-31T12:00:00Z')
+    const dashboard = createFinanceDemo({ startDate: '2026-12-31', endDate: '2026-12-31' })
+    for (const amount of [Infinity, NaN, 1e100, 1e307, 1e12 + 1]) {
+      dashboard.kpis.currentBalance = amount
+      expect(() => projectFinance(dashboard, clock)).toThrow(/límite.*1\.000\.000\.000\.000/)
+      try { projectFinance(dashboard, clock) } catch (error) { expect(error).toBeInstanceOf(FutureFinancePeriodError) }
+    }
+    Object.assign(dashboard.kpis, { currentBalance: 0, effectiveReserve: 0, totalInflows: 2e11, totalOutflows: 0 })
+    expect(() => projectFinance(dashboard, clock)).toThrow(/límite/)
+    Object.assign(dashboard.kpis, { currentBalance: 9e11, totalInflows: 2e10 })
+    expect(() => projectFinance(dashboard, clock)).toThrow(/límite/)
+    Object.assign(dashboard.kpis, { currentBalance: -6e11, effectiveReserve: 6e11, totalInflows: 0 })
+    expect(() => projectFinance(dashboard, clock)).toThrow(/límite/)
+    dashboard.startDate = dashboard.endDate = '2026-12-01'
+    Object.assign(dashboard.kpis, { currentBalance: 0, effectiveReserve: 0, totalInflows: 4e10 })
+    expect(() => projectFinance(dashboard, clock)).toThrow(/límite/)
+  })
+
+  it('accepts large supported amounts, including negatives, without changing normal rounding', () => {
+    const dashboard = createFinanceDemo({ startDate: '2026-12-31', endDate: '2026-12-31' })
+    Object.assign(dashboard.kpis, { currentBalance: -5e11, effectiveReserve: 0, totalInflows: 0, totalOutflows: 0 })
+    const result = projectFinance(dashboard, new Date('2026-12-31T12:00:00Z'))
+    expect(result.weeks[3].baseline).toBe(-5e11)
+    expect(result.weeks[3].baselineShortfall).toBe(5e11)
+    dashboard.kpis.currentBalance = 1e12
+    expect(projectFinance(dashboard, new Date('2026-12-31T12:00:00Z')).opening).toBe(1e12)
+  })
   it('reconciles four future weeks across a year boundary', () => {
     const dashboard = createFinanceDemo({ startDate: '2026-12-31', endDate: '2026-12-31' })
     const result = projectFinance(dashboard, new Date('2026-12-31T12:00:00Z'))

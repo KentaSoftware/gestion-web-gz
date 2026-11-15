@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import FinancePage from './page'
 import { Permission } from '@/interfaces/auth.interface'
 import { createFinanceDemo } from './financeDemo'
+import { FinanceProjectionAmountError } from './financeProjection'
+import * as projectionPdf from './financeProjectionPdf'
 
 const mocks = vi.hoisted(() => ({ demo: true, allowed: true, permission: '', modal: vi.fn(), getDashboard: vi.fn(), getRules: vi.fn(), updateRules: vi.fn(), exportReportPdf: vi.fn() }))
 vi.mock('./financeDemo', async importOriginal => ({ ...(await importOriginal<typeof import('./financeDemo')>()), get demo() { return mocks.demo } }))
@@ -104,6 +106,17 @@ describe('finance page source switch', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Exportar Reporte' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo exportar el PDF')
     expect(mocks.exportReportPdf).not.toHaveBeenCalled()
+  })
+
+  it('shows the numerical limit when fixture PDF generation fails', async () => {
+    const generate = vi.spyOn(projectionPdf, 'createProjectionPdf').mockImplementation(() => { throw new FinanceProjectionAmountError() })
+    try {
+      render(<FinancePage />)
+      await screen.findAllByText(/Cobros de ventas/)
+      fireEvent.click(screen.getByRole('button', { name: 'Exportar Reporte' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('límite de ARS 1.000.000.000.000')
+      expect(mocks.exportReportPdf).not.toHaveBeenCalled()
+    } finally { generate.mockRestore() }
   })
 
   it('uses the Buenos Aires default range and blocks applying tomorrow without replacing the dashboard', async () => {
