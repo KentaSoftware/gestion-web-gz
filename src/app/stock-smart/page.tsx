@@ -147,7 +147,6 @@ export default function SmartStockPage() {
   const detailHeadingRef = useRef<HTMLHeadingElement>(null)
   const pendingQuickFocus = useRef('')
   const loadedDetailId = useRef('')
-  const [category, setCategory] = useState('')
   const [severity, setSeverity] = useState<SeverityFilter>(SEVERITIES.ALL)
   const [expandedAlertGroups, setExpandedAlertGroups] = useState<Partial<Record<AlertSeverity, boolean>>>({})
   const [selectedId, setSelectedId] = useState('')
@@ -176,7 +175,7 @@ export default function SmartStockPage() {
     const controller = new AbortController()
     setStatus('loading')
     apiClient.get<StockOverview>('/stock/overview', {
-      params: { businessDate: dateInBuenosAires(), ...(search.trim() ? { search: search.trim() } : {}), ...(category.trim() ? { category: category.trim() } : {}), page, pageSize: PAGE_SIZE, timeZone: TIME_ZONE },
+      params: { businessDate: dateInBuenosAires(), ...(search.trim() ? { search: search.trim() } : {}), page, pageSize: PAGE_SIZE, timeZone: TIME_ZONE },
       signal: controller.signal,
     }).then(({ data }) => {
       setOverview(data)
@@ -185,7 +184,7 @@ export default function SmartStockPage() {
       if (!controller.signal.aborted) setStatus('error')
     })
     return () => controller.abort()
-  }, [page, retry, search, category])
+  }, [page, retry, search])
 
   useEffect(() => {
     if (!selectedId) return
@@ -348,7 +347,7 @@ export default function SmartStockPage() {
     } catch { setOperationError('No se pudo completar el retiro masivo. Intentá nuevamente.') }
     finally { setOperationBusy(false) }
   }
-  const hasProductFilters = Boolean(search.trim() || category.trim())
+  const hasProductFilters = Boolean(search.trim())
   const emptyProductsMessage = overview?.total === 0 && !hasProductFilters
     ? 'Todavía no hay productos para mostrar.'
     : 'No hay productos que coincidan con estos filtros.'
@@ -434,16 +433,11 @@ export default function SmartStockPage() {
               <input aria-label="Buscar producto por nombre" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} placeholder="Buscar producto" className="h-10 w-full rounded-md border border-border-subtle bg-background-canvas pl-9 pr-9 text-sm text-text-primary placeholder:text-text-muted" />
               {search && <button type="button" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-text-secondary hover:bg-background-subtle" aria-label="Limpiar búsqueda"><X className="size-4" /></button>}
             </label>
-            <label className="flex items-center gap-2">
-              <span className="sr-only">Filtrar productos por categoría</span>
-              <input aria-label="Filtrar productos por categoría" className="h-10 min-w-36 rounded-md border border-border-subtle bg-background-canvas px-3 text-sm text-text-primary placeholder:text-text-muted" value={category} onChange={(event) => { setCategory(event.target.value); setPage(1) }} placeholder="Categoría" />
-              {category && <button type="button" onClick={() => setCategory('')} className="rounded p-2 text-text-secondary hover:bg-background-subtle" aria-label="Limpiar categoría"><X className="size-4" /></button>}
-            </label>
           </div>
 
           {status === 'loading' ? <div className="flex min-h-48 items-center justify-center gap-3 text-text-secondary" role="status" aria-live="polite"><RefreshCw className="size-5 animate-spin" aria-hidden="true" />Cargando productos…</div>
             : status === 'error' ? <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-center" role="alert"><AlertTriangle className="size-8 text-state-error" /><p className="text-sm text-text-secondary">No se pudo cargar el stock. Verificá la conexión e intentá nuevamente.</p><button type="button" className="rounded-md bg-brand-primary px-4 py-2 text-sm font-semibold text-text-inverse" onClick={() => setRetry((value) => value + 1)}>Reintentar</button></div>
-               : items.length === 0 ? <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center" role="status"><PackageSearch className="size-8 text-text-muted" aria-hidden="true" /><p className="font-medium text-text-primary">{emptyProductsMessage}</p><p className="text-sm text-text-secondary">La búsqueda y la categoría se aplican juntas.</p></div>
+               : items.length === 0 ? <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center" role="status"><PackageSearch className="size-8 text-text-muted" aria-hidden="true" /><p className="font-medium text-text-primary">{emptyProductsMessage}</p></div>
                  : <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-border-subtle text-xs font-semibold uppercase tracking-wide text-text-secondary"><th className="px-2 py-3">Producto</th><th className="px-2 py-3">Categoría</th><th className="px-2 py-3">Stock actual</th><th className="px-2 py-3">Stock mínimo</th><th className="px-2 py-3">Estado</th><th className="px-2 py-3">Última venta</th><th className="px-2 py-3"><span className="sr-only">Acciones</span></th></tr></thead><tbody className="divide-y divide-border-subtle">{items.map((item) => { const state = stockStatus(item); return <tr key={item.productId} className={selectedId === item.productId ? 'bg-background-subtle' : ''}>
                    <td className="px-2 py-3"><button type="button" onClick={() => selectProduct(item.productId)} aria-pressed={selectedId === item.productId} className="flex min-w-40 items-center gap-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary">{item.imagePath ? <img src={imageUrl(item.imagePath)} alt="" className="size-9 shrink-0 rounded-md object-cover" /> : <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-background-subtle text-text-muted"><Boxes className="size-4" aria-hidden="true" /></span>}<span className="font-semibold text-text-primary">{item.productName}</span></button></td>
                    <td className="px-2 py-3 text-text-secondary">{item.categoryName || 'Sin categoría'}</td><td className="px-2 py-3"><span className="block font-semibold text-text-primary">{item.physicalQuantity} físico</span><span className="block text-xs text-text-secondary">Comprometido {item.committedQuantity} · Disponible {item.availableToSell}</span></td><td className="px-2 py-3 text-text-primary">{item.minimum === null ? 'No definido' : item.minimum}</td><td className="px-2 py-3"><span className={`whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ${state.classes}`}>{state.label}</span></td><td className="px-2 py-3 text-xs text-text-secondary">{item.latestSale.status === 'RECORDED' && item.latestSale.occurredAt ? formatDate(item.latestSale.occurredAt) : 'No disponible: historial incompleto'}</td><td className="px-2 py-3"><details className="relative"><summary aria-label={`Acciones de ${item.productName}`} className="flex size-8 cursor-pointer list-none items-center justify-center rounded-md text-text-secondary hover:bg-background-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary"><MoreVertical className="size-4" aria-hidden="true" /></summary><div className="absolute right-0 z-10 mt-1 flex min-w-40 flex-col rounded-md border border-border-subtle bg-surface-base p-1 shadow-lg"><button type="button" onClick={() => openOperation('config', item.productId)} className="rounded px-3 py-2 text-left text-sm hover:bg-background-subtle">Configurar stock</button><button type="button" onClick={() => { setSelectedId(item.productId); openOperation('writeoff', item.productId) }} className="rounded px-3 py-2 text-left text-sm hover:bg-background-subtle">Registrar baja</button><button type="button" disabled={item.expiredQuantity <= 0} onClick={() => { setSelectedId(item.productId); openOperation('remove', item.productId) }} className="rounded px-3 py-2 text-left text-sm hover:bg-background-subtle disabled:opacity-50">Retirar vencidos</button></div></details></td></tr> })}</tbody></table></div>}

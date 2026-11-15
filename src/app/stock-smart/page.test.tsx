@@ -62,7 +62,7 @@ describe('Stock Inteligente read dashboard', () => {
     expect(within(alerts).queryByLabelText('Buscar producto por nombre')).not.toBeInTheDocument()
     expect(within(alerts).queryByLabelText('Filtrar productos por categoría')).not.toBeInTheDocument()
     expect(within(products).getByLabelText('Buscar producto por nombre')).toBeInTheDocument()
-    expect(within(products).getByLabelText('Filtrar productos por categoría')).toBeInTheDocument()
+    expect(within(products).queryByLabelText('Filtrar productos por categoría')).not.toBeInTheDocument()
     expect(toolbar).toContainElement(screen.getByLabelText('Filtrar alertas por severidad'))
     expect(screen.getByRole('region', { name: 'Alertas críticas' }).parentElement).toHaveClass('md:grid-cols-3')
     expect(screen.getByRole('region', { name: 'Alertas críticas' }).querySelector('ul')).toHaveClass('grid', 'gap-2')
@@ -147,25 +147,26 @@ describe('Stock Inteligente read dashboard', () => {
     await waitFor(() => expect(get).toHaveBeenCalledWith('/stock/overview', expect.objectContaining({ params: expect.objectContaining({ page: 2, pageSize: 8 }) })))
   })
 
-  it('S-09 sends intersecting filters to the API, resets pagination, and clears filters independently', async () => {
+  it('searches products, resets pagination, and keeps category data and severity filtering', async () => {
     render(<SmartStockPage />)
     await within(await screen.findByRole('table')).findByText('Yerba del Sur')
     fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
     await waitFor(() => expect(get).toHaveBeenCalledWith('/stock/overview', expect.objectContaining({ params: expect.objectContaining({ page: 2 }) })))
-    fireEvent.change(screen.getByLabelText('Filtrar productos por categoría'), { target: { value: 'Infusiones' } })
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/stock/overview', expect.objectContaining({ params: expect.objectContaining({ category: 'Infusiones', page: 1 }) })))
     fireEvent.change(screen.getByLabelText('Buscar producto por nombre'), { target: { value: 'Yerba' } })
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/stock/overview', expect.objectContaining({ params: expect.objectContaining({ search: 'Yerba', category: 'Infusiones', page: 1 }) })))
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/stock/overview', expect.objectContaining({ params: expect.objectContaining({ search: 'Yerba', page: 1 }) })))
+    const table = await screen.findByRole('table')
+    expect(within(table).getByRole('columnheader', { name: 'Categoría' })).toBeInTheDocument()
+    expect(within(table).getByRole('row', { name: /Yerba del Sur/ })).toHaveTextContent('Almacén')
     fireEvent.click(screen.getByLabelText('Limpiar búsqueda'))
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/stock/overview', expect.objectContaining({ params: expect.objectContaining({ category: 'Infusiones', page: 1 }) })))
-    expect(get.mock.calls.at(-1)?.[1].params).not.toHaveProperty('search')
-    fireEvent.click(screen.getByLabelText('Limpiar categoría'))
-    await waitFor(() => expect(get.mock.calls.at(-1)?.[1].params).not.toHaveProperty('category'))
+    await waitFor(() => expect(get.mock.calls.at(-1)?.[1].params).not.toHaveProperty('search'))
     const count = get.mock.calls.length
     fireEvent.change(screen.getByLabelText('Filtrar alertas por severidad'), { target: { value: 'WARNING' } })
     expect(get).toHaveBeenCalledTimes(count)
+    expect(screen.getByText('Rotación baja')).toBeInTheDocument()
+    expect(screen.queryByText('Bajo mínimo')).not.toBeInTheDocument()
     expect(get.mock.calls.at(-1)?.[1].params).not.toHaveProperty('search')
     expect(get.mock.calls.at(-1)?.[1].params).not.toHaveProperty('category')
+    for (const [, config] of get.mock.calls) expect(config.params).not.toHaveProperty('category')
   })
 
   it('does not send client-only severity to the API and omits empty filters', async () => {
@@ -186,7 +187,7 @@ describe('Stock Inteligente read dashboard', () => {
     })
     render(<SmartStockPage />)
     expect(await screen.findByText('Todavía no hay productos para mostrar.')).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Filtrar productos por categoría'), { target: { value: 'Inexistente' } })
+    fireEvent.change(screen.getByLabelText('Buscar producto por nombre'), { target: { value: 'Inexistente' } })
     expect(await screen.findByText('No hay productos que coincidan con estos filtros.')).toBeInTheDocument()
   })
   it('S-10 and S-14 distinguish zero availability and incomplete sale history; S-03 shows movements', async () => {
