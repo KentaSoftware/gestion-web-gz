@@ -88,7 +88,7 @@ export function FinanceRulesPanel({ onUpdated, readOnly = false }: Props) {
             Configuración de reglas financieras
           </h2>
         </div>
-        <Button text={saving ? 'Actualizando…' : 'Actualizar'} onClick={handleSave} size="md" disabled={readOnly} />
+        <Button text={saving ? 'Actualizando…' : 'Actualizar'} onClick={handleSave} size="md" />
       </div>
 
       {loading && <p className="text-caption text-text-secondary">Cargando…</p>}

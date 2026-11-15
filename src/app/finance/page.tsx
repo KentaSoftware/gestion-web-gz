@@ -119,14 +119,12 @@ function FinancePageContent() {
               onClick={() => { void handleExportPdf() }}
               size="md"
               variant="secondary"
-              disabled={demo}
             />
             <Button
               text="+ Nuevo Movimiento"
-              onClick={() => setExpenseOpen(true)}
+              onClick={() => { if (!demo) setExpenseOpen(true) }}
               size="md"
               variant="primary"
-              disabled={demo}
             />
           </>
         }

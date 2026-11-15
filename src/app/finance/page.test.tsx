@@ -16,8 +16,9 @@ vi.mock('@/components/finance/RegisterExpenseModal', () => ({ RegisterExpenseMod
 describe('finance page source switch', () => {
   beforeEach(() => { vi.clearAllMocks(); mocks.demo = true; mocks.allowed = true; mocks.permission = '' })
 
-  it('renders fixtures with disabled actions and no real movement navigation', async () => {
+  it('renders fixtures with enabled no-op actions and no real movement navigation', async () => {
     const user = userEvent.setup()
+    const download = vi.spyOn(HTMLAnchorElement.prototype, 'click')
     render(<FinancePage />)
     expect((await screen.findAllByText(/Cobros de ventas/)).length).toBeGreaterThan(0)
     expect(screen.getByText('Capital ocioso')).toBeInTheDocument()
@@ -31,12 +32,20 @@ describe('finance page source switch', () => {
     for (const name of ['Exportar Reporte', '+ Nuevo Movimiento', 'Actualizar']) {
       const button = screen.getByRole('button', { name })
       expect(button).toBeVisible()
-      expect(button).toBeDisabled()
+      expect(button).toBeEnabled()
       await user.click(button)
+      button.focus()
+      await user.keyboard('{Enter}{Space}')
     }
     expect(mocks.modal).not.toHaveBeenCalled()
+    expect(screen.queryByText('Expense form')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Actualizando|Exportando/)).not.toBeInTheDocument()
+    expect(mocks.getDashboard).not.toHaveBeenCalled()
+    expect(mocks.getRules).not.toHaveBeenCalled()
     expect(mocks.updateRules).not.toHaveBeenCalled()
     expect(mocks.exportReportPdf).not.toHaveBeenCalled()
+    expect(download).not.toHaveBeenCalled()
+    download.mockRestore()
     expect(screen.queryByText(/CUR-6|CU-012|finance-rules-v2/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/demo/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Ver Todos los Movimientos/ })).not.toBeInTheDocument()

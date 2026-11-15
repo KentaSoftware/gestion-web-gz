@@ -9,14 +9,18 @@ vi.mock('@/services/finance.service', () => ({ financeService: mocks }))
 describe('FinanceRulesPanel', () => {
   beforeEach(() => vi.resetAllMocks())
 
-  it('shows a disabled update button without fetching or saving in read-only mode', async () => {
+  it('keeps update keyboard accessible without fetching or saving in read-only mode', async () => {
     const user = userEvent.setup()
     const onUpdated = vi.fn()
     render(<FinanceRulesPanel readOnly onUpdated={onUpdated} />)
     const button = screen.getByRole('button', { name: 'Actualizar' })
     expect(button).toBeVisible()
-    expect(button).toBeDisabled()
+    expect(button).toBeEnabled()
+    await user.tab()
+    expect(button).toHaveFocus()
+    await user.keyboard('{Enter}{Space}')
     await user.click(button)
+    expect(screen.queryByText('Actualizando…')).not.toBeInTheDocument()
     expect(screen.getByLabelText(/Reserva mínima/)).toBeDisabled()
     expect(screen.queryByText(/CUR-6|CU-012|finance-rules-v2/i)).not.toBeInTheDocument()
     expect(mocks.getRules).not.toHaveBeenCalled()
