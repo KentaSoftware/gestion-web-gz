@@ -18,6 +18,9 @@ describe('finance page source switch', () => {
   it('renders fixtures without service calls, mutation controls or real movement navigation', async () => {
     render(<FinancePage />)
     expect((await screen.findAllByText(/Cobros de ventas/)).length).toBeGreaterThan(0)
+    expect(screen.getByText('Capital ocioso')).toBeInTheDocument()
+    expect(screen.getByText(/Yerba mate 1 kg: 120 unidades vendidas en los 30 días hasta el/)).toBeInTheDocument()
+    expect(screen.getByText(/Arroz largo fino 1 kg: 8 unidades disponibles/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }))
     expect(mocks.getDashboard).not.toHaveBeenCalled()
     expect(mocks.getRules).not.toHaveBeenCalled()
@@ -29,10 +32,14 @@ describe('finance page source switch', () => {
     fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-03-10' } })
     fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }))
     expect(screen.getByText(/Ingresos: 180.000 · Egresos: 120.000/)).toBeInTheDocument()
+    expect(screen.getByText(/30 días hasta el 10\/03\/2026 inclusive/)).toBeInTheDocument()
+    expect(screen.getByText(/8 unidades disponibles al 10\/03\/2026/)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2020-01-01' } })
     fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }))
     expect(screen.getByText(/no puede superar 366 días/)).toBeInTheDocument()
     expect(mocks.getDashboard).not.toHaveBeenCalled()
+    expect(mocks.updateRules).not.toHaveBeenCalled()
+    expect(mocks.exportReportPdf).not.toHaveBeenCalled()
   })
 
   it('uses live services and exposes actions when disabled', async () => {
@@ -60,11 +67,16 @@ describe('finance page source switch', () => {
   it('renders a successful live response without replacing it with fixtures', async () => {
     mocks.demo = false
     const live = createFinanceDemo({ startDate: '2026-03-10', endDate: '2026-03-10' })
+    live.insights = []
+    live.opportunity.title = 'Oportunidad real'
     live.recentMovements[0].description = 'Registro real'
     mocks.getDashboard.mockResolvedValue(live)
     mocks.getRules.mockResolvedValue({ rulesVersion: 'live', config: { reserveMinimumAmount: 12 } })
     render(<FinancePage />)
     expect(await screen.findByText(/Registro real/)).toBeInTheDocument()
+    expect(screen.queryByText(/Yerba mate 1 kg/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Arroz largo fino 1 kg/)).not.toBeInTheDocument()
+    expect(screen.getByText('Oportunidad real')).toBeInTheDocument()
     expect(await screen.findByText(/CUR-6 \/ CU-012 · live/)).toBeInTheDocument()
     expect(mocks.permission).toBe(Permission.READ_CASHFLOW)
     expect(mocks.getDashboard).toHaveBeenCalledTimes(1)

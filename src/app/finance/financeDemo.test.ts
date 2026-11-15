@@ -2,6 +2,24 @@ import { describe, expect, it } from 'vitest'
 import { createFinanceDemo } from './financeDemo'
 
 describe('finance fixtures', () => {
+  it('provides the idle capital and product recommendations with clear context', () => {
+    const data = createFinanceDemo({ startDate: '2026-03-10', endDate: '2026-03-10' })
+    expect(data.opportunity.title).toBe('Capital ocioso')
+    expect(data.insights).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'recommendation', title: 'Producto más vendido', explanation: 'Yerba mate 1 kg: 120 unidades vendidas en los 30 días hasta el 10/03/2026 inclusive. Revisá su reposición.' }),
+      expect.objectContaining({ type: 'recommendation', title: 'Producto con stock bajo', explanation: 'Arroz largo fino 1 kg: 8 unidades disponibles al 10/03/2026, por debajo del mínimo de 20 unidades. Revisá su reposición.' }),
+    ]))
+  })
+
+  it('anchors recommendations to the selected end date independently of the start date', () => {
+    const first = createFinanceDemo({ startDate: '2026-01-01', endDate: '2026-03-10' })
+    const sameEnd = createFinanceDemo({ startDate: '2026-03-10', endDate: '2026-03-10' })
+    const other = createFinanceDemo({ startDate: '2026-03-01', endDate: '2026-04-02' })
+    expect(first.insights).toEqual(sameEnd.insights)
+    expect(other.insights[0].explanation).toContain('30 días hasta el 02/04/2026 inclusive')
+    expect(other.insights[1].explanation).toContain('8 unidades disponibles al 02/04/2026')
+  })
+
   it('keeps totals and projection consistent for a single day', () => {
     const data = createFinanceDemo({ startDate: '2026-03-10', endDate: '2026-03-10' })
     expect(data.timeline.length).toBeGreaterThan(0)

@@ -76,6 +76,8 @@ export function createFinanceDemo({ startDate, endDate }: FinanceDateParams): Fi
   const currentBalance = balanceAfterDay(end)
   const effectiveReserve = 500000
   const idleCapital = Math.max(currentBalance - effectiveReserve, 0)
+  const [year, month, day] = endDate.split('-')
+  const referenceDate = `${day}/${month}/${year}`
   return {
     rulesVersion: 'finance-rules-v2', currency: 'ARS', generatedAt: `${endDate}T12:00:00Z`, startDate, endDate,
     emptyPeriod: false,
@@ -84,9 +86,12 @@ export function createFinanceDemo({ startDate, endDate }: FinanceDateParams): Fi
     expenseDistribution: [{ category: 'Gastos operativos', amount: timeline.filter(m => m.source === 'expense').reduce((sum, m) => sum + m.amount, 0) }],
     weeklyProjection,
     recentMovements: [...timeline].reverse().slice(0, 6),
-    insights: [], historySufficient: true,
+    insights: [
+      { type: 'recommendation', severity: 'info', code: 'DEMO_BEST_SELLER', title: 'Producto más vendido', explanation: `Yerba mate 1 kg: 120 unidades vendidas en los 30 días hasta el ${referenceDate} inclusive. Revisá su reposición.`, rulesVersion: 'finance-rules-v2' },
+      { type: 'recommendation', severity: 'warning', code: 'DEMO_LOW_STOCK', title: 'Producto con stock bajo', explanation: `Arroz largo fino 1 kg: 8 unidades disponibles al ${referenceDate}, por debajo del mínimo de 20 unidades. Revisá su reposición.`, rulesVersion: 'finance-rules-v2' },
+    ], historySufficient: true,
     opportunity: idleCapital > 0
-      ? { code: 'CAPITAL_OCIOSO_DETECTADO', title: 'Capital disponible', explanation: 'El saldo supera la reserva mínima.', referenceRoiPercent: 18, idleCapital, roiEnabled: true }
+      ? { code: 'CAPITAL_OCIOSO_DETECTADO', title: 'Capital ocioso', explanation: 'El saldo supera la reserva mínima.', referenceRoiPercent: 18, idleCapital, roiEnabled: true }
       : { code: 'CAPITAL_OCIOSO_NO_DETECTADO', title: 'Sin capital disponible', explanation: 'El saldo no supera la reserva mínima.', referenceRoiPercent: null, idleCapital, roiEnabled: false },
   }
 }
