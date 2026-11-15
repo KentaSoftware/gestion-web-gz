@@ -19,3 +19,5 @@ Started from `main` in branch `fix/catalog-alert-scroll`. User explicitly reject
 Work-unit commit: `d1a65c9`. Next: visually verify continuous scrolling with long alerts on desktop and mobile.
 
 User requested additional quick lookup refinements; preceding suggestion-dismissal changes are included. Focus transfers only after the selected detail loads, with stale requests and subsequent user navigation guarded. Live-browser and screen-reader verification remain unperformed.
+
+CAS-2 work-unit commit: `83a1d4f`. Next: visually verify quick-search focus and spacing in the browser.
