@@ -25,3 +25,5 @@ FPP-1 and FPP-2 work-unit commit: `763033d`. Next: verify the download in a real
 User requested a more visual report with charts and conclusions instead of predominantly textual content.
 
 The PDF uses graphical weekly comparisons, reserve reference and data-derived conclusions limited to weekly closes. Monetary amounts and intermediate calculations are bounded to ±ARS 1 trillion; excessive values fail closed. A representative fictional PDF was visually inspected. The PDF has selectable text but is not tagged; full accessibility and real-browser download remain unverified. No production build was run while the development server was active.
+
+FPP-3 work-unit commit: `9a6cdb2`. Next: review the sample report and verify browser download.
