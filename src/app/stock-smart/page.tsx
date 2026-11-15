@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, Boxes, ChevronLeft, ChevronRight, CircleHelp, PackageSearch, RefreshCw, Search, X, Settings2, FileText, Trash2, MoreVertical } from 'lucide-react'
 import { PageContainer, PageHeader } from '@/components/layout/PageLayout'
 import apiClient from '@/utils/client'
+import { CatalogAlertList } from './CatalogAlertList'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 const TIME_ZONE = 'America/Argentina/Buenos_Aires'
@@ -365,7 +366,7 @@ export default function SmartStockPage() {
                   return <section key={group.key} aria-label={`Alertas ${group.label.toLocaleLowerCase('es')}`} className="min-w-0">
                   <h3 className="mb-2 text-sm font-semibold text-text-primary">{group.label} <span className="font-normal text-text-secondary">({group.alerts.length})</span></h3>
                   {group.alerts.length === 0 ? <p className="rounded-lg bg-background-subtle p-3 text-sm text-text-secondary" role="status">{(overview?.globalAlerts.length ?? 0) === 0 ? 'Sin alertas activas.' : 'Sin alertas para esta severidad.'}</p> : <>
-                  <ul className="grid gap-2">
+                  <CatalogAlertList label={group.label.toLocaleLowerCase('es')} scrollable={expanded && group.alerts.length > 4}>
                     {visibleAlerts.map((alert, index) => <li key={`${alert.productId}-${alert.type}-${index}`} className="rounded-lg bg-background-subtle p-3">
                       <div className="flex items-start gap-3">
                         <AlertTriangle className={`mt-0.5 size-4 shrink-0 ${alert.severity === 'CRITICAL' ? 'text-state-error' : alert.severity === 'WARNING' ? 'text-brand-accent' : 'text-text-secondary'}`} aria-hidden="true" />
@@ -376,7 +377,7 @@ export default function SmartStockPage() {
                         </div>
                       </div>
                     </li>)}
-                  </ul>
+                  </CatalogAlertList>
                   {group.alerts.length > INITIAL_ALERT_LIMIT && <button type="button" aria-expanded={expanded} onClick={() => setExpandedAlertGroups((current) => ({ ...current, [group.key]: !expanded }))} className="mt-2 rounded-md px-3 py-2 text-sm font-medium text-text-secondary hover:bg-background-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary">
                     {expanded ? 'Mostrar menos alertas' : `Mostrar ${remainingCount} alertas más`}
                   </button>}

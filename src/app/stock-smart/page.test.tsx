@@ -98,7 +98,35 @@ describe('Stock Inteligente read dashboard', () => {
     expect(screen.getByRole('button', { name: 'Mostrar 5 alertas más' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Mostrar 5 alertas más' }))
     expect(warningGroup.querySelectorAll('li')).toHaveLength(7)
+    expect(within(warningGroup).getByRole('region', { name: 'Lista desplazable de alertas advertencias' })).toBeInTheDocument()
+    expect(warningGroup).toHaveTextContent('Alerta adicional 7')
     expect(screen.getByRole('button', { name: 'Mostrar menos alertas' })).toBeInTheDocument()
+  })
+
+  it('expands and collapses severity groups independently with three, four and five alerts', async () => {
+    const alerts = (severity: string, count: number) => Array.from({ length: count }, (_, index) => ({
+      productId: `${severity}-${index}`, productName: `${severity} ${index}`, type: 'LOW_STOCK', severity,
+      explanation: `Texto extenso ${severity} ${index}`, dataQuality: 'COMPLETE',
+    }))
+    get.mockResolvedValue({ data: { ...overview, globalAlerts: [...alerts('CRITICAL', 3), ...alerts('WARNING', 4), ...alerts('INFO', 5)] } })
+    render(<SmartStockPage />)
+    const critical = await screen.findByRole('region', { name: 'Alertas críticas' })
+    const warning = screen.getByRole('region', { name: 'Alertas advertencias' })
+    const info = screen.getByRole('region', { name: 'Alertas informativas' })
+    for (const group of [critical, warning, info]) expect(group.querySelectorAll('li')).toHaveLength(2)
+    fireEvent.click(within(critical).getByRole('button', { name: 'Mostrar 1 alertas más' }))
+    fireEvent.click(within(warning).getByRole('button', { name: 'Mostrar 2 alertas más' }))
+    fireEvent.click(within(info).getByRole('button', { name: 'Mostrar 3 alertas más' }))
+    expect(critical.querySelectorAll('li')).toHaveLength(3)
+    expect(warning.querySelectorAll('li')).toHaveLength(4)
+    expect(within(critical).queryByRole('region')).not.toBeInTheDocument()
+    expect(within(warning).queryByRole('region')).not.toBeInTheDocument()
+    expect(within(info).getByRole('region')).toHaveTextContent('Texto extenso INFO 4')
+    fireEvent.click(within(info).getByRole('button', { name: 'Mostrar menos alertas' }))
+    expect(info.querySelectorAll('li')).toHaveLength(2)
+    expect(within(info).queryByRole('region')).not.toBeInTheDocument()
+    expect(critical.querySelectorAll('li')).toHaveLength(3)
+    expect(warning.querySelectorAll('li')).toHaveLength(4)
   })
 
   it('requests eight products per page and keeps pagination based on API total', async () => {
