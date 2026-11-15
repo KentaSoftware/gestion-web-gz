@@ -15,3 +15,5 @@ Allow authorized users to confirm saved manual client coordinates from the clien
 
 ## Progress
 Started from `feat/client-management`; API already exposes the required confirmation and snapshot endpoints. Read-only location review is available to confirmation-only users and when zones cannot load. Live browser and database integration remain unverified. RDD is disabled; failed risk assessment was treated as high.
+
+Work-unit commit: `fd06c2f`. Next: verify the confirmation flow in the running application with an authorized user.
