@@ -21,3 +21,5 @@ Work-unit commit: `01e8ba1`. Next: visually check the dashboard and run a produc
 User requested additional fictional recommendation cards in the existing fixture mode; live product-ranking recommendations are not provided by the finance API.
 
 Sales and stock figures in the recommendation cards are fixed fictional values, with dates relative to the selected range end. They are not labeled as demo per user request and could be mistaken for real business data. Live browser and production build remain unverified; no build was run while the development server was active.
+
+FFM-2 work-unit commit: `5394cb2`. Next: visually verify the recommendations and run the production build after the development server is stopped.
