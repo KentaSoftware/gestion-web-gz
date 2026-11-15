@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, ArrowDown, ArrowUp, Boxes, ChevronLeft, ChevronRight, CircleHelp, PackageSearch, RefreshCw, Search, X, Settings2, FileText, Trash2, MoreVertical } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, Boxes, ChevronLeft, ChevronRight, CircleHelp, PackageSearch, RefreshCw, Search, X, Settings2, FileText, MoreVertical } from 'lucide-react'
 import { PageContainer, PageHeader } from '@/components/layout/PageLayout'
 import apiClient from '@/utils/client'
 import { CatalogAlertList } from './CatalogAlertList'
@@ -142,6 +142,11 @@ export default function SmartStockPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [quickSearch, setQuickSearch] = useState('')
+  const [quickResultsOpen, setQuickResultsOpen] = useState(true)
+  const quickSearchRef = useRef<HTMLInputElement>(null)
+  const detailHeadingRef = useRef<HTMLHeadingElement>(null)
+  const pendingQuickFocus = useRef('')
+  const loadedDetailId = useRef('')
   const [category, setCategory] = useState('')
   const [severity, setSeverity] = useState<SeverityFilter>(SEVERITIES.ALL)
   const [expandedAlertGroups, setExpandedAlertGroups] = useState<Partial<Record<AlertSeverity, boolean>>>({})
@@ -191,13 +196,57 @@ export default function SmartStockPage() {
       params: { businessDate: dateInBuenosAires(), timeZone: TIME_ZONE, movementLimit: 5 },
       signal: controller.signal,
     }).then(({ data }) => {
+      if (controller.signal.aborted) return
+      loadedDetailId.current = selectedId
       setDetail(data)
       setDetailStatus('ready')
     }).catch(() => {
-      if (!controller.signal.aborted) setDetailStatus('error')
+      if (!controller.signal.aborted) {
+        if (pendingQuickFocus.current === selectedId) pendingQuickFocus.current = ''
+        setDetailStatus('error')
+      }
     })
     return () => controller.abort()
   }, [selectedId, detailRetry])
+
+  useEffect(() => {
+    if (detailStatus === 'ready' && loadedDetailId.current === selectedId && pendingQuickFocus.current === selectedId) {
+      pendingQuickFocus.current = ''
+      if (document.activeElement === quickSearchRef.current) detailHeadingRef.current?.focus()
+    }
+  }, [detailStatus, selectedId])
+
+  useEffect(() => {
+    const cancelFocus = (event: FocusEvent) => {
+      if (event.target !== quickSearchRef.current) pendingQuickFocus.current = ''
+    }
+    const cancelPointer = () => { pendingQuickFocus.current = '' }
+    const cancelNavigation = (event: KeyboardEvent) => {
+      if (!['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) pendingQuickFocus.current = ''
+    }
+    document.addEventListener('focusin', cancelFocus)
+    document.addEventListener('pointerdown', cancelPointer)
+    document.addEventListener('keydown', cancelNavigation)
+    return () => {
+      document.removeEventListener('focusin', cancelFocus)
+      document.removeEventListener('pointerdown', cancelPointer)
+      document.removeEventListener('keydown', cancelNavigation)
+    }
+  }, [])
+
+  const selectProduct = (productId: string) => {
+    pendingQuickFocus.current = ''
+    setSelectedId(productId)
+    setQuickResultsOpen(false)
+    setQuickSearch('')
+  }
+
+  const selectQuickProduct = (productId: string) => {
+    quickSearchRef.current?.focus()
+    selectProduct(productId)
+    if (productId === selectedId && detailStatus === 'ready') detailHeadingRef.current?.focus()
+    else pendingQuickFocus.current = productId
+  }
 
   const items = overview?.items ?? []
   const quickItems = items.filter((item) => `${item.productName} ${item.categoryName ?? ''}`.toLocaleLowerCase('es').includes(quickSearch.trim().toLocaleLowerCase('es')))
@@ -396,7 +445,7 @@ export default function SmartStockPage() {
             : status === 'error' ? <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-center" role="alert"><AlertTriangle className="size-8 text-state-error" /><p className="text-sm text-text-secondary">No se pudo cargar el stock. Verificá la conexión e intentá nuevamente.</p><button type="button" className="rounded-md bg-brand-primary px-4 py-2 text-sm font-semibold text-text-inverse" onClick={() => setRetry((value) => value + 1)}>Reintentar</button></div>
                : items.length === 0 ? <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center" role="status"><PackageSearch className="size-8 text-text-muted" aria-hidden="true" /><p className="font-medium text-text-primary">{emptyProductsMessage}</p><p className="text-sm text-text-secondary">La búsqueda y la categoría se aplican juntas.</p></div>
                  : <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-border-subtle text-xs font-semibold uppercase tracking-wide text-text-secondary"><th className="px-2 py-3">Producto</th><th className="px-2 py-3">Categoría</th><th className="px-2 py-3">Stock actual</th><th className="px-2 py-3">Stock mínimo</th><th className="px-2 py-3">Estado</th><th className="px-2 py-3">Última venta</th><th className="px-2 py-3"><span className="sr-only">Acciones</span></th></tr></thead><tbody className="divide-y divide-border-subtle">{items.map((item) => { const state = stockStatus(item); return <tr key={item.productId} className={selectedId === item.productId ? 'bg-background-subtle' : ''}>
-                   <td className="px-2 py-3"><button type="button" onClick={() => setSelectedId(item.productId)} aria-pressed={selectedId === item.productId} className="flex min-w-40 items-center gap-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary">{item.imagePath ? <img src={imageUrl(item.imagePath)} alt="" className="size-9 shrink-0 rounded-md object-cover" /> : <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-background-subtle text-text-muted"><Boxes className="size-4" aria-hidden="true" /></span>}<span className="font-semibold text-text-primary">{item.productName}</span></button></td>
+                   <td className="px-2 py-3"><button type="button" onClick={() => selectProduct(item.productId)} aria-pressed={selectedId === item.productId} className="flex min-w-40 items-center gap-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary">{item.imagePath ? <img src={imageUrl(item.imagePath)} alt="" className="size-9 shrink-0 rounded-md object-cover" /> : <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-background-subtle text-text-muted"><Boxes className="size-4" aria-hidden="true" /></span>}<span className="font-semibold text-text-primary">{item.productName}</span></button></td>
                    <td className="px-2 py-3 text-text-secondary">{item.categoryName || 'Sin categoría'}</td><td className="px-2 py-3"><span className="block font-semibold text-text-primary">{item.physicalQuantity} físico</span><span className="block text-xs text-text-secondary">Comprometido {item.committedQuantity} · Disponible {item.availableToSell}</span></td><td className="px-2 py-3 text-text-primary">{item.minimum === null ? 'No definido' : item.minimum}</td><td className="px-2 py-3"><span className={`whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ${state.classes}`}>{state.label}</span></td><td className="px-2 py-3 text-xs text-text-secondary">{item.latestSale.status === 'RECORDED' && item.latestSale.occurredAt ? formatDate(item.latestSale.occurredAt) : 'No disponible: historial incompleto'}</td><td className="px-2 py-3"><details className="relative"><summary aria-label={`Acciones de ${item.productName}`} className="flex size-8 cursor-pointer list-none items-center justify-center rounded-md text-text-secondary hover:bg-background-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary"><MoreVertical className="size-4" aria-hidden="true" /></summary><div className="absolute right-0 z-10 mt-1 flex min-w-40 flex-col rounded-md border border-border-subtle bg-surface-base p-1 shadow-lg"><button type="button" onClick={() => openOperation('config', item.productId)} className="rounded px-3 py-2 text-left text-sm hover:bg-background-subtle">Configurar stock</button><button type="button" onClick={() => { setSelectedId(item.productId); openOperation('writeoff', item.productId) }} className="rounded px-3 py-2 text-left text-sm hover:bg-background-subtle">Registrar baja</button><button type="button" disabled={item.expiredQuantity <= 0} onClick={() => { setSelectedId(item.productId); openOperation('remove', item.productId) }} className="rounded px-3 py-2 text-left text-sm hover:bg-background-subtle disabled:opacity-50">Retirar vencidos</button></div></details></td></tr> })}</tbody></table></div>}
 
           <div className="mt-4 flex items-center justify-between border-t border-border-subtle pt-3">
@@ -407,12 +456,11 @@ export default function SmartStockPage() {
         </div>
 
         <aside aria-label="Consulta rápida de existencias" className="min-w-0 rounded-xl border border-border-subtle bg-surface-base p-4 md:p-5">
-          <h2 className="text-lg font-semibold text-text-primary">Consulta rápida de existencias</h2><p className="mt-1 text-sm text-text-secondary">Buscá entre los productos de la página actual.</p><label className="relative mt-3 block"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" aria-hidden="true" /><input aria-label="Búsqueda rápida en esta página" value={quickSearch} onChange={(event) => setQuickSearch(event.target.value)} placeholder="Nombre o categoría" className="h-10 w-full rounded-md border border-border-subtle bg-background-canvas pl-9 pr-3 text-sm text-text-primary" /></label>
-           {quickSearch.trim() && (quickItems.length === 0 ? <p className="py-4 text-sm text-text-secondary" role="status">No hay productos en esta página que coincidan.</p> : <ul className="mt-2 divide-y divide-border-subtle">{quickItems.map((item) => <li key={item.productId}><button type="button" onClick={() => setSelectedId(item.productId)} aria-pressed={selectedId === item.productId} className="flex w-full items-center gap-3 py-2 text-left hover:bg-background-subtle">{item.imagePath ? <img src={imageUrl(item.imagePath)} alt="" className="size-9 rounded object-cover" /> : <Boxes className="size-5 text-text-muted" aria-hidden="true" />}<span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary">{item.productName}</span><span className="block text-xs text-text-secondary">{item.categoryName || 'Sin categoría'}</span></span></button></li>)}</ul>)}
+          <h2 className="text-lg font-semibold text-text-primary">Consulta rápida de existencias</h2><p className="mt-1 text-sm text-text-secondary">Buscá entre los productos de la página actual.</p><label className="relative mt-3 block"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" aria-hidden="true" /><input aria-label="Búsqueda rápida en esta página" ref={quickSearchRef} value={quickSearch} onClick={() => setQuickResultsOpen(true)} onChange={(event) => { pendingQuickFocus.current = ''; setQuickSearch(event.target.value); setQuickResultsOpen(true) }} placeholder="Nombre o categoría" className="h-10 w-full rounded-md border border-border-subtle bg-background-canvas pl-9 pr-3 text-sm text-text-primary" /></label>
+           {quickSearch.trim() && (quickResultsOpen || !selectedId) && (quickItems.length === 0 ? <p className="py-4 text-sm text-text-secondary" role="status">No hay productos en esta página que coincidan.</p> : <ul className="mt-2 divide-y divide-border-subtle">{quickItems.map((item) => <li key={item.productId}><button type="button" onClick={() => selectQuickProduct(item.productId)} aria-pressed={selectedId === item.productId} className="flex w-full items-center gap-3 py-2 text-left hover:bg-background-subtle">{item.imagePath ? <img src={imageUrl(item.imagePath)} alt="" className="size-9 rounded object-cover" /> : <Boxes className="size-5 text-text-muted" aria-hidden="true" />}<span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-text-primary">{item.productName}</span><span className="block text-xs text-text-secondary">{item.categoryName || 'Sin categoría'}</span></span></button></li>)}</ul>)}
           {!selectedId ? (!quickSearch.trim() && <div className="flex min-h-32 flex-col items-center justify-center gap-2 text-center text-text-secondary"><CircleHelp className="size-8" aria-hidden="true" /><p className="font-medium">Consultá un producto</p><p className="text-sm">Seleccioná un resultado para ver existencias y movimientos.</p></div>)
             : <>
-               <div className="border-b border-border-subtle pb-3"><p className="text-xs font-medium uppercase tracking-wide text-text-muted">Detalle de stock</p>{selectedItem?.imagePath && <img src={imageUrl(selectedItem.imagePath)} alt="" className="mt-2 size-12 rounded-md object-cover" />}<h3 className="mt-1 text-lg font-semibold text-text-primary">{selectedItem?.productName ?? 'Producto seleccionado'}</h3><p className="text-sm text-text-secondary">{selectedItem?.categoryName || 'Sin categoría'}</p>
-                {selectedItem && <div className="mt-3 flex flex-wrap gap-2"><button type="button" aria-label={`Configurar stock de ${selectedItem.productName}`} onClick={() => openOperation('config', selectedItem.productId)} className="rounded-md border border-border-subtle px-3 py-2 text-sm"><Settings2 className="mr-1 inline size-4" aria-hidden="true" />Configurar</button><button type="button" onClick={() => openOperation('writeoff')} className="rounded-md border border-border-subtle px-3 py-2 text-sm">Registrar baja</button><button type="button" onClick={() => openOperation('remove')} disabled={selectedItem.expiredQuantity <= 0} className="rounded-md border border-border-subtle px-3 py-2 text-sm disabled:opacity-50"><Trash2 className="mr-1 inline size-4" aria-hidden="true" />Retirar vencidos</button></div>}
+               <div className="mt-4 border-b border-border-subtle pb-3"><p className="text-xs font-medium uppercase tracking-wide text-text-muted">Detalle de stock</p>{selectedItem?.imagePath && <img src={imageUrl(selectedItem.imagePath)} alt="" className="mt-2 size-12 rounded-md object-cover" />}<h3 ref={detailHeadingRef} tabIndex={-1} className="mt-1 text-lg font-semibold text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-primary">{selectedItem?.productName ?? 'Producto seleccionado'}</h3><p className="text-sm text-text-secondary">{selectedItem?.categoryName || 'Sin categoría'}</p>
               </div>
               {detailStatus === 'loading' ? <p className="py-6 text-sm text-text-secondary" role="status">Cargando disponibilidad y movimientos…</p>
                 : detailStatus === 'error' ? <div className="py-6 text-center" role="alert"><p className="text-sm text-state-error">No se pudo consultar el detalle del producto.</p><button type="button" onClick={() => setDetailRetry((value) => value + 1)} className="mt-3 rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary">Reintentar</button></div>
