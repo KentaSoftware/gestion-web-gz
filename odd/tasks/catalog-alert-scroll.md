@@ -14,3 +14,5 @@ Size each expanded catalog severity list to approximately its first four alert r
 
 ## Progress
 Started from `main` in branch `fix/catalog-alert-scroll`. User explicitly rejected pagination. Because alert rows have variable heights and scrolling is continuous, later positions may show part of an extra row or more than four shorter rows. Real-browser geometry and keyboard scrolling remain unverified. RDD is disabled; failed risk assessment was treated as high.
+
+Work-unit commit: `d1a65c9`. Next: visually verify continuous scrolling with long alerts on desktop and mobile.
