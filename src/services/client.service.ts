@@ -15,7 +15,7 @@ export const clientService = {
     return response.data
   },
   zones: async (): Promise<ClientZone[]> => (await apiClient.get<ClientZone[]>('/deliveryZone')).data,
-  create: async (input: ManagedClientInput): Promise<void> => { await apiClient.post('/client', input) },
+  create: async (input: ManagedClientInput): Promise<{ _id: string }> => (await apiClient.post<{ _id: string }>('/client', input)).data,
   update: async (id: string, input: Partial<ManagedClientInput>): Promise<void> => {
     const response = await apiClient.patch<{ matchedCount: number }>(`/client/${id}/managed`, input)
     if (response.data.matchedCount !== 1) throw new Error('Client not found')

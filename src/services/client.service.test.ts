@@ -7,6 +7,11 @@ vi.mock('@/utils/client', () => ({ default: { get: vi.fn(), post: vi.fn(), patch
 describe('client management', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('returns the created client identity', async () => {
+    vi.mocked(apiClient.post).mockResolvedValueOnce({ data: { _id: 'client-1' } })
+    await expect(clientService.create({ nombreCompleto: 'Nuevo', telefonos: [] })).resolves.toEqual({ _id: 'client-1' })
+  })
+
   it('uses bounded pagination for literal search', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: [] })
     await clientService.list('a.*', 25, 26)

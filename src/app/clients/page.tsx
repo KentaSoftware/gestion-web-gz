@@ -9,11 +9,37 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { coordinatesFromInputs, LocationMapPicker } from '@/components/route/LocationMapPicker'
 import { usePermission } from '@/hooks/usePermission'
-import { Permission } from '@/interfaces/auth.interface'
-import type { ExpectedClientFields, ManagedClient, ManagedClientInput } from '@/interfaces/client.interface'
+import { Permission, SESSION_STATUS } from '@/interfaces/auth.interface'
+import { useAppSelector } from '@/redux/hook'
+import { getUser } from '@/redux/userSlice'
+import type { ClientLocationSnapshot, ExpectedClientFields, ManagedClient, ManagedClientInput } from '@/interfaces/client.interface'
 import { clientService, type ClientZone } from '@/services/client.service'
 
 const PAGE_SIZE = 25
+const RECOVERY_KEY = 'client-create-recovery-v2:'
+const LEGACY_RECOVERY_KEY = 'client-create-recovery-v1'
+const MAX_RECOVERY_LENGTH = 16384
+
+interface CreateRecovery {
+  input: ManagedClientInput
+  id?: string
+  confirm: boolean
+}
+
+function parseRecovery(raw: string): CreateRecovery {
+  if (raw.length > MAX_RECOVERY_LENGTH) throw new Error('Invalid recovery')
+  const value: unknown = JSON.parse(raw)
+  if (!value || typeof value !== 'object' || !('input' in value) || !('confirm' in value) || typeof value.confirm !== 'boolean' || !value.input || typeof value.input !== 'object') throw new Error('Invalid recovery')
+  const input = value.input as Record<string, unknown>
+  if (typeof input.nombreCompleto !== 'string' || !input.nombreCompleto.trim() || input.nombreCompleto.length > 200 || !Array.isArray(input.telefonos) || input.telefonos.length > 256 || input.telefonos.some((phone: unknown) => !Number.isSafeInteger(phone) || Number(phone) < 0) || (input.address !== undefined && (typeof input.address !== 'string' || input.address.length > 300)) || (input.deliveryZoneId !== undefined && (typeof input.deliveryZoneId !== 'string' || input.deliveryZoneId.length > 128)) || (input.isActive !== undefined && typeof input.isActive !== 'boolean') || (('lat' in input || 'lng' in input) && (typeof input.lat !== 'number' || typeof input.lng !== 'number' || !Number.isFinite(input.lat) || !Number.isFinite(input.lng) || Math.abs(input.lat) > 90 || Math.abs(input.lng) > 180)) || ('id' in value && (typeof value.id !== 'string' || !value.id || value.id.length > 128))) throw new Error('Invalid recovery')
+  if (value.confirm && (typeof input.lat !== 'number' || typeof input.lng !== 'number')) throw new Error('Invalid recovery')
+  return value as CreateRecovery
+}
+
+function readRecovery(key: string): CreateRecovery | null {
+  const raw = localStorage.getItem(key)
+  return raw === null ? null : parseRecovery(raw)
+}
 
 function errorMessage(error: unknown): string {
   if (axios.isAxiosError(error) && error.response?.status === 409) return 'Los datos cambiaron desde que abriste el cliente. Cerrá el formulario, actualizá la lista y volvé a revisarlos.'
@@ -22,26 +48,102 @@ function errorMessage(error: unknown): string {
   return 'No se pudo completar la operación. Intentá nuevamente.'
 }
 
-function ClientForm({ client, zones, onClose, onSaved }: {
+function ClientForm({ client, zones, onClose, onSaved, recovery, onRecovery, canConfirm, recoveryKey }: {
   client: ManagedClient | null
   zones: ClientZone[]
   onClose: () => void
   onSaved: () => void
+  recovery: CreateRecovery | null
+  onRecovery: (value: CreateRecovery | null) => void
+  canConfirm: boolean
+  recoveryKey: string
 }) {
-  const [name, setName] = useState(client?.nombreCompleto ?? '')
-  const [address, setAddress] = useState(client?.address ?? '')
-  const [phones, setPhones] = useState(client?.telefonos?.join(', ') ?? '')
-  const [zone, setZone] = useState(client?.deliveryZoneId ?? '')
-  const [latitude, setLatitude] = useState(client?.lat == null ? '' : String(client.lat))
-  const [longitude, setLongitude] = useState(client?.lng == null ? '' : String(client.lng))
+  const initial = client ?? recovery?.input
+  const [name, setName] = useState(initial?.nombreCompleto ?? '')
+  const [address, setAddress] = useState(initial?.address ?? '')
+  const [phones, setPhones] = useState(initial?.telefonos?.join(', ') ?? '')
+  const [zone, setZone] = useState(initial?.deliveryZoneId ?? '')
+  const [latitude, setLatitude] = useState(initial?.lat == null ? '' : String(initial.lat))
+  const [longitude, setLongitude] = useState(initial?.lng == null ? '' : String(initial.lng))
   const [coordinatesEdited, setCoordinatesEdited] = useState(false)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
   const [error, setError] = useState('')
+  const [snapshot, setSnapshot] = useState<ClientLocationSnapshot | null>(null)
+  const [acknowledged, setAcknowledged] = useState(false)
+  const [idRecorded, setIdRecorded] = useState(false)
+  const [recoveryStorageFailed, setRecoveryStorageFailed] = useState(false)
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    const beforeUnload = (event: BeforeUnloadEvent) => { if (savingRef.current || recoveryStorageFailed) { event.preventDefault(); event.returnValue = '' } }
+    window.addEventListener('beforeunload', beforeUnload)
+    return () => window.removeEventListener('beforeunload', beforeUnload)
+  }, [recoveryStorageFailed])
+
+  function storeRecovery(value: CreateRecovery | null) {
+    if (value) {
+      const raw = JSON.stringify(value)
+      parseRecovery(raw)
+      localStorage.setItem(recoveryKey, raw)
+    } else localStorage.removeItem(recoveryKey)
+    onRecovery(value)
+  }
+
+  async function retryPersistId() {
+    if (!recoveryStorageFailed || !recovery?.id || savingRef.current) return
+    if (!navigator.locks) { setError('No se puede proteger la recuperación entre pestañas. Conservá el ID mostrado.'); return }
+    savingRef.current = true; setSaving(true)
+    try {
+      await navigator.locks.request(recoveryKey, { ifAvailable: true }, (lock) => {
+        if (!lock) { setError('Hay una operación en curso en otra pestaña. Conservá el ID y volvé a intentar.'); return }
+        const current = readRecovery(recoveryKey)
+        if (!current || (current.id !== undefined && current.id !== recovery.id) || current.confirm !== recovery.confirm || JSON.stringify(current.input) !== JSON.stringify(recovery.input)) {
+          setError('La recuperación guardada cambió. No se sobrescribió; conservá el ID y revisá los datos antes de continuar.')
+          return
+        }
+        storeRecovery(recovery)
+        setRecoveryStorageFailed(false)
+        setError('')
+      })
+    } catch { setError('No se pudo guardar la identificación. Conservá el ID y volvé a intentar.') }
+    finally { savingRef.current = false; setSaving(false) }
+  }
+
+  async function reviewLocation() {
+    if (!recovery?.id || savingRef.current || !canConfirm) return
+    savingRef.current = true; setSaving(true); setError(''); setSnapshot(null)
+    try { setSnapshot(await clientService.locationSnapshot(recovery.id)) }
+    catch { setError('El cliente ya fue creado. No se pudo cargar la ubicación actual; intentá revisarla nuevamente.') }
+    finally { savingRef.current = false; setSaving(false) }
+  }
+
+  async function confirmReviewed(id: string, reviewed: ClientLocationSnapshot, point: { lat: number, lng: number }) {
+    try {
+      await clientService.confirmLocation(id, { manualConfirmation: point, expectedLocation: reviewed })
+      storeRecovery(null)
+      onSaved()
+    } catch {
+      setSnapshot(null)
+      setError('El cliente ya fue creado, pero la confirmación falló o su resultado es incierto. Revisá la ubicación actual antes de volver a confirmar.')
+    }
+  }
+
+  async function retryConfirmation() {
+    const point = coordinatesFromInputs(latitude, longitude)
+    if (!recovery?.id || !snapshot || !point || !canConfirm || savingRef.current || !navigator.locks) return
+    savingRef.current = true; setSaving(true); setError('')
+    try { await navigator.locks.request(recoveryKey, { ifAvailable: true }, async (lock) => {
+      if (!lock) { setError('Hay una operación en curso en otra pestaña.'); return }
+      const current = readRecovery(recoveryKey)
+      if (!current || current.id !== recovery.id) { setSnapshot(null); setError('La recuperación cambió en otra pestaña. Cerrá y revisá el estado actual.'); return }
+      await confirmReviewed(recovery.id!, snapshot, point)
+    }) } catch { setSnapshot(null); setError('No se pudo verificar la recuperación. No se confirmó la ubicación.') }
+    finally { savingRef.current = false; setSaving(false) }
+  }
+
+  async function submit(event: Pick<FormEvent, 'preventDefault'>, confirm = false) {
     event.preventDefault()
-    if (savingRef.current) return
+    if (savingRef.current || recovery || (confirm && (!canConfirm || client))) return
     const parts = phones.split(',').map((part) => part.trim()).filter(Boolean)
     if (!name.trim()) { setError('Ingresá el nombre del cliente.'); return }
     if (parts.some((part) => !/^\d{1,15}$/.test(part) || !Number.isSafeInteger(Number(part)))) {
@@ -50,6 +152,7 @@ function ClientForm({ client, zones, onClose, onSaved }: {
     }
     const emptyCoordinates = latitude.trim() === '' && longitude.trim() === ''
     const point = coordinatesFromInputs(latitude, longitude)
+    if (confirm && (!coordinatesEdited || point === null)) { setError('Seleccioná o ingresá ambas coordenadas válidas antes de confirmar.'); return }
     if (coordinatesEdited && !emptyCoordinates && point === null) {
       setError('Ingresá ambas coordenadas válidas: latitud entre -90 y 90 y longitud entre -180 y 180.')
       return
@@ -93,31 +196,62 @@ function ClientForm({ client, zones, onClose, onSaved }: {
     }
     try {
       if (client) await clientService.update(client._id, input)
-      else await clientService.create(input as ManagedClientInput)
+      else {
+        if (!navigator.locks || !recoveryKey) { setError('No se puede proteger la creación entre pestañas. Usá un navegador compatible y seguro.'); return }
+        await navigator.locks.request(recoveryKey, { ifAvailable: true }, async (lock) => {
+        if (!lock) { setError('Hay otra creación en curso en otra pestaña. Esperá y revisá el cliente antes de continuar.'); return }
+        let existing: CreateRecovery | null
+        try { existing = readRecovery(recoveryKey) } catch { setError('No se pudo leer la recuperación guardada. No se creó el cliente.'); return }
+        if (existing) { setError('Hay una creación pendiente. Cerrá y retomá la recuperación.'); return }
+        const pending: CreateRecovery = { input: input as ManagedClientInput, confirm }
+        try { storeRecovery(pending) } catch { setError('No se pudo guardar el estado de recuperación. No se creó el cliente.'); return }
+        let created: { _id: string }
+        try { created = await clientService.create(pending.input) } catch {
+          setError('No se sabe si el cliente fue creado. Buscalo antes de intentar crear otro.')
+          return
+        }
+        if (!created || typeof created._id !== 'string' || !created._id || created._id.length > 128) { setError('El cliente podría haberse creado, pero no se recibió su identificador. Buscalo antes de crear otro.'); return }
+        const saved = { ...pending, id: created._id }
+        try { storeRecovery(saved) } catch { onRecovery(saved); setRecoveryStorageFailed(true); setError(`El cliente ya fue creado (ID: ${created._id}), pero no se pudo guardar su identificación para recuperar la operación. Anotá el ID antes de salir.`); return }
+        if (confirm && point) {
+          let reviewed: ClientLocationSnapshot
+          try { reviewed = await clientService.locationSnapshot(created._id) } catch { setError('El cliente ya fue creado. No se pudo cargar la ubicación actual; revisala antes de confirmar.'); return }
+          if (reviewed.locationRevision !== 0 || reviewed.address !== (pending.input.address ?? null) || reviewed.lat !== point.lat || reviewed.lng !== point.lng) {
+            setError('El cliente ya fue creado, pero su ubicación cambió. Revisá la ubicación actual antes de confirmar.'); return
+          }
+          await confirmReviewed(created._id, reviewed, point)
+          return
+        }
+        storeRecovery(null)
+        onSaved()
+        })
+        return
+      }
       onSaved()
     } catch (caught) { setError(errorMessage(caught)) } finally { savingRef.current = false; setSaving(false) }
   }
 
-  return <Dialog open onOpenChange={(open) => { if (!open && !savingRef.current) onClose() }}>
-    <DialogContent className={client ? 'max-h-[90vh] overflow-y-auto' : 'flex h-[95vh] h-[95dvh] flex-col overflow-y-auto'} closeDisabled={saving} onEscapeKeyDown={(event) => { if (savingRef.current) event.preventDefault() }} onInteractOutside={(event) => { if (savingRef.current) event.preventDefault() }}>
+  return <Dialog open onOpenChange={(open) => { if (!open && !savingRef.current && !recoveryStorageFailed) onClose() }}>
+    <DialogContent className={client ? 'max-h-[90vh] overflow-y-auto' : 'flex h-[95vh] h-[95dvh] flex-col overflow-y-auto'} closeDisabled={saving || recoveryStorageFailed} onEscapeKeyDown={(event) => { if (savingRef.current || recoveryStorageFailed) event.preventDefault() }} onInteractOutside={(event) => { if (savingRef.current || recoveryStorageFailed) event.preventDefault() }}>
       <DialogHeader>
         <DialogTitle>{client ? 'Editar cliente' : 'Nuevo cliente'}</DialogTitle>
         <DialogDescription>Completá los datos de contacto. La ubicación se confirma por separado en Rutas.</DialogDescription>
       </DialogHeader>
       {saving && <p role="status" className="text-sm text-muted-foreground">Guardando cliente…</p>}
-      <form onSubmit={submit} className={client ? 'space-y-4' : 'flex flex-1 flex-col gap-4'} aria-busy={saving}>
-        <fieldset disabled={saving} className={client ? 'space-y-4' : 'flex flex-1 flex-col gap-4'}>
+      <form onSubmit={(event) => void submit(event)} className={client ? 'space-y-4' : 'flex flex-1 flex-col gap-4'} aria-busy={saving}>
+        <fieldset disabled={saving || !!recovery} className={client ? 'space-y-4' : 'flex flex-1 flex-col gap-4'}>
         <div className="space-y-1"><label htmlFor="client-name">Nombre *</label><Input id="client-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} required /></div>
         <div className="space-y-1"><label htmlFor="client-address">Dirección</label><Input id="client-address" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={300} />{client && <p className="text-sm text-muted-foreground">Cambiar la dirección invalida la confirmación de ubicación existente.</p>}</div>
         <fieldset className={client ? 'space-y-2' : 'flex flex-1 flex-col gap-2'}>
           <legend className="font-medium">Ubicación en el mapa</legend>
           <p id="client-location-help" className="text-sm text-muted-foreground">Seleccioná un punto en el mapa o ingresá ambas coordenadas. Se guardará como referencia sin confirmar; para planificar entregas debe confirmarse por separado en Rutas.</p>
-          <LocationMapPicker kind="client" disabled={saving} value={coordinatesFromInputs(latitude, longitude)} {...(!client && { defaultCenter: { lat: -26.9, lng: -65.3 }, defaultZoom: 8, mapClassName: 'flex-1 min-h-64' })} onChange={(point) => { if (!savingRef.current) { setLatitude(String(point.lat)); setLongitude(String(point.lng)); setCoordinatesEdited(true) } }} />
+          <LocationMapPicker kind="client" disabled={saving || !!recovery} value={coordinatesFromInputs(latitude, longitude)} {...(!client && { defaultCenter: { lat: -26.9, lng: -65.3 }, defaultZoom: 8, mapClassName: 'flex-1 min-h-64' })} onChange={(point) => { if (!savingRef.current && !recovery) { setLatitude(String(point.lat)); setLongitude(String(point.lng)); setCoordinatesEdited(true) } }} />
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1"><label htmlFor="client-latitude">Latitud</label><Input id="client-latitude" inputMode="decimal" aria-describedby="client-location-help" value={latitude} onChange={(e) => { setLatitude(e.target.value); setCoordinatesEdited(true) }} /></div>
             <div className="space-y-1"><label htmlFor="client-longitude">Longitud</label><Input id="client-longitude" inputMode="decimal" aria-describedby="client-location-help" value={longitude} onChange={(e) => { setLongitude(e.target.value); setCoordinatesEdited(true) }} /></div>
           </div>
           <Button type="button" variant="outline" onClick={() => { setLatitude(''); setLongitude(''); setCoordinatesEdited(true) }}>Quitar ubicación</Button>
+          {!client && canConfirm && <Button type="button" disabled={!coordinatesEdited || !coordinatesFromInputs(latitude, longitude)} onClick={(event) => { const form = event.currentTarget.form; if (form?.reportValidity()) void submit(event, true) }}>Guardar y confirmar ubicación</Button>}
           {client && <p className="text-sm text-muted-foreground">Modificar o quitar el punto invalida cualquier confirmación de ubicación anterior.</p>}
         </fieldset>
         <div className="space-y-1"><label htmlFor="client-phones">Teléfonos</label><Input id="client-phones" value={phones} onChange={(e) => setPhones(e.target.value)} placeholder="Ej.: 1123456789, 1145678901" /><p className="text-sm text-muted-foreground">Solo números, separados por comas. Los ceros iniciales no se conservan.</p></div>
@@ -127,8 +261,25 @@ function ClientForm({ client, zones, onClose, onSaved }: {
           {zones.filter((item) => item.active || item._id === client?.deliveryZoneId).map((item) => <option key={item._id} value={item._id}>{item.name}{item.active ? '' : ' (inactiva)'}</option>)}
         </select></div>
         </fieldset>
+        {recovery && !saving && <div className="space-y-2">
+          <p>{recovery.id ? `El cliente ya fue creado (ID: ${recovery.id}). Los datos están bloqueados para evitar diferencias; cerrá y editalos desde la lista.` : 'No se sabe si el cliente fue creado. Buscalo en la lista antes de crear otro.'}</p>
+          {recoveryStorageFailed && recovery.id && <div className="space-y-2">
+            <label htmlFor="created-client-id">ID del cliente creado</label>
+            <Input id="created-client-id" value={recovery.id} readOnly onFocus={(event) => event.currentTarget.select()} />
+            <p>Copiá o anotá este ID. Si salís sin guardarlo, no podremos recuperarlo automáticamente; no vuelvas a crear el cliente.</p>
+            <Button type="button" variant="outline" onClick={() => void retryPersistId()}>Reintentar guardar identificación</Button>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={idRecorded} onChange={(event) => setIdRecorded(event.target.checked)} />Anoté el ID y entiendo que no está guardado para recuperación automática.</label>
+            <Button type="button" variant="outline" disabled={!idRecorded} onClick={onClose}>Cerrar con ID anotado</Button>
+          </div>}
+          {!recoveryStorageFailed && recovery.id && recovery.confirm && canConfirm && <>
+            <Button type="button" variant="outline" onClick={() => void reviewLocation()}>Revisar ubicación actual</Button>
+            {snapshot && <><p>Ubicación actual: {snapshot.address || 'Sin dirección'} · {snapshot.lat ?? '—'}, {snapshot.lng ?? '—'} · revisión {snapshot.locationRevision}. Las coordenadas a confirmar son {latitude}, {longitude}.</p><Button type="button" onClick={() => void retryConfirmation()}>Confirmar ubicación revisada</Button></>}
+          </>}
+          {!recoveryStorageFailed && <><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />{recovery.id ? 'Entiendo que el cliente ya existe y que su ubicación puede no estar confirmada.' : 'Ya busqué el cliente y entiendo que podría existir; no reintentaré sin verificar.'}</label>
+          <Button type="button" variant="outline" disabled={!acknowledged} onClick={() => { if (!navigator.locks) { setError('No se puede proteger la recuperación entre pestañas.'); return }; void navigator.locks.request(recoveryKey, { ifAvailable: true }, (lock) => { if (!lock) { setError('Hay una operación en curso en otra pestaña.'); return }; try { const current = readRecovery(recoveryKey); if (!current || current.id !== recovery.id || JSON.stringify(current.input) !== JSON.stringify(recovery.input)) { setError('La recuperación cambió en otra pestaña. Cerrá y revisá el estado actual.'); return }; storeRecovery(null); onSaved() } catch { setError('No se pudo cerrar la recuperación. Los datos siguen guardados.') } }).catch(() => setError('No se pudo cerrar la recuperación. Los datos siguen guardados.')) }}>{recovery.id ? 'Finalizar sin confirmar' : 'Cerrar recuperación'}</Button></>}
+        </div>}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <DialogFooter><Button type="button" variant="outline" disabled={saving} onClick={onClose}>Cancelar</Button><Button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button></DialogFooter>
+        <DialogFooter><Button type="button" variant="outline" disabled={saving || recoveryStorageFailed} onClick={onClose}>{recovery && !saving ? 'Cerrar' : 'Cancelar'}</Button>{!recovery && <Button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>}</DialogFooter>
       </form>
     </DialogContent>
   </Dialog>
@@ -136,6 +287,8 @@ function ClientForm({ client, zones, onClose, onSaved }: {
 
 function ClientsContent() {
   const { hasPermission } = usePermission()
+  const user = useAppSelector(getUser)
+  const recoveryKey = user.sessionStatus === SESSION_STATUS.READY && user.id && user.id.length <= 128 ? `${RECOVERY_KEY}${encodeURIComponent(user.id)}` : ''
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
   const [clients, setClients] = useState<ManagedClient[]>([])
@@ -147,6 +300,21 @@ function ClientsContent() {
   const [editing, setEditing] = useState<ManagedClient | null | undefined>(undefined)
   const [statusClient, setStatusClient] = useState<ManagedClient | null>(null)
   const [saving, setSaving] = useState(false)
+  const [recovery, setRecovery] = useState<CreateRecovery | null>(null)
+  const [recoveryError, setRecoveryError] = useState('')
+
+  useEffect(() => {
+    if (!recoveryKey) { setRecovery(null); return }
+    const load = () => { try {
+      if (sessionStorage.getItem(LEGACY_RECOVERY_KEY)) throw new Error('Legacy recovery')
+      const current = readRecovery(recoveryKey)
+      if (editing === undefined) setRecovery(current)
+      setRecoveryError('')
+    } catch { setRecoveryError('No se puede leer la recuperación anterior o el almacenamiento. No crees otro cliente hasta revisar los datos guardados.') } }
+    load()
+    window.addEventListener('storage', load)
+    return () => window.removeEventListener('storage', load)
+  }, [recoveryKey, editing])
 
   useEffect(() => {
     let current = true
@@ -178,11 +346,12 @@ function ClientsContent() {
   }
 
   return <PageContainer>
-    <PageHeader title="Clientes" actions={hasPermission(Permission.CREATE_CLIENT) && <Button disabled={zoneError} onClick={() => setEditing(null)}>Nuevo cliente</Button>}>
+    <PageHeader title="Clientes" actions={hasPermission(Permission.CREATE_CLIENT) && <Button disabled={zoneError || !recoveryKey || !!recoveryError} onClick={() => setEditing(null)}>{recovery ? 'Retomar creación pendiente' : 'Nuevo cliente'}</Button>}>
       <label htmlFor="client-search" className="sr-only">Buscar clientes</label>
       <Input id="client-search" placeholder="Buscar clientes" value={search} maxLength={100} onChange={(e) => { setSearch(e.target.value); setPage(0) }} />
     </PageHeader>
     {zoneError && <p role="alert" className="p-4 text-sm text-destructive">No se pudieron cargar las zonas. Recargá la página para editar clientes.</p>}
+    {recoveryError && <p role="alert" className="p-4 text-sm text-destructive">{recoveryError}</p>}
     {error && <div className="p-4"><p role="alert" className="text-sm text-destructive">{error}</p><Button variant="outline" className="mt-2" onClick={() => setRefresh((value) => value + 1)}>Actualizar lista</Button></div>}
     {loading ? <p role="status" className="p-6">Cargando clientes…</p> : !error && clients.length === 0 ? <p className="p-6 text-muted-foreground">No hay clientes para mostrar.</p> : !error && <ul className="divide-y">
       {clients.slice(0, PAGE_SIZE).map((client) => <li key={client._id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -191,7 +360,7 @@ function ClientsContent() {
       </li>)}
     </ul>}
     <div className="flex items-center gap-3 py-4"><Button variant="outline" disabled={page === 0 || loading || !!error} onClick={() => setPage((value) => value - 1)}>Anterior</Button><span>Página {page + 1}</span><Button variant="outline" disabled={clients.length <= PAGE_SIZE || loading || !!error} onClick={() => setPage((value) => value + 1)}>Siguiente</Button></div>
-    {editing !== undefined && <ClientForm client={editing} zones={zones} onClose={() => { setEditing(undefined); setRefresh((value) => value + 1) }} onSaved={() => { setEditing(undefined); setRefresh((value) => value + 1) }} />}
+    {editing !== undefined && <ClientForm client={editing} zones={zones} recoveryKey={recoveryKey} recovery={editing === null ? recovery : null} onRecovery={setRecovery} canConfirm={hasPermission(Permission.CREATE_CLIENT) && hasPermission('confirm_client_location')} onClose={() => { setEditing(undefined); setRefresh((value) => value + 1) }} onSaved={() => { setEditing(undefined); setRefresh((value) => value + 1) }} />}
     <Dialog open={statusClient !== null} onOpenChange={(open) => { if (!open && !saving) setStatusClient(null) }}><DialogContent><DialogHeader><DialogTitle>{statusClient?.isActive === true ? 'Desactivar cliente' : 'Activar cliente'}</DialogTitle><DialogDescription>{statusClient?.isActive === true ? 'No aparecerá para nuevas ventas y sus entregas pendientes no podrán incluirse en nuevas rutas mientras esté inactivo. Su historial se conservará y podrás activarlo nuevamente.' : 'El cliente volverá a estar disponible para nuevas ventas.'}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" disabled={saving} onClick={() => setStatusClient(null)}>Cancelar</Button><Button disabled={saving} onClick={changeStatus}>{saving ? 'Guardando…' : 'Confirmar'}</Button></DialogFooter></DialogContent></Dialog>
   </PageContainer>
 }
