@@ -48,7 +48,7 @@ function errorMessage(error: unknown): string {
   return 'No se pudo completar la operación. Intentá nuevamente.'
 }
 
-function ClientForm({ client, zones, onClose, onSaved, recovery, onRecovery, canConfirm, recoveryKey }: {
+function ClientForm({ client, zones, onClose, onSaved, recovery, onRecovery, canConfirm, canEdit, recoveryKey }: {
   client: ManagedClient | null
   zones: ClientZone[]
   onClose: () => void
@@ -56,6 +56,7 @@ function ClientForm({ client, zones, onClose, onSaved, recovery, onRecovery, can
   recovery: CreateRecovery | null
   onRecovery: (value: CreateRecovery | null) => void
   canConfirm: boolean
+  canEdit: boolean
   recoveryKey: string
 }) {
   const initial = client ?? recovery?.input
@@ -73,6 +74,36 @@ function ClientForm({ client, zones, onClose, onSaved, recovery, onRecovery, can
   const [acknowledged, setAcknowledged] = useState(false)
   const [idRecorded, setIdRecorded] = useState(false)
   const [recoveryStorageFailed, setRecoveryStorageFailed] = useState(false)
+  const [reviewRequired, setReviewRequired] = useState(false)
+  const mounted = useRef(false)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+
+  const dirty = !!client && (name !== client.nombreCompleto || address !== (client.address ?? '') || phones !== (client.telefonos?.join(', ') ?? '') || zone !== (client.deliveryZoneId ?? '') || latitude !== (client.lat == null ? '' : String(client.lat)) || longitude !== (client.lng == null ? '' : String(client.lng)))
+  const savedPoint = client && client.lat != null && client.lng != null ? coordinatesFromInputs(String(client.lat), String(client.lng)) : null
+
+  async function confirmSavedLocation() {
+    if (!client || !canConfirm || !savedPoint || dirty || reviewRequired || savingRef.current) return
+    savingRef.current = true; setSaving(true); setError('')
+    try {
+      const current = await clientService.locationSnapshot(client._id)
+      if (!mounted.current) return
+      if (current.address !== (client.address ?? null) || current.lat !== client.lat || current.lng !== client.lng || current.locationRevision !== client.locationRevision) {
+        setReviewRequired(true)
+        setError('La ubicación cambió. Cerrá el formulario, actualizá la lista y revisá la ubicación antes de confirmar.')
+        return
+      }
+      await clientService.confirmLocation(client._id, { manualConfirmation: savedPoint, expectedLocation: current })
+      if (mounted.current) onSaved()
+    } catch {
+      if (mounted.current) {
+        setReviewRequired(true)
+        setError('No se pudo confirmar o el resultado es incierto. Cerrá el formulario, actualizá la lista y revisá la ubicación antes de confirmar.')
+      }
+    } finally {
+      savingRef.current = false
+      if (mounted.current) setSaving(false)
+    }
+  }
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => { if (savingRef.current || recoveryStorageFailed) { event.preventDefault(); event.returnValue = '' } }
@@ -143,7 +174,7 @@ function ClientForm({ client, zones, onClose, onSaved, recovery, onRecovery, can
 
   async function submit(event: Pick<FormEvent, 'preventDefault'>, confirm = false) {
     event.preventDefault()
-    if (savingRef.current || recovery || (confirm && (!canConfirm || client))) return
+    if (savingRef.current || recovery || (client && !canEdit) || (confirm && (!canConfirm || client))) return
     const parts = phones.split(',').map((part) => part.trim()).filter(Boolean)
     if (!name.trim()) { setError('Ingresá el nombre del cliente.'); return }
     if (parts.some((part) => !/^\d{1,15}$/.test(part) || !Number.isSafeInteger(Number(part)))) {
@@ -231,11 +262,21 @@ function ClientForm({ client, zones, onClose, onSaved, recovery, onRecovery, can
     } catch (caught) { setError(errorMessage(caught)) } finally { savingRef.current = false; setSaving(false) }
   }
 
+  if (client && !canEdit) return <Dialog open onOpenChange={(open) => { if (!open && !savingRef.current) onClose() }}>
+    <DialogContent closeDisabled={saving} onEscapeKeyDown={(event) => { if (savingRef.current) event.preventDefault() }} onInteractOutside={(event) => { if (savingRef.current) event.preventDefault() }}>
+      <DialogHeader><DialogTitle>Revisar ubicación</DialogTitle><DialogDescription>Revisá los datos guardados antes de confirmar la ubicación.</DialogDescription></DialogHeader>
+      <div className="space-y-2"><p>Cliente: {client.nombreCompleto}</p><p>Dirección: {client.address || 'Sin dirección'}</p><p>Coordenadas: {client.lat ?? '—'}, {client.lng ?? '—'}</p></div>
+      {!savedPoint && <p className="text-sm text-muted-foreground">Se necesitan coordenadas guardadas válidas para confirmar la ubicación.</p>}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      <DialogFooter><Button type="button" variant="outline" disabled={saving} onClick={onClose}>Cerrar</Button>{canConfirm && <Button type="button" disabled={!savedPoint || reviewRequired || saving} onClick={() => void confirmSavedLocation()}>Confirmar ubicación guardada</Button>}</DialogFooter>
+    </DialogContent>
+  </Dialog>
+
   return <Dialog open onOpenChange={(open) => { if (!open && !savingRef.current && !recoveryStorageFailed) onClose() }}>
     <DialogContent className={client ? 'max-h-[90vh] overflow-y-auto' : 'flex h-[95vh] h-[95dvh] flex-col overflow-y-auto'} closeDisabled={saving || recoveryStorageFailed} onEscapeKeyDown={(event) => { if (savingRef.current || recoveryStorageFailed) event.preventDefault() }} onInteractOutside={(event) => { if (savingRef.current || recoveryStorageFailed) event.preventDefault() }}>
       <DialogHeader>
         <DialogTitle>{client ? 'Editar cliente' : 'Nuevo cliente'}</DialogTitle>
-        <DialogDescription>Completá los datos de contacto. La ubicación se confirma por separado en Rutas.</DialogDescription>
+        <DialogDescription>Completá los datos de contacto. La ubicación se confirma por separado.</DialogDescription>
       </DialogHeader>
       {saving && <p role="status" className="text-sm text-muted-foreground">Guardando cliente…</p>}
       <form onSubmit={(event) => void submit(event)} className={client ? 'space-y-4' : 'flex flex-1 flex-col gap-4'} aria-busy={saving}>
@@ -252,6 +293,11 @@ function ClientForm({ client, zones, onClose, onSaved, recovery, onRecovery, can
           </div>
           <Button type="button" variant="outline" onClick={() => { setLatitude(''); setLongitude(''); setCoordinatesEdited(true) }}>Quitar ubicación</Button>
           {!client && canConfirm && <Button type="button" disabled={!coordinatesEdited || !coordinatesFromInputs(latitude, longitude)} onClick={(event) => { const form = event.currentTarget.form; if (form?.reportValidity()) void submit(event, true) }}>Guardar y confirmar ubicación</Button>}
+          {client && canConfirm && <>
+            <Button type="button" variant="outline" disabled={!savedPoint || dirty || reviewRequired || saving} onClick={() => void confirmSavedLocation()}>Confirmar ubicación guardada</Button>
+            {dirty && <p className="text-sm text-muted-foreground">Guardá los cambios antes de confirmar la ubicación.</p>}
+            {!savedPoint && <p className="text-sm text-muted-foreground">Guardá coordenadas válidas antes de confirmar la ubicación.</p>}
+          </>}
           {client && <p className="text-sm text-muted-foreground">Modificar o quitar el punto invalida cualquier confirmación de ubicación anterior.</p>}
         </fieldset>
         <div className="space-y-1"><label htmlFor="client-phones">Teléfonos</label><Input id="client-phones" value={phones} onChange={(e) => setPhones(e.target.value)} placeholder="Ej.: 1123456789, 1145678901" /><p className="text-sm text-muted-foreground">Solo números, separados por comas. Los ceros iniciales no se conservan.</p></div>
@@ -298,6 +344,7 @@ function ClientsContent() {
   const [error, setError] = useState('')
   const [refresh, setRefresh] = useState(0)
   const [editing, setEditing] = useState<ManagedClient | null | undefined>(undefined)
+  const [reviewOnly, setReviewOnly] = useState(false)
   const [statusClient, setStatusClient] = useState<ManagedClient | null>(null)
   const [saving, setSaving] = useState(false)
   const [recovery, setRecovery] = useState<CreateRecovery | null>(null)
@@ -346,7 +393,7 @@ function ClientsContent() {
   }
 
   return <PageContainer>
-    <PageHeader title="Clientes" actions={hasPermission(Permission.CREATE_CLIENT) && <Button disabled={zoneError || !recoveryKey || !!recoveryError} onClick={() => setEditing(null)}>{recovery ? 'Retomar creación pendiente' : 'Nuevo cliente'}</Button>}>
+    <PageHeader title="Clientes" actions={hasPermission(Permission.CREATE_CLIENT) && <Button disabled={zoneError || !recoveryKey || !!recoveryError} onClick={() => { setReviewOnly(false); setEditing(null) }}>{recovery ? 'Retomar creación pendiente' : 'Nuevo cliente'}</Button>}>
       <label htmlFor="client-search" className="sr-only">Buscar clientes</label>
       <Input id="client-search" placeholder="Buscar clientes" value={search} maxLength={100} onChange={(e) => { setSearch(e.target.value); setPage(0) }} />
     </PageHeader>
@@ -356,11 +403,12 @@ function ClientsContent() {
     {loading ? <p role="status" className="p-6">Cargando clientes…</p> : !error && clients.length === 0 ? <p className="p-6 text-muted-foreground">No hay clientes para mostrar.</p> : !error && <ul className="divide-y">
       {clients.slice(0, PAGE_SIZE).map((client) => <li key={client._id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0"><p className="font-semibold">{client.nombreCompleto}</p><p className="text-sm text-muted-foreground">{client.address || 'Sin dirección'} · {client.telefonos?.join(', ') || 'Sin teléfono'}</p><p className="text-sm">{client.isActive === true ? 'Activo' : client.isActive === false ? 'Inactivo' : 'Sin estado — no disponible para ventas'}</p></div>
-        {hasPermission(Permission.UPDATE_CLIENT) && <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={zoneError} onClick={() => setEditing(client)}>Editar</Button><Button variant="outline" onClick={() => setStatusClient(client)}>{client.isActive === true ? 'Desactivar' : 'Activar'}</Button></div>}
+        {hasPermission(Permission.UPDATE_CLIENT) && <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={zoneError} onClick={() => { setReviewOnly(false); setEditing(client) }}>Editar</Button><Button variant="outline" onClick={() => setStatusClient(client)}>{client.isActive === true ? 'Desactivar' : 'Activar'}</Button></div>}
+        {(!hasPermission(Permission.UPDATE_CLIENT) || zoneError) && hasPermission('confirm_client_location') && <Button variant="outline" onClick={() => { setReviewOnly(true); setEditing(client) }}>Revisar ubicación</Button>}
       </li>)}
     </ul>}
     <div className="flex items-center gap-3 py-4"><Button variant="outline" disabled={page === 0 || loading || !!error} onClick={() => setPage((value) => value - 1)}>Anterior</Button><span>Página {page + 1}</span><Button variant="outline" disabled={clients.length <= PAGE_SIZE || loading || !!error} onClick={() => setPage((value) => value + 1)}>Siguiente</Button></div>
-    {editing !== undefined && <ClientForm client={editing} zones={zones} recoveryKey={recoveryKey} recovery={editing === null ? recovery : null} onRecovery={setRecovery} canConfirm={hasPermission(Permission.CREATE_CLIENT) && hasPermission('confirm_client_location')} onClose={() => { setEditing(undefined); setRefresh((value) => value + 1) }} onSaved={() => { setEditing(undefined); setRefresh((value) => value + 1) }} />}
+    {editing !== undefined && <ClientForm client={editing} zones={zones} recoveryKey={recoveryKey} recovery={editing === null ? recovery : null} onRecovery={setRecovery} canEdit={!reviewOnly && hasPermission(Permission.UPDATE_CLIENT)} canConfirm={(editing !== null || hasPermission(Permission.CREATE_CLIENT)) && hasPermission('confirm_client_location')} onClose={() => { setEditing(undefined); setRefresh((value) => value + 1) }} onSaved={() => { setEditing(undefined); setRefresh((value) => value + 1) }} />}
     <Dialog open={statusClient !== null} onOpenChange={(open) => { if (!open && !saving) setStatusClient(null) }}><DialogContent><DialogHeader><DialogTitle>{statusClient?.isActive === true ? 'Desactivar cliente' : 'Activar cliente'}</DialogTitle><DialogDescription>{statusClient?.isActive === true ? 'No aparecerá para nuevas ventas y sus entregas pendientes no podrán incluirse en nuevas rutas mientras esté inactivo. Su historial se conservará y podrás activarlo nuevamente.' : 'El cliente volverá a estar disponible para nuevas ventas.'}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" disabled={saving} onClick={() => setStatusClient(null)}>Cancelar</Button><Button disabled={saving} onClick={changeStatus}>{saving ? 'Guardando…' : 'Confirmar'}</Button></DialogFooter></DialogContent></Dialog>
   </PageContainer>
 }
