@@ -99,20 +99,20 @@ function ClientForm({ client, zones, onClose, onSaved }: {
   }
 
   return <Dialog open onOpenChange={(open) => { if (!open && !savingRef.current) onClose() }}>
-    <DialogContent className="max-h-[90vh] overflow-y-auto" closeDisabled={saving} onEscapeKeyDown={(event) => { if (savingRef.current) event.preventDefault() }} onInteractOutside={(event) => { if (savingRef.current) event.preventDefault() }}>
+    <DialogContent className={client ? 'max-h-[90vh] overflow-y-auto' : 'flex h-[95vh] h-[95dvh] flex-col overflow-y-auto'} closeDisabled={saving} onEscapeKeyDown={(event) => { if (savingRef.current) event.preventDefault() }} onInteractOutside={(event) => { if (savingRef.current) event.preventDefault() }}>
       <DialogHeader>
         <DialogTitle>{client ? 'Editar cliente' : 'Nuevo cliente'}</DialogTitle>
         <DialogDescription>Completá los datos de contacto. La ubicación se confirma por separado en Rutas.</DialogDescription>
       </DialogHeader>
       {saving && <p role="status" className="text-sm text-muted-foreground">Guardando cliente…</p>}
-      <form onSubmit={submit} className="space-y-4" aria-busy={saving}>
-        <fieldset disabled={saving} className="space-y-4">
+      <form onSubmit={submit} className={client ? 'space-y-4' : 'flex flex-1 flex-col gap-4'} aria-busy={saving}>
+        <fieldset disabled={saving} className={client ? 'space-y-4' : 'flex flex-1 flex-col gap-4'}>
         <div className="space-y-1"><label htmlFor="client-name">Nombre *</label><Input id="client-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} required /></div>
         <div className="space-y-1"><label htmlFor="client-address">Dirección</label><Input id="client-address" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={300} />{client && <p className="text-sm text-muted-foreground">Cambiar la dirección invalida la confirmación de ubicación existente.</p>}</div>
-        <fieldset className="space-y-2">
+        <fieldset className={client ? 'space-y-2' : 'flex flex-1 flex-col gap-2'}>
           <legend className="font-medium">Ubicación en el mapa</legend>
           <p id="client-location-help" className="text-sm text-muted-foreground">Seleccioná un punto en el mapa o ingresá ambas coordenadas. Se guardará como referencia sin confirmar; para planificar entregas debe confirmarse por separado en Rutas.</p>
-          <LocationMapPicker kind="client" disabled={saving} value={coordinatesFromInputs(latitude, longitude)} onChange={(point) => { if (!savingRef.current) { setLatitude(String(point.lat)); setLongitude(String(point.lng)); setCoordinatesEdited(true) } }} />
+          <LocationMapPicker kind="client" disabled={saving} value={coordinatesFromInputs(latitude, longitude)} {...(!client && { defaultCenter: { lat: -26.9, lng: -65.3 }, defaultZoom: 8, mapClassName: 'flex-1 min-h-64' })} onChange={(point) => { if (!savingRef.current) { setLatitude(String(point.lat)); setLongitude(String(point.lng)); setCoordinatesEdited(true) } }} />
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1"><label htmlFor="client-latitude">Latitud</label><Input id="client-latitude" inputMode="decimal" aria-describedby="client-location-help" value={latitude} onChange={(e) => { setLatitude(e.target.value); setCoordinatesEdited(true) }} /></div>
             <div className="space-y-1"><label htmlFor="client-longitude">Longitud</label><Input id="client-longitude" inputMode="decimal" aria-describedby="client-location-help" value={longitude} onChange={(e) => { setLongitude(e.target.value); setCoordinatesEdited(true) }} /></div>

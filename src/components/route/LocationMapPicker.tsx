@@ -19,9 +19,12 @@ interface LocationMapPickerProps {
   kind: 'origin' | 'client'
   address?: string
   disabled?: boolean
+  defaultCenter?: LocationPoint
+  defaultZoom?: number
+  mapClassName?: string
 }
 
-function PickerCanvas({ value, onChange, kind, address, disabled }: LocationMapPickerProps) {
+function PickerCanvas({ value, onChange, kind, address, disabled, defaultCenter, defaultZoom, mapClassName }: LocationMapPickerProps) {
   const status = useApiLoadingStatus()
   const mapId = useId()
   const map = useMap(mapId)
@@ -73,11 +76,11 @@ function PickerCanvas({ value, onChange, kind, address, disabled }: LocationMapP
 
   if (status === APILoadingStatus.FAILED || status === APILoadingStatus.AUTH_FAILURE) return <p role="alert" className="text-sm text-state-warning">No se pudo cargar el mapa. Ingresá las coordenadas manualmente.</p>
   if (status !== APILoadingStatus.LOADED) return <p role="status" className="text-sm text-text-secondary">Cargando mapa…</p>
-  return <div className="grid gap-2">
+  return <div className={mapClassName ? 'flex flex-1 flex-col gap-2' : 'grid gap-2'}>
     {kind === 'origin' && <Button type="button" variant="secondary" onClick={() => void search()} disabled={searching || disabled}>Buscar dirección del depósito</Button>}
     {error && <p role="alert" className="text-sm text-state-warning">{error}</p>}
-    <div className="h-64 overflow-hidden rounded-md border border-border-subtle" aria-label={kind === 'origin' ? 'Mapa del depósito' : 'Mapa del cliente'}>
-      <Map id={mapId} defaultCenter={value ?? { lat: -34.6, lng: -58.4 }} defaultZoom={12} gestureHandling={disabled ? 'none' : 'cooperative'} keyboardShortcuts={!disabled} disableDefaultUI={!!disabled} disableDoubleClickZoom={!!disabled} clickableIcons={!disabled} onClick={(event: MapMouseEvent) => emit(event.detail.latLng)}>
+    <div className={`${mapClassName ?? 'h-64'} overflow-hidden rounded-md border border-border-subtle`} aria-label={kind === 'origin' ? 'Mapa del depósito' : 'Mapa del cliente'}>
+      <Map id={mapId} defaultCenter={value ?? defaultCenter ?? { lat: -34.6, lng: -58.4 }} defaultZoom={defaultZoom ?? 12} gestureHandling={disabled ? 'none' : 'cooperative'} keyboardShortcuts={!disabled} disableDefaultUI={!!disabled} disableDoubleClickZoom={!!disabled} clickableIcons={!disabled} onClick={(event: MapMouseEvent) => emit(event.detail.latLng)}>
         {value !== null && <Marker position={value} draggable={!disabled} onDragEnd={(event: google.maps.MapMouseEvent) => emit(event.latLng?.toJSON() ?? null)} title={kind === 'origin' ? 'Depósito' : 'Cliente'} icon={{ path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: kind === 'origin' ? '#3e68a4' : '#d32f2f', fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2 }} />}
       </Map>
     </div>

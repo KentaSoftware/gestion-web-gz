@@ -15,6 +15,26 @@ vi.mock('@vis.gl/react-google-maps', () => ({
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
 
 describe('LocationMapPicker', () => {
+  it('supports a configurable viewport without selecting a location, and preserves existing coordinates', () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key')
+    vi.stubGlobal('google', { maps: { SymbolPath: { CIRCLE: 0 } } })
+    const onChange = vi.fn()
+    const center = { lat: -26.9, lng: -65.3 }
+    const { rerender } = render(<LocationMapPicker value={null} onChange={onChange} kind="client" defaultCenter={center} defaultZoom={8} mapClassName="flex-1 min-h-64" />)
+    expect(mapProps).toHaveBeenLastCalledWith(expect.objectContaining({ defaultCenter: center, defaultZoom: 8 }))
+    expect(screen.getByLabelText('Mapa del cliente')).toHaveClass('flex-1', 'min-h-64')
+    expect(onChange).not.toHaveBeenCalled()
+    expect(screen.queryByText('marker drag')).not.toBeInTheDocument()
+    rerender(<LocationMapPicker value={{ lat: 0, lng: 0 }} onChange={onChange} kind="client" defaultCenter={center} defaultZoom={8} />)
+    expect(mapProps).toHaveBeenLastCalledWith(expect.objectContaining({ defaultCenter: { lat: 0, lng: 0 } }))
+  })
+
+  it('retains the original viewport and height when not configured', () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key')
+    render(<LocationMapPicker value={null} onChange={vi.fn()} kind="client" />)
+    expect(mapProps).toHaveBeenLastCalledWith(expect.objectContaining({ defaultCenter: { lat: -34.6, lng: -58.4 }, defaultZoom: 12 }))
+    expect(screen.getByLabelText('Mapa del cliente')).toHaveClass('h-64')
+  })
   it.each(['map click', 'marker drag', 'prop change'])('ignores a delayed search after %s', async (choice) => {
     vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key')
     let resolveSearch: (value: unknown) => void = () => {}

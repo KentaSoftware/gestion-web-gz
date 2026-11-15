@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ClientsPage from './page'
 
-const mocks = vi.hoisted(() => ({ list: vi.fn(), zones: vi.fn(), create: vi.fn(), update: vi.fn(), hasPermission: vi.fn() }))
+const mocks = vi.hoisted(() => ({ list: vi.fn(), zones: vi.fn(), create: vi.fn(), update: vi.fn(), hasPermission: vi.fn(), map: vi.fn() }))
 vi.mock('@/components/ProtectedRoute', () => ({ default: ({ children }: { children: ReactNode }) => <>{children}</> }))
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ hasPermission: mocks.hasPermission }) }))
 vi.mock('@/services/client.service', () => ({ clientService: mocks }))
@@ -12,7 +12,7 @@ vi.mock('@vis.gl/react-google-maps', () => ({
   APILoadingStatus: { LOADED: 'loaded', FAILED: 'failed', AUTH_FAILURE: 'auth' },
   useApiLoadingStatus: () => 'loaded',
   useMap: () => null,
-  Map: ({ children, onClick }: { children: ReactNode; onClick: (event: unknown) => void }) => <div><button type="button" onClick={() => onClick({ detail: { latLng: { lat: -34, lng: -58 } } })}>Seleccionar punto de prueba</button>{children}</div>,
+  Map: (props: { children: ReactNode; onClick: (event: unknown) => void }) => { mocks.map(props); return <div><button type="button" onClick={() => props.onClick({ detail: { latLng: { lat: -34, lng: -58 } } })}>Seleccionar punto de prueba</button>{props.children}</div> },
   Marker: () => null,
 }))
 
@@ -108,6 +108,26 @@ describe('Client management', () => {
     expect(screen.getByLabelText('Latitud')).toHaveValue('-34')
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
     await waitFor(() => expect(mocks.create).toHaveBeenCalledWith({ nombreCompleto: 'Nuevo', telefonos: [], isActive: true, lat: -34, lng: -58, deliveryZoneId: 'zone-1' }))
+  })
+
+  it('expands only the creation dialog and does not submit its default map center', async () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key')
+    vi.stubGlobal('google', { maps: { SymbolPath: { CIRCLE: 0 } } })
+    render(<ClientsPage />)
+    await screen.findByText('Ana')
+    fireEvent.click(screen.getByRole('button', { name: 'Nuevo cliente' }))
+    expect(screen.getByRole('dialog')).toHaveClass('h-[95dvh]', 'overflow-y-auto')
+    expect(mocks.map).toHaveBeenLastCalledWith(expect.objectContaining({ defaultCenter: { lat: -26.9, lng: -65.3 }, defaultZoom: 8 }))
+    expect(screen.getByLabelText('Mapa del cliente')).toHaveClass('flex-1', 'min-h-64')
+    expect(screen.getByLabelText('Latitud')).toHaveValue('')
+    expect(screen.getByLabelText('Longitud')).toHaveValue('')
+    fireEvent.change(screen.getByLabelText('Nombre *'), { target: { value: 'Nuevo' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledWith({ nombreCompleto: 'Nuevo', telefonos: [], isActive: true }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar' }))
+    expect(screen.getByRole('dialog')).toHaveClass('max-h-[90vh]')
+    expect(screen.getByLabelText('Mapa del cliente')).toHaveClass('h-64')
+    expect(mocks.map).toHaveBeenLastCalledWith(expect.objectContaining({ defaultCenter: { lat: 0, lng: 0 }, defaultZoom: 12 }))
   })
 
   it('updates coordinates with the reviewed location snapshot and can clear them', async () => {
