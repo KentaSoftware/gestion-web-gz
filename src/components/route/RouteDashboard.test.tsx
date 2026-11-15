@@ -431,6 +431,17 @@ describe('RouteDashboard selected-route detail', () => {
     expect(scrollIntoView).toHaveBeenCalledTimes(1)
   })
 
+  it('avoids smooth map scrolling when reduced motion is requested', async () => {
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true }))
+    getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
+    getDashboard.mockResolvedValue(dashboard)
+    render(<RouteDashboard />)
+    await screen.findByRole('heading', { name: 'Rutas planificadas (2)' })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver mapa' })[0])
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: 'instant', block: 'start' })
+    vi.unstubAllGlobals()
+  })
+
   it('opens the preview dialog while retaining the map in the document', async () => {
     getActiveDeliveryZones.mockResolvedValue([{ _id: 'zone-1', code: 'NORTE', name: 'Zona Norte', active: true }])
     getDashboard.mockResolvedValue(dashboard)

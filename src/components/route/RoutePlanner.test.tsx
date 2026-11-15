@@ -1,6 +1,6 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
+import { StrictMode, useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RoutePreview as RoutePreviewData } from '@/interfaces/routePlan.interface'
 
@@ -124,8 +124,8 @@ describe('RoutePlanner', () => {
 
     const table = screen.getByRole('table', { name: 'Pedidos pendientes' })
     const container = screen.getByTestId('pending-orders-table-container')
-    expect(container.className).toContain('h-[38rem]')
-    expect(container.className).toContain('overflow-hidden')
+    expect(container.className).toContain('overflow-x-auto')
+    expect(container.className).not.toContain('overflow-hidden')
     expect(within(table).getAllByRole('row')).toHaveLength(9)
     expect(screen.getByText('Página 1 de 2')).toBeInTheDocument()
 
@@ -139,6 +139,47 @@ describe('RoutePlanner', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Anterior' }))
     expect(screen.getByRole('checkbox', { name: 'Cliente 1' })).toBeChecked()
+  })
+
+  it('distinguishes loading, failure, retry and empty assignment options', async () => {
+    getAssignmentOptions.mockReturnValueOnce(new Promise(() => {}))
+    await renderLoaded()
+    expect(screen.getByText('Cargando repartidores y vehículos…')).toBeInTheDocument()
+    expect(screen.getByLabelText('Repartidor')).toBeDisabled()
+  })
+
+  it('retries assignment options after an error and reports empty resources', async () => {
+    getAssignmentOptions.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ drivers: [], vehicles: [] })
+    await renderLoaded()
+    expect(await screen.findByText('No se pudieron cargar los repartidores y vehículos.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar recursos' }))
+    expect(await screen.findByText('No hay repartidores disponibles.')).toBeInTheDocument()
+    expect(screen.getByText('No hay vehículos disponibles.')).toBeInTheDocument()
+  })
+
+  it('ignores an older assignment failure after a newer request succeeds', async () => {
+    let rejectOld!: (reason: Error) => void
+    const options = { drivers: [{ id: 'driver-1', nickname: 'Ana Pérez', isActive: true }], vehicles: [{ id: 'vehicle-1', code: 'AA123BB', fuelConsumptionLitersPer100Km: 10.5, attributes: {}, availability: true }] }
+    getAssignmentOptions.mockReturnValueOnce(new Promise((_, reject) => { rejectOld = reject })).mockResolvedValueOnce(options)
+    getCandidates.mockResolvedValue(candidates)
+    render(<StrictMode><RoutePlanner initialServiceDate="2026-10-04" initialDeliveryZoneId={ZONE_ID} /></StrictMode>)
+    await screen.findByRole('option', { name: 'Ana Pérez' })
+    await selectAssignmentsAndClients()
+    await act(async () => { rejectOld(new Error('stale failure')) })
+    expect(screen.getByLabelText('Repartidor')).toHaveValue('driver-1')
+    expect(screen.getByRole('button', { name: 'Generar ruta' })).toBeEnabled()
+    expect(screen.queryByText('No se pudieron cargar los repartidores y vehículos.')).not.toBeInTheDocument()
+  })
+
+  it('ignores an older assignment success after a newer request fails', async () => {
+    let resolveOld!: (value: { drivers: []; vehicles: [] }) => void
+    getAssignmentOptions.mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve })).mockRejectedValueOnce(new Error('offline'))
+    getCandidates.mockResolvedValue(candidates)
+    render(<StrictMode><RoutePlanner initialServiceDate="2026-10-04" initialDeliveryZoneId={ZONE_ID} /></StrictMode>)
+    await screen.findByText('No se pudieron cargar los repartidores y vehículos.')
+    await act(async () => { resolveOld({ drivers: [], vehicles: [] }) })
+    expect(screen.getByText('No se pudieron cargar los repartidores y vehículos.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Generar ruta' })).toBeDisabled()
   })
 
   it('requires two clients, driver, and vehicle before generating', async () => {

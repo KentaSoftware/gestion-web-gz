@@ -135,7 +135,8 @@ export function RouteDashboard({ onGenerateRoutes, refreshToken = 0 }: RouteDash
       const region = document.getElementById(focusRegionId)
       if (!(region instanceof HTMLElement)) return
       region.focus({ preventScroll: true })
-      region.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+      region.scrollIntoView({ behavior: reducedMotion ? 'instant' : 'smooth', block: 'start' })
       setFocusRegionId(null)
     })
     return () => {
