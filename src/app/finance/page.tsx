@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { Permission } from '@/interfaces/auth.interface'
 import { financeService } from '@/services/finance.service'
@@ -19,6 +19,8 @@ import Button from '@/components/Button'
 import { cn } from '@/lib/cn'
 import { PageContainer, PageHeader } from '@/components/layout/PageLayout'
 import { createFinanceDemo, demo, DEMO_MAX_DAYS } from './financeDemo'
+import { createProjectionPdf } from './financeProjectionPdf'
+import { financeBusinessDate, FutureFinancePeriodError } from './financeProjection'
 
 interface DateRange {
   startDate: string
@@ -27,6 +29,10 @@ interface DateRange {
 
 function getDefaultDateRange(): DateRange {
   const now = new Date()
+  if (demo) {
+    const endDate = financeBusinessDate(now)
+    return { startDate: `${endDate.slice(0, 7)}-01`, endDate }
+  }
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
   return {
     startDate: firstDay.toISOString().split('T')[0],
@@ -42,6 +48,7 @@ function FinancePageContent() {
   const [loadError, setLoadError] = useState('')
   const [exporting, setExporting] = useState(false)
   const [expenseOpen, setExpenseOpen] = useState(false)
+  const exportingRef = useRef(false)
 
   const fetchDashboard = useCallback(async (range: DateRange) => {
     if (demo) {
@@ -82,6 +89,10 @@ function FinancePageContent() {
       setDateError('La fecha inicial no puede ser posterior a la fecha final')
       return
     }
+    if (demo && dateRange.endDate > financeBusinessDate()) {
+      setDateError(new FutureFinancePeriodError().message)
+      return
+    }
     if (demo && (to.getTime() - from.getTime()) / 86400000 + 1 > DEMO_MAX_DAYS) {
       setDateError(`El rango no puede superar ${DEMO_MAX_DAYS} días.`)
       return
@@ -91,19 +102,23 @@ function FinancePageContent() {
   }
 
   const handleExportPdf = async () => {
-    if (demo) return
+    if (exportingRef.current) return
+    if (demo && (!dashboard || dashboard.startDate !== dateRange.startDate || dashboard.endDate !== dateRange.endDate)) return
+    exportingRef.current = true
     try {
       setExporting(true)
-      const blob = await financeService.exportReportPdf(dateRange)
+      setLoadError('')
+      const blob = demo && dashboard ? createProjectionPdf(dashboard).output('blob') : await financeService.exportReportPdf(dateRange)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = `golozur360-finance-${dateRange.startDate}_${dateRange.endDate}.pdf`
       a.click()
       URL.revokeObjectURL(url)
-    } catch {
-      setLoadError('No se pudo exportar el PDF. Reintentá o verificá permisos.')
+    } catch (error) {
+      setLoadError(error instanceof FutureFinancePeriodError ? error.message : 'No se pudo exportar el PDF. Reintentá o verificá permisos.')
     } finally {
+      exportingRef.current = false
       setExporting(false)
     }
   }
@@ -119,6 +134,7 @@ function FinancePageContent() {
               onClick={() => { void handleExportPdf() }}
               size="md"
               variant="secondary"
+              disabled={exporting || (demo && (!dashboard || dashboard.startDate !== dateRange.startDate || dashboard.endDate !== dateRange.endDate))}
             />
             <Button
               text="+ Nuevo Movimiento"
@@ -166,7 +182,7 @@ function FinancePageContent() {
         </div>
 
         {(dateError || loadError) && (
-          <p className="text-state-error text-caption mt-2 font-medium">{dateError || loadError}</p>
+          <p role="alert" className="text-state-error text-caption mt-2 font-medium">{dateError || loadError}</p>
         )}
       </PageHeader>
 

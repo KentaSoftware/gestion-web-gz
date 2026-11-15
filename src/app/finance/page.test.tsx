@@ -1,10 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import FinancePage from './page'
 import { Permission } from '@/interfaces/auth.interface'
 import { createFinanceDemo } from './financeDemo'
+import { FinanceProjectionAmountError } from './financeProjection'
+import * as projectionPdf from './financeProjectionPdf'
 
 const mocks = vi.hoisted(() => ({ demo: true, allowed: true, permission: '', modal: vi.fn(), getDashboard: vi.fn(), getRules: vi.fn(), updateRules: vi.fn(), exportReportPdf: vi.fn() }))
 vi.mock('./financeDemo', async importOriginal => ({ ...(await importOriginal<typeof import('./financeDemo')>()), get demo() { return mocks.demo } }))
@@ -15,10 +17,13 @@ vi.mock('@/components/finance/RegisterExpenseModal', () => ({ RegisterExpenseMod
 
 describe('finance page source switch', () => {
   beforeEach(() => { vi.clearAllMocks(); mocks.demo = true; mocks.allowed = true; mocks.permission = '' })
+  afterEach(() => { vi.useRealTimers() })
 
-  it('renders fixtures with enabled no-op actions and no real movement navigation', async () => {
+  it('exports fixtures locally and keeps other fixture actions inert', async () => {
     const user = userEvent.setup()
-    const download = vi.spyOn(HTMLAnchorElement.prototype, 'click')
+    const download = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    URL.createObjectURL = vi.fn(() => 'blob:fixture')
+    URL.revokeObjectURL = vi.fn()
     render(<FinancePage />)
     expect((await screen.findAllByText(/Cobros de ventas/)).length).toBeGreaterThan(0)
     expect(screen.getByText('Capital ocioso')).toBeInTheDocument()
@@ -29,7 +34,11 @@ describe('finance page source switch', () => {
     expect(mocks.getRules).not.toHaveBeenCalled()
     expect(mocks.updateRules).not.toHaveBeenCalled()
     expect(mocks.exportReportPdf).not.toHaveBeenCalled()
-    for (const name of ['Exportar Reporte', '+ Nuevo Movimiento', 'Actualizar']) {
+    await user.click(screen.getByRole('button', { name: 'Exportar Reporte' }))
+    expect(download).toHaveBeenCalledTimes(1)
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:fixture')
+    for (const name of ['+ Nuevo Movimiento', 'Actualizar']) {
       const button = screen.getByRole('button', { name })
       expect(button).toBeVisible()
       expect(button).toBeEnabled()
@@ -44,14 +53,15 @@ describe('finance page source switch', () => {
     expect(mocks.getRules).not.toHaveBeenCalled()
     expect(mocks.updateRules).not.toHaveBeenCalled()
     expect(mocks.exportReportPdf).not.toHaveBeenCalled()
-    expect(download).not.toHaveBeenCalled()
     download.mockRestore()
     expect(screen.queryByText(/CUR-6|CU-012|finance-rules-v2/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/demo/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Ver Todos los Movimientos/ })).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-03-10' } })
     fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-03-10' } })
+    expect(screen.getByRole('button', { name: 'Exportar Reporte' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }))
+    expect(screen.getByRole('button', { name: 'Exportar Reporte' })).toBeEnabled()
     expect(screen.getByText(/Ingresos: 180.000 · Egresos: 120.000/)).toBeInTheDocument()
     expect(screen.getByText(/30 días hasta el 10\/03\/2026 inclusive/)).toBeInTheDocument()
     expect(screen.getByText(/8 unidades disponibles al 10\/03\/2026/)).toBeInTheDocument()
@@ -87,6 +97,63 @@ describe('finance page source switch', () => {
     fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }))
     expect(mocks.getDashboard).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports a local generation failure without contacting the service', async () => {
+    URL.createObjectURL = vi.fn(() => { throw new Error('download failed') })
+    render(<FinancePage />)
+    await screen.findAllByText(/Cobros de ventas/)
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar Reporte' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo exportar el PDF')
+    expect(mocks.exportReportPdf).not.toHaveBeenCalled()
+  })
+
+  it('shows the numerical limit when fixture PDF generation fails', async () => {
+    const generate = vi.spyOn(projectionPdf, 'createProjectionPdf').mockImplementation(() => { throw new FinanceProjectionAmountError() })
+    try {
+      render(<FinancePage />)
+      await screen.findAllByText(/Cobros de ventas/)
+      fireEvent.click(screen.getByRole('button', { name: 'Exportar Reporte' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('límite de ARS 1.000.000.000.000')
+      expect(mocks.exportReportPdf).not.toHaveBeenCalled()
+    } finally { generate.mockRestore() }
+  })
+
+  it('uses the Buenos Aires default range and blocks applying tomorrow without replacing the dashboard', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2027-01-01T02:30:00Z'))
+    const download = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    URL.createObjectURL = vi.fn(() => 'blob:fixture')
+    render(<FinancePage />)
+    expect(screen.getByLabelText('Desde')).toHaveValue('2026-12-01')
+    expect(screen.getByLabelText('Hasta')).toHaveValue('2026-12-31')
+    expect(screen.getByText(/8 unidades disponibles al 31\/12\/2026/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar Reporte' }))
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
+    fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2027-01-01' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('fecha final')
+    expect(screen.getByText(/8 unidades disponibles al 31\/12\/2026/)).toBeInTheDocument()
+    expect(screen.queryByText(/8 unidades disponibles al 01\/01\/2027/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Exportar Reporte' })).toBeDisabled()
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
+    expect(mocks.exportReportPdf).not.toHaveBeenCalled()
+    expect(mocks.getDashboard).not.toHaveBeenCalled()
+    download.mockRestore()
+  })
+
+  it('preserves live UTC default end and permits future periods', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2027-01-01T02:30:00Z'))
+    mocks.demo = false
+    mocks.getDashboard.mockResolvedValue(createFinanceDemo({ startDate: '2027-01-01', endDate: '2027-01-01' }))
+    mocks.getRules.mockRejectedValue(new Error('offline'))
+    render(<FinancePage />)
+    expect(screen.getByLabelText('Hasta')).toHaveValue('2027-01-01')
+    fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2027-01-02' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }))
+    expect(mocks.getDashboard).toHaveBeenLastCalledWith(expect.objectContaining({ endDate: '2027-01-02' }))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('renders a successful live response without replacing it with fixtures', async () => {
