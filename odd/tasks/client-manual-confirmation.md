@@ -15,3 +15,5 @@ Remove the unfinished Places autocomplete and allow an authorized user to create
 
 ## Progress
 Started on `feat/client-management`; the uncommitted Places integration was removed. Local recovery and Web Locks do not guarantee cross-device idempotency, or protect against cleared browser storage. If persisting a newly created ID fails, client-side navigation can still lose its in-memory value; an unresolved recovery record remains and blocks another create until acknowledged. Web Locks require a supported secure context. Live browser, multi-tab and database integration were not verified. RDD is disabled; risk assessment unavailable, treated as high.
+
+Work-unit commit: `2f69163`. Next: test real browser recovery and consider backend idempotency before relying on cross-device duplicate prevention.
