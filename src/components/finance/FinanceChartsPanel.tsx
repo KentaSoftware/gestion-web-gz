@@ -70,6 +70,7 @@ interface Props {
   loading: boolean
   /** When false, omit Proyección (rendered beside movements). Default true. */
   showProjection?: boolean
+  showSinglePoint?: boolean
 }
 
 function buildCashflowSeries (timeline: FinanceMovement[]) {
@@ -100,7 +101,7 @@ function buildCashflowSeries (timeline: FinanceMovement[]) {
     map.set(sortKey, row)
   }
 
-  return [...map.values()]
+  return Array.from(map.values())
     .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
     .map(({ label, ingresos, egresos }) => ({
       label,
@@ -229,6 +230,7 @@ export function FinanceChartsPanel({
   weekly,
   loading,
   showProjection = true,
+  showSinglePoint = false,
 }: Props) {
   const cashflow = useMemo(() => buildCashflowSeries(timeline), [timeline])
   const pieData = useMemo(() => {
@@ -295,7 +297,7 @@ export function FinanceChartsPanel({
                     stroke={CHART_COLORS.inflows}
                     fill="url(#financeInflowsFill)"
                     strokeWidth={2}
-                    dot={false}
+                    dot={showSinglePoint && cashflow.length === 1}
                     activeDot={{ r: 4 }}
                   />
                   <Area
@@ -305,7 +307,7 @@ export function FinanceChartsPanel({
                     stroke={CHART_COLORS.outflows}
                     fill="url(#financeOutflowsFill)"
                     strokeWidth={2}
-                    dot={false}
+                    dot={showSinglePoint && cashflow.length === 1}
                     activeDot={{ r: 4 }}
                   />
                 </AreaChart>

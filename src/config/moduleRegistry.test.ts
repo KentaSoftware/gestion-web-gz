@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_MODULE_GATES,
   MODULE_FLAGS,
@@ -21,8 +21,6 @@ describe('MODULE_REGISTRY', () => {
   it('keeps Phase 0 stock/simulation gated off; finance gate open for this iteration', () => {
     expect(MODULE_FLAGS.stock).toBe(false)
     expect(MODULE_FLAGS.simulation).toBe(false)
-    // finance flag still comes from NEXT_PUBLIC_FINANCE_ENABLED (false in unit tests unless set)
-    expect(typeof MODULE_FLAGS.finance).toBe('boolean')
     expect(DEFAULT_MODULE_GATES).toEqual({
       stock: false,
       finance: true,
@@ -34,9 +32,26 @@ describe('MODULE_REGISTRY', () => {
     const finance = MODULE_REGISTRY.find((entry) => entry.id === 'finance')
     expect(finance).toMatchObject({
       href: '/finance',
+      flag: null,
       requiredPermissions: [Permission.READ_CASHFLOW],
       gate: 'finance',
     })
+  })
+
+  afterEach(() => { vi.unstubAllEnvs(); vi.resetModules() })
+
+  it.each([undefined, 'false'])('enforces finance access independently of env value %s', async (value) => {
+    vi.stubEnv('NEXT_PUBLIC_FINANCE_ENABLED', value)
+    vi.resetModules()
+    const { MODULE_REGISTRY, isModuleEnabled } = await import('./moduleRegistry')
+    const finance = MODULE_REGISTRY.find((entry) => entry.id === 'finance')!
+    const authorized = { ...repartidorAccess, permissions: [Permission.READ_CASHFLOW], gates: { ...repartidorAccess.gates, finance: true } }
+    expect(isModuleEnabled(finance, authorized)).toBe(true)
+    expect(isModuleEnabled(finance, { ...authorized, permissions: [] })).toBe(false)
+    expect(isModuleEnabled(finance, { ...authorized, permissions: [], isAdmin: true })).toBe(true)
+    expect(isModuleEnabled(finance, { ...authorized, status: SESSION_STATUS.HYDRATING })).toBe(false)
+    expect(isModuleEnabled(finance, { ...authorized, gates: { ...authorized.gates, finance: false } })).toBe(false)
+    expect(isModuleEnabled(finance, { ...authorized, isAdmin: true, gates: { ...authorized.gates, finance: false } })).toBe(false)
   })
 
   it('keeps a Repartidor read-only while allowing legacy read navigation', () => {
