@@ -14,3 +14,5 @@ Use 95% of the available viewport height for the client creation modal and maxim
 
 ## Progress and next step
 Started from Web commit `71140b4`; no live browser verification has been performed. RDD is disabled; risk assessment was unavailable and treated as high. Initial center is approximately `-26.9, -65.3`, zoom 8; it is not submitted as a selected location. Small-screen visual layout remains unverified.
+
+Work-unit commit: `ea9c839`. Next: visually verify the modal at desktop and short mobile viewport sizes.
