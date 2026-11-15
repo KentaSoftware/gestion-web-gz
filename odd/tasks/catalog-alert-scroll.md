@@ -26,3 +26,5 @@ CAS-2 work-unit commit: `83a1d4f`. Next: visually verify quick-search focus and 
 User requested removing the product and category filters from the catalog alerts section while retaining severity.
 
 The relocated filters continue to affect the product overview. Existing shared overview loading can temporarily hide alerts during a product-filter refresh; this was not introduced or changed by CAS-3. Live browser behavior remains unverified.
+
+CAS-3 work-unit commit: `e6c119e`. Next: review the placement of product filters in the browser.
