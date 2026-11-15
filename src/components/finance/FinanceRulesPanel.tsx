@@ -28,7 +28,6 @@ export function FinanceRulesPanel({ onUpdated, readOnly = false }: Props) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
-  const [rulesVersion, setRulesVersion] = useState('')
   const [form, setForm] = useState<FinanceRulesConfig>(DEFAULTS)
 
   useEffect(() => {
@@ -40,7 +39,6 @@ export function FinanceRulesPanel({ onUpdated, readOnly = false }: Props) {
         setError('')
         const data = await financeService.getRules()
         if (cancelled) return
-        setRulesVersion(data.rulesVersion)
         setForm({ ...DEFAULTS, ...data.config })
       } catch {
         if (!cancelled) setError('No se pudieron cargar las reglas financieras.')
@@ -67,7 +65,6 @@ export function FinanceRulesPanel({ onUpdated, readOnly = false }: Props) {
         riskProfile: form.riskProfile,
       })
       setForm({ ...DEFAULTS, ...data.config })
-      setRulesVersion(data.rulesVersion)
       setOk('Reglas actualizadas. Se recalculará el tablero.')
       onUpdated?.()
     } catch {
@@ -90,11 +87,8 @@ export function FinanceRulesPanel({ onUpdated, readOnly = false }: Props) {
           <h2 className="text-label font-semibold text-text-primary">
             Configuración de reglas financieras
           </h2>
-          <p className="text-caption text-text-secondary mt-1">
-            CUR-6 / CU-012 · {rulesVersion || 'finance-rules-v2'}
-          </p>
         </div>
-        {!readOnly && <Button text={saving ? 'Actualizando…' : 'Actualizar'} onClick={handleSave} size="md" />}
+        <Button text={saving ? 'Actualizando…' : 'Actualizar'} onClick={handleSave} size="md" disabled={readOnly} />
       </div>
 
       {loading && <p className="text-caption text-text-secondary">Cargando…</p>}

@@ -114,18 +114,20 @@ function FinancePageContent() {
         title="Gestión Financiera"
         actions={
           <>
-            {!demo && <Button
+            <Button
               text={exporting ? 'Exportando…' : 'Exportar Reporte'}
               onClick={() => { void handleExportPdf() }}
               size="md"
               variant="secondary"
-            />}
-            {!demo && <Button
+              disabled={demo}
+            />
+            <Button
               text="+ Nuevo Movimiento"
               onClick={() => setExpenseOpen(true)}
               size="md"
               variant="primary"
-            />}
+              disabled={demo}
+            />
           </>
         }
       >
