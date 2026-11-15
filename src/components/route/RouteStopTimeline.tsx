@@ -100,7 +100,7 @@ export function RouteStopTimeline({ stops, segments = [], estimates = [], depot 
         <h3 id={titleId} className="text-sm font-semibold text-text-primary">
           Secuencia de paradas
         </h3>
-        <p className="mt-1 text-xs text-text-secondary">Salida desde {depot.name} y regreso al finalizar.</p>
+        <p className="mt-1 text-sm text-text-secondary">Salida desde {depot.name} y regreso al finalizar.</p>
       </>}
       {stops.length === 0 ? (
         <p role="status" className="mt-3 rounded-md border border-border-subtle p-3 text-xs text-text-secondary">
@@ -116,7 +116,7 @@ export function RouteStopTimeline({ stops, segments = [], estimates = [], depot 
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-text-primary">Depósito de origen</p>
-              <p className="mt-1 break-words text-xs text-text-secondary">{depot.name}{depot.address ? ` · ${depot.address}` : ` · ${unavailableAddress}`}</p>
+              <p className="mt-1 break-words text-sm text-text-secondary">{depot.name}{depot.address ? ` · ${depot.address}` : ` · ${unavailableAddress}`}</p>
             </div>
             <dl className="col-start-2 flex flex-wrap gap-x-3 gap-y-1">
               {formatMetric('Distancia', formatKilometers(0), Navigation)}
@@ -139,7 +139,7 @@ export function RouteStopTimeline({ stops, segments = [], estimates = [], depot 
                 </div>
                 <div className="min-w-0">
                   <p className="break-words text-sm font-semibold text-text-primary"><span className="sr-only">Parada {index + 1}: </span>Cliente: {stop.displayName ?? 'No disponible'}</p>
-                  <p className="mt-1 break-words text-xs text-text-secondary">{stop.addressSummary ?? unavailableAddress}</p>
+                  <p className="mt-1 break-words text-sm text-text-secondary">{stop.addressSummary ?? unavailableAddress}</p>
                   {onMove && <div className="mt-2 flex gap-2">
                     <button type="button" className="rounded border border-border-subtle px-2 py-1 text-xs disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-state-focus" aria-label={`Subir parada ${index + 1}: ${stop.displayName ?? 'Cliente'}`} disabled={index === 0} onClick={() => onMove(index, -1)}>Subir</button>
                     <button type="button" className="rounded border border-border-subtle px-2 py-1 text-xs disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-state-focus" aria-label={`Bajar parada ${index + 1}: ${stop.displayName ?? 'Cliente'}`} disabled={index === stops.length - 1} onClick={() => onMove(index, 1)}>Bajar</button>

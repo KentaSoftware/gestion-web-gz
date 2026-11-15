@@ -416,7 +416,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
         <td className="px-3 py-1 align-middle text-sm font-medium text-text-primary">
           <Label htmlFor={id} title={group.displayName} className="cursor-pointer break-words leading-normal">{group.displayName}</Label>
         </td>
-        <td className="px-3 py-1 align-middle text-xs text-text-secondary">
+        <td className="px-3 py-2 align-middle text-sm text-text-secondary">
           <div title={group.addressSummary ?? 'Dirección no disponible'} className="break-words">{group.addressSummary ?? 'Dirección no disponible'}</div>
           <div>{group.zoneMismatch ? 'Otra zona' : selectedZoneName}</div>
           {group.reasons.length > 0 && (() => {
@@ -425,7 +425,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
           })()}
         </td>
         <td className="whitespace-nowrap px-3 py-1 align-middle text-sm text-text-secondary">{orderCount} {orderCount === 1 ? 'pedido' : 'pedidos'}</td>
-        <td className={isBlocked ? 'px-3 py-1 align-middle text-xs font-medium text-state-error' : 'px-3 py-1 align-middle text-xs font-medium text-state-success'}>{isBlocked ? 'Bloqueado' : 'Apto'}</td>
+        <td className={isBlocked ? 'px-3 py-2 align-middle text-sm font-medium text-state-error' : 'px-3 py-2 align-middle text-sm font-medium text-state-success'}>{isBlocked ? 'Bloqueado' : 'Apto'}</td>
       </tr>
     )
   }
@@ -546,10 +546,10 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
 
       {previewStatus === 'idle' && loadStatus === 'ready' && candidates !== null && !isEmpty && (
         <div className="flex flex-col gap-4">
-          <div className="grid gap-4 lg:grid-cols-[1.08fr_1fr]">
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             <section aria-labelledby="pending-orders-title" className="min-w-0 rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md">
-              <h3 id="pending-orders-title" className="text-sm font-semibold text-brand-primary">Pedidos pendientes</h3>
-              <p className="mt-1 text-xs text-text-secondary">
+              <h3 id="pending-orders-title" className="text-base font-semibold text-brand-primary">Pedidos pendientes</h3>
+              <p className="mt-1 text-sm text-text-secondary">
                 Seleccioná clientes. Todos sus pedidos aptos se incluirán en una sola parada.
               </p>
               <div data-testid="pending-orders-table-container" className="mt-3 overflow-x-auto" role="region" aria-label="Tabla de pedidos pendientes" tabIndex={0}>
@@ -561,7 +561,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
                     <col className="w-[15%]" />
                     <col className="w-[13%]" />
                   </colgroup>
-                  <thead className="border-b border-border-subtle text-xs text-text-secondary">
+                  <thead className="border-b border-border-subtle text-sm text-text-secondary">
                     <tr className="h-10">
                       <th scope="col" className="w-10 px-3 py-2"><span className="sr-only">Selección</span></th>
                       <th scope="col" className="px-3 py-2 font-medium">Cliente / Comercio</th>
@@ -575,7 +575,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
               </div>
                 {pendingClientPageCount > 1 && <nav aria-label="Paginación de pedidos pendientes" className="mt-3 flex items-center justify-between gap-3">
                   <Button type="button" variant="secondary" size="sm" onClick={() => setPendingClientPage((page) => Math.max(1, page - 1))} disabled={pendingClientPage === 1}>Anterior</Button>
-                  <span role="status" aria-live="polite" className="text-xs text-text-secondary">Página {pendingClientPage} de {pendingClientPageCount}</span>
+                  <span role="status" aria-live="polite" className="text-sm text-text-secondary">Página {pendingClientPage} de {pendingClientPageCount}</span>
                   <Button type="button" variant="secondary" size="sm" onClick={() => setPendingClientPage((page) => Math.min(pendingClientPageCount, page + 1))} disabled={pendingClientPage === pendingClientPageCount}>Siguiente</Button>
                 </nav>}
               <div className="mt-3 flex flex-wrap gap-2">
@@ -600,9 +600,9 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
               </div>
             </section>
           <section aria-labelledby="route-configuration-title" className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md">
-            <h3 id="route-configuration-title" className="text-sm font-semibold text-brand-primary">Configuración de la ruta</h3>
-            <div className="flex flex-col gap-3">
-              <div className="grid gap-4 md:grid-cols-2">
+            <h3 id="route-configuration-title" className="text-base font-semibold text-brand-primary">Configuración de la ruta</h3>
+            <div className="mt-3 flex flex-col gap-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
                 <div className="flex flex-col gap-2"><Label htmlFor="route-driver">Repartidor</Label><select id="route-driver" disabled={assignmentStatus !== 'ready'} value={driverId} onChange={(event) => { invalidatePreview(); setDriverId(event.target.value) }} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un repartidor</option>{assignmentOptions.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.nickname}</option>)}</select></div>
                 <div className="flex flex-col gap-2"><Label htmlFor="route-vehicle">Vehículo</Label><select id="route-vehicle" disabled={assignmentStatus !== 'ready'} value={vehicleId} onChange={(event) => { invalidatePreview(); setVehicleId(event.target.value) }} className="h-10 rounded-md border border-input bg-background px-3 text-sm text-text-primary"><option value="">Seleccioná un vehículo</option>{assignmentOptions.vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.code} · {vehicle.fuelConsumptionLitersPer100Km} L/100 km</option>)}</select></div>
               </div>
@@ -615,7 +615,7 @@ export function RoutePlanner({ initialServiceDate = '', initialDeliveryZoneId = 
                 <Button type="button" onClick={() => void handlePreview()} disabled={isSaving || !canPreview}>
                   Generar ruta
                 </Button>
-                <p className="text-xs text-text-secondary">
+                <p className="text-sm text-text-secondary">
                    Se seleccionaron {selectedClientCount} clientes y {selectedSaleIds.length} pedidos aptos.
                 </p>
               </div>

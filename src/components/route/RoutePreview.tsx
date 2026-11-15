@@ -135,9 +135,9 @@ const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, 
         />
       </div>
       <div role="tabpanel" id={panelId('sales')} aria-labelledby={tabId('sales')} hidden={activeTab !== 'sales'} className="pt-4">
-        <h4 className="text-sm font-semibold text-text-primary">Pedidos vinculados</h4>
+        <h4 className="text-base font-semibold text-text-primary">Pedidos vinculados</h4>
         <div className="mt-3 overflow-x-auto">
-          <table aria-label="Pedidos vinculados" className="w-full min-w-[48rem] border-collapse text-left text-xs">
+          <table aria-label="Pedidos vinculados" className="w-full min-w-[48rem] border-collapse text-left text-sm">
             <thead className="border-b border-border-subtle text-text-secondary">
               <tr>
                 <th scope="col" className="px-3 py-2 font-medium">#</th>
@@ -181,8 +181,8 @@ const RouteTabs = ({ route, estimates, saleReferences, depotName, depotAddress, 
           </table>
         </div>
       </div>
-      {stale && <p role="status" className="mt-4 rounded-md border border-state-warning p-3 text-xs text-state-warning">Este snapshot está desactualizado y es de solo lectura. Para actualizarlo, generá una nueva ruta.</p>}
-      {readWarnings.filter(isVisibleRouteWarning).map((warning) => <p key={warning} className="mt-2 text-xs text-state-warning">{warning}</p>)}
+      {stale && <p role="status" className="mt-4 rounded-md border border-state-warning p-3 text-sm text-state-warning">Este snapshot está desactualizado y es de solo lectura. Para actualizarlo, generá una nueva ruta.</p>}
+      {readWarnings.filter(isVisibleRouteWarning).map((warning) => <p key={warning} className="mt-2 text-sm text-state-warning">{warning}</p>)}
     </div>
   )
 }
@@ -261,33 +261,33 @@ export function RoutePreview({ status, preview, errorCode, candidateEntries = []
       aria-labelledby="route-preview-title"
       className="rounded-lg border border-border-subtle bg-surface-base p-4 shadow-md md:p-6"
     >
-      <h3 id="route-preview-title" className="text-sm font-semibold text-brand-primary">
+      <h3 id="route-preview-title" className="text-base font-semibold text-brand-primary">
         Recorrido propuesto
       </h3>
-      <p className="mt-1 text-xs text-text-secondary">
+      <p className="mt-1 text-sm text-text-secondary">
         Orden calculado de paradas, métricas y advertencias para las ventas seleccionadas.
       </p>
 
-      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <dl className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <div className="rounded-md border border-border-subtle bg-background-subtle p-3">
-          <dt className="text-xs text-text-secondary">Paradas / Clientes</dt>
-          <dd className="mt-0.5 text-sm font-medium text-text-primary">{preview.metrics.stopCount}</dd>
+          <dt className="text-sm text-text-secondary">Paradas / Clientes</dt>
+          <dd className="mt-0.5 text-base font-semibold tabular-nums text-text-primary">{preview.metrics.stopCount}</dd>
         </div>
         <div className="rounded-md border border-border-subtle bg-background-subtle p-3">
-          <dt className="text-xs text-text-secondary">Distancia total</dt>
-          <dd className="mt-0.5 text-sm font-medium text-text-primary">
+          <dt className="text-sm text-text-secondary">Distancia total</dt>
+          <dd className="mt-0.5 text-base font-semibold tabular-nums text-text-primary">
             {formatKilometers(preview.metrics.distanceMeters)}
           </dd>
         </div>
         <div className="rounded-md border border-border-subtle bg-background-subtle p-3">
-          <dt className="text-xs text-text-secondary">Tiempo estimado</dt>
-          <dd className="mt-0.5 text-sm font-medium text-text-primary">
+          <dt className="text-sm text-text-secondary">Tiempo estimado</dt>
+          <dd className="mt-0.5 text-base font-semibold tabular-nums text-text-primary">
             {formatDuration(preview.metrics.durationSeconds)}
           </dd>
         </div>
         <div className="rounded-md border border-border-subtle bg-background-subtle p-3">
-          <dt className="text-xs text-text-secondary">Combustible estimado</dt>
-          <dd className="mt-0.5 text-sm font-medium text-text-primary">
+          <dt className="text-sm text-text-secondary">Combustible estimado</dt>
+          <dd className="mt-0.5 text-base font-semibold tabular-nums text-text-primary">
             {formatLiters(preview.metrics.fuelLiters)}
           </dd>
         </div>

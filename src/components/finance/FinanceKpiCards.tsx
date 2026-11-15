@@ -65,7 +65,7 @@ export function FinanceKpiCards({ kpis, loading }: Props) {
 
   return (
     <section className="mb-6">
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3">
         {items.map((item) => {
           const Icon = item.icon
           return (
@@ -77,7 +77,7 @@ export function FinanceKpiCards({ kpis, loading }: Props) {
               )}
             >
               <div className="flex items-start justify-between gap-2 mb-2">
-                <p className="text-caption text-text-secondary">{item.label}</p>
+                <p className="text-sm font-medium text-text-secondary">{item.label}</p>
                 <span
                   className={cn(
                     'inline-flex size-8 items-center justify-center rounded-md shrink-0',
@@ -91,8 +91,8 @@ export function FinanceKpiCards({ kpis, loading }: Props) {
               {loading ? (
                 <div className="h-5 w-1/2 bg-background-subtle rounded-sm animate-pulse" />
               ) : (
-                <p className={cn('text-label font-semibold text-lg truncate', item.valueClass)}>
-                  {formatAmount(item.value)}
+                <p className={cn('text-lg font-semibold tabular-nums break-words', kpis ? item.valueClass : 'text-text-secondary')}>
+                  {kpis ? formatAmount(item.value) : 'No disponible'}
                 </p>
               )}
             </div>

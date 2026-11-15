@@ -351,6 +351,7 @@ describe('RouteDashboard selected-route detail', () => {
     expect(dashboardRoot).not.toHaveClass('mb-8')
     expect(dashboardRoot).not.toHaveClass('h-full')
     expect(lowerPanels).toHaveClass('w-full', 'min-w-0', 'flex-1', 'min-h-0')
+    expect(lowerPanels).toHaveClass('lg:items-stretch')
     expect(mapPanel).toHaveClass('w-full', 'min-w-0')
     expect(detailPanel).toHaveClass('w-full', 'min-w-0')
     expect(lowerPanels).not.toHaveClass('lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]')

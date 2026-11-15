@@ -91,6 +91,7 @@ export interface SaleClientOption {
   id: string
   name: string
   address?: string
+  deliveryZoneName?: string | null
 }
 
 export interface SaleClientOptionsResponse {

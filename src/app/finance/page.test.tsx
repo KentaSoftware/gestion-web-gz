@@ -82,6 +82,8 @@ describe('finance page source switch', () => {
     await waitFor(() => expect(mocks.getDashboard).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(mocks.getRules).toHaveBeenCalledTimes(1))
     expect(await screen.findByText(/No se pudo cargar el panel financiero/)).toBeInTheDocument()
+    expect(screen.queryByText('Sin movimientos en el período.')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Sin alertas ni oportunidades/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Cobros de ventas/)).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Ver Todos los Movimientos/ })).toHaveAttribute('href', '/cashflow')
     mocks.updateRules.mockRejectedValue(new Error('offline'))
