@@ -47,6 +47,13 @@ interface GlobalSummary {
   activeAlertCount: number
 }
 
+interface ExpiredProductRow {
+  productId: string
+  productName: string
+  expiryDate: string
+  quantity: number
+}
+
 interface StockOverview {
   page: number
   pageSize: number
@@ -54,6 +61,7 @@ interface StockOverview {
   items: StockItem[]
   globalSummary: GlobalSummary
   globalAlerts: StockAlert[]
+  expiredProducts?: ExpiredProductRow[]
 }
 
 interface StockMovement {
@@ -110,7 +118,9 @@ const formatAlertExplanation = (alert: StockAlert): string => {
   const explanation = alert.explanation
   const normalized = explanation.trim().toUpperCase().replace(/[ -]+/g, '_')
   if (normalized.includes('INCOMPLETE') && normalized.includes('THRESHOLD')) return 'Datos incompletos para evaluar los umbrales de stock.'
-  if (alert.type === 'LOW_ROTATION' && (normalized.includes('INCOMPLETE') || normalized.includes('INSUFFICIENT'))) return 'Historial de ventas insuficiente para evaluar la rotación.'
+  if (alert.type === 'LOW_ROTATION' && (normalized.includes('INCOMPLETE') || normalized.includes('INSUFFICIENT') || normalized.includes('HISTORIAL'))) {
+    return 'Historial de salidas insuficiente para evaluar la rotación.'
+  }
   if (normalized.includes('PREVENTIVE') && normalized.includes('THRESHOLD')) return 'No se pudo evaluar el umbral preventivo.'
   return explanation.trim() || 'Revisá el estado del stock de este producto.'
 }
@@ -129,8 +139,10 @@ const imageUrl = (path: string): string => {
 
 const stockStatus = (item: StockItem) => {
   if (item.dataQuality !== 'COMPLETE' || item.minimum === null) return { label: 'Datos incompletos', classes: 'bg-background-subtle text-text-secondary' }
+  const half = Math.floor(item.minimum / 2)
+  if (item.physicalQuantity < half) return { label: 'Crítico', classes: 'bg-state-error/10 text-state-error' }
+  if (item.physicalQuantity < item.minimum) return { label: 'Stock bajo', classes: 'bg-brand-accent/10 text-brand-accent' }
   if (item.availableToSell === 0) return { label: 'Sin disponibilidad', classes: 'bg-state-error/10 text-state-error' }
-  if (item.availableToSell <= item.minimum) return { label: 'Stock bajo', classes: 'bg-brand-accent/10 text-brand-accent' }
   return { label: 'Disponible', classes: 'bg-state-success/10 text-state-success' }
 }
 
@@ -251,15 +263,20 @@ export default function SmartStockPage() {
   const quickItems = items.filter((item) => `${item.productName} ${item.categoryName ?? ''}`.toLocaleLowerCase('es').includes(quickSearch.trim().toLocaleLowerCase('es')))
   const filteredAlerts = (overview?.globalAlerts ?? []).filter((alert) => severity === SEVERITIES.ALL || alert.severity === severity)
   const alertGroups = [
-    { key: 'CRITICAL' as const, label: 'Críticas' },
-    { key: 'WARNING' as const, label: 'Advertencias' },
-    { key: 'INFO' as const, label: 'Informativas' },
+    { key: 'CRITICAL' as const, label: 'Crítica' },
+    { key: 'WARNING' as const, label: 'Media' },
+    { key: 'INFO' as const, label: 'Informativa' },
   ].map((group) => ({ ...group, alerts: filteredAlerts.filter((alert) => alert.severity === group.key) }))
   const summary = overview?.globalSummary ?? EMPTY_SUMMARY
   const pageCount = Math.max(1, Math.ceil((overview?.total ?? 0) / PAGE_SIZE))
   const selectedItem = items.find((item) => item.productId === selectedId)
   const configItem = items.find((item) => item.productId === configProductId)
-  const expiredItems = items.filter((item) => item.expiredQuantity > 0)
+  const expiredItems = overview?.expiredProducts ?? items.filter((item) => item.expiredQuantity > 0).map((item) => ({
+    productId: item.productId,
+    productName: item.productName,
+    expiryDate: '',
+    quantity: item.expiredQuantity,
+  }))
   const openOperation = (kind: typeof dialog, productId = selectedId) => {
     pendingOperationIds.current.clear()
     setOperationError('')
@@ -274,6 +291,27 @@ export default function SmartStockPage() {
     setDialog(kind)
   }
   const refreshData = () => { setRetry((value) => value + 1); if (selectedId) setDetailRetry((value) => value + 1) }
+  const downloadReport = async () => {
+    try {
+      setOperationBusy(true)
+      setOperationError('')
+      const { data } = await apiClient.get<Blob>('/stock/report.pdf', {
+        params: { businessDate: dateInBuenosAires(), timeZone: TIME_ZONE },
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `golozur360-stock-${dateInBuenosAires()}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+      setOperationMessage('Reporte PDF descargado.')
+    } catch {
+      setOperationError('No se pudo generar el reporte PDF. Reintentá o verificá permisos.')
+    } finally {
+      setOperationBusy(false)
+    }
+  }
   const saveConfig = async () => {
     if (!configItem) return
     const minimumValue = Number(minimum)
@@ -285,7 +323,7 @@ export default function SmartStockPage() {
     setOperationBusy(true)
     try {
       await apiClient.patch(`/stock/products/${encodeURIComponent(configItem.productId)}/minimum`, { minimum: minimumValue, ...(daysValue === undefined ? {} : { expiryAlertDays: daysValue }) })
-      setOperationMessage('Configuración guardada correctamente.')
+      setOperationMessage('Configuración se guardó correctamente.')
       refreshData()
     } catch {
       setOperationError('No se pudo guardar la configuración. Verificá los valores o intentá nuevamente.')
@@ -324,9 +362,9 @@ export default function SmartStockPage() {
     finally { setOperationBusy(false) }
   }
   const removeExpiredBulk = async () => {
-    const eligibleItems = items.filter((item) => item.expiredQuantity > 0)
-    if (!eligibleItems.length) { setOperationMessage('No hay productos con existencias vencidas en esta página.'); return }
-    const payload = { businessDate: dateInBuenosAires(), productIds: eligibleItems.slice(0, 100).map((item) => item.productId) }
+    const productIds = Array.from(new Set(expiredItems.map((item) => item.productId))).slice(0, 100)
+    if (!productIds.length) { setOperationMessage('No existen productos vencidos.'); return }
+    const payload = { businessDate: dateInBuenosAires(), productIds }
     const operationKey = JSON.stringify(['expired-removals', payload])
     setOperationBusy(true)
     try {
@@ -354,11 +392,11 @@ export default function SmartStockPage() {
 
   return (
     <PageContainer className="gap-5 overflow-y-auto">
-      <PageHeader title="Stock inteligente" description="Una lectura clara de las existencias y los productos que requieren atención." actions={
+      <PageHeader title="Gestión Inteligente de Stock" description="Controlá tu inventario, evitá faltantes y reducí mermas." actions={
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => openOperation('config', '')} className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary"><Settings2 className="mr-2 inline size-4" aria-hidden="true" />Configuraciones</button>
           <button type="button" onClick={refreshData} aria-label="Actualizar stock" className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary"><RefreshCw className="mr-2 inline size-4" aria-hidden="true" />Actualizar</button>
-          <button type="button" onClick={() => openOperation('report')} aria-label="Generar reporte" className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary"><FileText className="mr-2 inline size-4" aria-hidden="true" />Generar reporte</button>
+          <button type="button" onClick={() => openOperation('config', '')} className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary"><Settings2 className="mr-2 inline size-4" aria-hidden="true" />Configuraciones</button>
+          <button type="button" onClick={() => void downloadReport()} aria-label="Generar reporte" className="rounded-md bg-brand-accent px-3 py-2 text-sm font-semibold text-text-inverse"><FileText className="mr-2 inline size-4" aria-hidden="true" />Generar Reporte</button>
         </div>
       } />
 
@@ -391,7 +429,7 @@ export default function SmartStockPage() {
           <label className="flex items-center gap-2 text-sm text-text-secondary">
             <span>Severidad</span>
             <select aria-label="Filtrar alertas por severidad" className="rounded-md border border-border-subtle bg-background-canvas px-3 py-2 text-text-primary" value={severity} onChange={(event) => setSeverity(event.target.value as SeverityFilter)}>
-              <option value="ALL">Todas</option><option value="CRITICAL">Crítica</option><option value="WARNING">Advertencia</option><option value="INFO">Informativa</option>
+              <option value="ALL">Todas</option><option value="CRITICAL">Crítica</option><option value="WARNING">Media</option><option value="INFO">Informativa</option>
             </select>
           </label>
           </div>
@@ -405,7 +443,7 @@ export default function SmartStockPage() {
                   const remainingCount = group.alerts.length - visibleAlerts.length
                   return <section key={group.key} aria-label={`Alertas ${group.label.toLocaleLowerCase('es')}`} className="min-w-0">
                   <h3 className="mb-2 border-b border-border-subtle pb-2 text-base font-semibold text-text-primary">{group.label} <span className="font-normal tabular-nums text-text-secondary">({group.alerts.length})</span></h3>
-                  {group.alerts.length === 0 ? <p className="rounded-lg bg-background-subtle p-3 text-sm text-text-secondary" role="status">{(overview?.globalAlerts.length ?? 0) === 0 ? 'Sin alertas activas.' : 'Sin alertas para esta severidad.'}</p> : <>
+                  {group.alerts.length === 0 ? <p className="rounded-lg bg-background-subtle p-3 text-sm text-text-secondary" role="status">{(overview?.globalAlerts.length ?? 0) === 0 ? 'Todos los indicadores operan dentro de los parámetros normales' : 'Sin alertas para esta severidad.'}</p> : <>
                   <CatalogAlertList label={group.label.toLocaleLowerCase('es')} scrollable={expanded && group.alerts.length > 4}>
                     {visibleAlerts.map((alert, index) => <li key={`${alert.productId}-${alert.type}-${index}`} className="rounded-lg bg-background-subtle p-3">
                       <div className="flex items-start gap-3">
@@ -463,6 +501,11 @@ export default function SmartStockPage() {
               {detailStatus === 'loading' ? <p className="py-6 text-sm text-text-secondary" role="status">Cargando disponibilidad y movimientos…</p>
                 : detailStatus === 'error' ? <div className="py-6 text-center" role="alert"><p className="text-sm text-state-error">No se pudo consultar el detalle del producto.</p><button type="button" onClick={() => setDetailRetry((value) => value + 1)} className="mt-3 rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary">Reintentar</button></div>
                   : detail && <>
+                     {detail.availability.availableToSell === 0 && (
+                       <p className="mt-3 rounded-md bg-state-warning/10 p-3 text-sm text-text-primary" role="status">
+                         No hay existencia disponible del artículo
+                       </p>
+                     )}
                      <dl className="my-4 grid grid-cols-2 gap-x-4 gap-y-4 rounded-lg bg-background-subtle p-4 text-base tabular-nums">
                       <div><dt className="text-text-secondary">Físico</dt><dd className="font-semibold text-text-primary">{detail.availability.physicalQuantity}</dd></div>
                       <div><dt className="text-text-secondary">Comprometido</dt><dd className="font-semibold text-text-primary">{detail.availability.committedQuantity}</dd></div>
@@ -481,14 +524,30 @@ export default function SmartStockPage() {
       </section>
       <Dialog open={dialog !== null} onOpenChange={(open) => { if (!open && !operationBusy) { pendingOperationIds.current.clear(); setDialog(null) } }}>
         <DialogContent aria-describedby="stock-action-description" className={`${dialog === 'config' ? 'max-w-3xl' : 'max-w-lg'} max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6`}>
-          <DialogHeader><DialogTitle>{dialog === 'config' ? 'Configuración de stock' : dialog === 'writeoff' ? 'Registrar baja de stock' : dialog === 'remove' ? 'Retirar existencias vencidas' : dialog === 'bulk' ? 'Retiro masivo de vencidos' : 'Generar reporte'}</DialogTitle><DialogDescription id="stock-action-description">{dialog === 'report' ? 'La generación de reportes todavía no está disponible.' : dialog === 'bulk' ? `Se procesarán ${expiredItems.length} productos con existencias vencidas de esta página de forma independiente.` : `Producto: ${selectedItem?.productName ?? 'seleccionado'}`}</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{dialog === 'config' ? 'Configuración de Umbrales y Vencimiento Preventivo' : dialog === 'writeoff' ? 'Registrar baja de stock' : dialog === 'remove' ? 'Retirar existencias vencidas' : dialog === 'bulk' ? 'Retiro masivo de vencidos' : 'Generar reporte'}</DialogTitle><DialogDescription id="stock-action-description">{dialog === 'bulk' ? `Se procesarán ${Array.from(new Set(expiredItems.map((row) => row.productId))).length} producto(s) con existencias vencidas.` : dialog === 'config' ? 'Configurá el stock mínimo por producto y los días de vencimiento preventivo.' : `Producto: ${selectedItem?.productName ?? 'seleccionado'}`}</DialogDescription></DialogHeader>
           {dialog === 'config' && <div className="grid gap-6">
-            <section aria-labelledby="expired-products-title">
-              <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 id="expired-products-title" className="font-semibold text-text-primary">Productos vencidos de esta página</h3><p className="mt-1 text-sm text-text-secondary">Mostramos únicamente los productos de la página actual.</p></div><button type="button" disabled={expiredItems.length === 0 || operationBusy} onClick={() => setDialog('bulk')} className="rounded-md border border-border-subtle px-3 py-2 text-sm disabled:opacity-50">Retirar todos de esta página</button></div>
+            <section aria-labelledby="expired-products-title" className="rounded-lg border border-state-error/30 bg-state-error/5 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 id="expired-products-title" className="font-semibold text-text-primary">Productos vencidos detectados</h3><p className="mt-1 text-sm text-text-secondary">Lotes con fecha de caducidad alcanzada o superada (catálogo completo).</p></div><button type="button" disabled={expiredItems.length === 0 || operationBusy || status !== 'ready'} onClick={() => setDialog('bulk')} className="rounded-md bg-state-error px-3 py-2 text-sm font-medium text-text-inverse disabled:opacity-50">Retirar productos vencidos</button></div>
               {status !== 'ready' && <p role="status" className="mt-4 rounded-lg bg-background-subtle p-4 text-sm text-text-secondary">{status === 'loading' ? 'Cargando productos vencidos…' : 'No se pudieron cargar los productos vencidos.'}{expiredItems.length > 0 && ' Se muestran datos anteriores.'}</p>}
-              {expiredItems.length === 0 ? status === 'ready' && <p role="status" className="mt-4 rounded-lg bg-background-subtle p-4 text-sm text-text-secondary">No hay productos vencidos en esta página.</p> : <ul className="mt-4 divide-y divide-border-subtle rounded-lg border border-border-subtle">{expiredItems.map((item) => <li key={item.productId} className="flex flex-wrap items-center justify-between gap-3 p-3"><div className="min-w-0"><p className="truncate font-medium text-text-primary">{item.productName}</p><p className="text-sm text-text-secondary">Existencias vencidas: {item.expiredQuantity}</p></div><button type="button" aria-label={`Retirar vencidos de ${item.productName}`} disabled={operationBusy} onClick={() => { setSelectedId(item.productId); setDialog('remove') }} className="rounded-md border border-border-subtle px-3 py-2 text-sm">Retirar vencidos</button></li>)}</ul>}
+              {expiredItems.length === 0 ? status === 'ready' && <p role="status" className="mt-4 rounded-lg bg-background-subtle p-4 text-sm text-text-secondary">No existen productos vencidos</p> : (
+                <div className="mt-4 overflow-x-auto rounded-lg border border-border-subtle">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-background-subtle text-text-secondary"><tr><th className="px-3 py-2 font-medium">Producto</th><th className="px-3 py-2 font-medium">Fecha de vencimiento</th><th className="px-3 py-2 font-medium">Cantidad</th><th className="px-3 py-2 font-medium">Acción</th></tr></thead>
+                    <tbody className="divide-y divide-border-subtle">
+                      {expiredItems.map((item) => (
+                        <tr key={`${item.productId}-${item.expiryDate}`}>
+                          <td className="px-3 py-2 font-medium text-text-primary">{item.productName}</td>
+                          <td className="px-3 py-2 text-text-secondary">{item.expiryDate || '—'}</td>
+                          <td className="px-3 py-2 text-text-primary">{item.quantity} un.</td>
+                          <td className="px-3 py-2"><button type="button" aria-label={`Retirar vencidos de ${item.productName}`} disabled={operationBusy} onClick={() => { setSelectedId(item.productId); setDialog('remove') }} className="rounded-md border border-border-subtle px-2 py-1 text-sm">Retirar</button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
-            <section aria-labelledby="stock-config-title" className="border-t border-border-subtle pt-5 "><h3 id="stock-config-title" className="font-semibold text-text-primary">Umbrales por producto</h3><p className="mt-1 text-sm text-text-secondary">Elegí un producto de esta página para ajustar su configuración.</p><div className="mt-4 space-y-3"><label className="block text-sm">Producto<select aria-label="Producto para configurar" value={configProductId} onChange={(event) => { const product = items.find((entry) => entry.productId === event.target.value); setConfigProductId(event.target.value); setMinimum(product ? String(product.minimum ?? 0) : ''); setExpiryAlertDays(product ? String(product.expiryAlertDays) : ''); setOperationError(''); setOperationMessage('') }} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2"><option value="">Seleccionar producto</option>{items.map((item) => <option key={item.productId} value={item.productId}>{item.productName}</option>)}</select></label><label className="block text-sm">Stock mínimo<input aria-label="Stock mínimo" type="number" min="0" step="1" value={minimum} disabled={!configItem} onChange={(event) => setMinimum(event.target.value)} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2" /></label><label className="block text-sm">Umbral preventivo (días)<input aria-label="Umbral preventivo (días)" type="number" min="0" max="3650" step="1" value={expiryAlertDays} placeholder="Sin cambios" disabled={!configItem} onChange={(event) => setExpiryAlertDays(event.target.value)} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2" /></label><p className="text-xs text-text-secondary">El umbral preventivo define cuándo avisar que un producto está próximo a vencer.</p></div>
+            <section aria-labelledby="stock-config-title" className="border-t border-border-subtle pt-5"><h3 id="stock-config-title" className="font-semibold text-text-primary">Configuración de Umbrales de Stock y Vencimiento Preventivo</h3><p className="mt-1 text-sm text-text-secondary">Buscá/seleccioná un producto del listado filtrado (página actual) para ajustar umbrales.</p><div className="mt-4 space-y-3"><label className="block text-sm">Producto *<select aria-label="Buscar y seleccionar producto" value={configProductId} onChange={(event) => { const product = items.find((entry) => entry.productId === event.target.value); setConfigProductId(event.target.value); setMinimum(product ? String(product.minimum ?? 0) : ''); setExpiryAlertDays(product ? String(product.expiryAlertDays) : ''); setOperationError(''); setOperationMessage('') }} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2"><option value="">Buscar y seleccionar producto...</option>{items.map((item) => <option key={item.productId} value={item.productId}>{item.productName}</option>)}</select></label><label className="block text-sm">Stock mínimo manual por producto *<input aria-label="Stock mínimo manual por producto" type="number" min="0" step="1" value={minimum} disabled={!configItem} placeholder="Ej. 20" onChange={(event) => setMinimum(event.target.value)} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2" /></label><label className="block text-sm">Días límite de vencimiento preventivo *<input aria-label="Días límite de vencimiento preventivo" type="number" min="0" max="3650" step="1" value={expiryAlertDays} placeholder="Ej. 7" disabled={!configItem} onChange={(event) => setExpiryAlertDays(event.target.value)} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2" /></label><p className="rounded-md bg-state-info/10 p-3 text-xs text-text-secondary">Recibirás alertas cuando el stock esté por debajo del mínimo definido o cuando falten menos días que el límite configurado para el vencimiento.</p></div>
             </section>
           </div>}
           {dialog === 'writeoff' && <div className="space-y-3"><label className="block text-sm">Cantidad<input aria-label="Cantidad" type="number" min="1" step="1" value={writeOffQuantity} onChange={(event) => setWriteOffQuantity(event.target.value)} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2" /></label><p className="text-sm text-text-secondary">Motivo: Vencimiento</p><label className="block text-sm">Observación (máximo 250 caracteres)<textarea aria-label="Observación" maxLength={250} value={writeOffNote} onChange={(event) => setWriteOffNote(event.target.value)} className="mt-1 block w-full rounded-md border border-border-subtle bg-background-canvas px-3 py-2" /></label></div>}
