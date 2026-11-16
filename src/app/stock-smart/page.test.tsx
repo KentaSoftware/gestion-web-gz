@@ -269,7 +269,7 @@ describe('Stock Inteligente read dashboard', () => {
     ] } })
     render(<SmartStockPage />)
     expect(await screen.findByText('Datos incompletos para evaluar los umbrales de stock.')).toBeInTheDocument()
-    expect(screen.getByText('Historial de ventas insuficiente para evaluar la rotación.')).toBeInTheDocument()
+    expect(screen.getByText('Historial de salidas insuficiente para evaluar la rotación.')).toBeInTheDocument()
     expect(screen.getByText('Explicación específica del servicio')).toBeInTheDocument()
   })
 
@@ -280,7 +280,7 @@ describe('Stock Inteligente read dashboard', () => {
     ] } })
     render(<SmartStockPage />)
 
-    expect(await screen.findByText('Historial de ventas insuficiente para evaluar la rotación.')).toBeInTheDocument()
+    expect(await screen.findByText('Historial de salidas insuficiente para evaluar la rotación.')).toBeInTheDocument()
     expect(screen.queryByText(explanation)).not.toBeInTheDocument()
     expect(screen.queryByText(/Product p-90/)).not.toBeInTheDocument()
   })
